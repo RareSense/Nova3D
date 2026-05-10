@@ -26,7 +26,7 @@ This repo is the client. It connects to our (currently) closed-source hosted ser
 
 ## Quick Start
 
-Get the UI running locally in under 2 minutes. Requires [Flutter 3.24+](https://flutter.dev).
+Get it running locally in under 2 minutes. Requires [Flutter 3.24+](https://flutter.dev).
 
 ```bash
 # 1. Clone and Install
