@@ -2,9 +2,9 @@
 
 # Nova3D
 
-**AI 3D generation that outputs separate, editable parts - not a single merged blob**
+**A tool that generates 3D objects with separate, editable parts - instead of a single merged blob**
 
-[nova3d.xyz](https://nova3d.xyz) · [Issues](https://github.com/RareSense/Nova3D/issues)
+[website](https://nova3d.xyz) · [discord](https://discord.gg/QEH8mzcwdR) · [twitter/X](https://x.com/nova3d_ai) · [github issues](https://github.com/RareSense/Nova3D/issues)
 
 <br/>
 
@@ -48,9 +48,8 @@ flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5555
 
 ## Demo
 
-[![Editable parts — quick look](https://i.imgur.com/VHQAaQS.png)](https://www.youtube.com/watch?v=gdKSknQKk4c)
-
-<sub>Full feature walkthrough → [youtube.com/watch?v=-OC59b1tNuc](https://www.youtube.com/watch?v=-OC59b1tNuc)</sub>
+[![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=9tpWOoSxTPQ)
+☝️Prompt: Make a washing machine with detailed internal mechanics
 
 ---
 
