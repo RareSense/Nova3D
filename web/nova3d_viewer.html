@@ -136,6 +136,9 @@ body.full-ui .viewport-action { left:12px; }
   border-right:1px solid rgba(255,255,255,.06);
   box-shadow:4px 0 20px rgba(0,0,0,.4);
 }
+.ai-busy .et-btn:not([data-flyout="flyAiRemix"]):not([data-flyout="flyAiGrow"]) {
+  opacity:0.3; pointer-events:none;
+}
 .et-btn {
   width:52px; height:46px; background:transparent; border:none;
   border-radius:4px; color:#666; font-size:18px; cursor:pointer;
@@ -154,6 +157,8 @@ body.full-ui .viewport-action { left:12px; }
   box-shadow:4px 4px 16px rgba(0,0,0,.5);
 }
 .et-btn:hover .et-tip { display:block; }
+.et-tip-soon { color:#f90 !important; }
+.et-btn-soon:hover { opacity:0.8 !important; }
 
 /* ── Flyout panels ── */
 .flyout {
@@ -239,7 +244,7 @@ body.compact .undo-bar { display:none !important; }
 
 /* ── Stats bar ── */
 .stats {
-  position:absolute; bottom:22px; left:50%; transform:translateX(-50%);
+  position:absolute; bottom:80px; left:50%; transform:translateX(-50%);
   display:flex; gap:24px;
   background:linear-gradient(180deg,rgba(25,25,25,.92),rgba(16,16,16,.96));
   backdrop-filter:blur(25px); padding:12px 28px; border-radius:8px;
@@ -384,7 +389,7 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
     min-width:82px; padding:8px 12px; letter-spacing:1.1px;
   }
   .mesh-panel { width:240px; }
-  .stats { bottom:20px; }
+  .stats { bottom:80px; }
 }
 
 @media (max-width: 1040px) {
@@ -474,33 +479,30 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
     <div class="edit-toolbar">
       <button class="et-btn" data-flyout="flyTransform"><span>⇔</span><span class="et-label">Transform</span><div class="et-tip">Transform</div></button>
       <button class="et-btn" data-flyout="flyMesh"><span>⬡</span><span class="et-label">Mesh</span><div class="et-tip">Mesh</div></button>
-      <button class="et-btn" data-flyout="flyModifiers"><span>⊞</span><span class="et-label">Modifiers</span><div class="et-tip">Modifiers</div></button>
-      <button class="et-btn" data-flyout="flyMaterials"><span>◉</span><span class="et-label">Materials</span><div class="et-tip">Materials</div></button>
+      <button class="et-btn et-btn-soon" id="matSoonBtn" style="opacity:0.5"><span>◉</span><span class="et-label">Materials</span><div class="et-tip et-tip-soon">Will be back hotter 🔥</div></button>
       <button class="et-btn" data-flyout="flyDisplay"><span>👁</span><span class="et-label">Display</span><div class="et-tip">Display</div></button>
-      <button class="et-btn" data-flyout="flySculpt"><span>✏</span><span class="et-label">Sculpt</span><div class="et-tip">Sculpt</div></button>
-      <button class="et-btn" data-flyout="flySnap"><span>⊟</span><span class="et-label">Snap</span><div class="et-tip">Snap &amp; Pivot</div></button>
-      <button class="et-btn" data-flyout="flyAiEdit"><span>AI</span><span class="et-label">Edit</span><div class="et-tip">AI Edit</div></button>
+      <button class="et-btn" data-flyout="flyAiRemix"><span>✦</span><span class="et-label">Remix</span><div class="et-tip">Remix a part — reshape, refine, or totally reinvent selected geometry</div></button>
+      <button class="et-btn" data-flyout="flyAiGrow"><span>✚</span><span class="et-label">Grow</span><div class="et-tip">Grow new parts — conjure fresh geometry right onto your model</div></button>
     </div>
 
     <!-- Transform flyout -->
     <div class="flyout" id="flyTransform" style="top:70px">
       <h3>Transform</h3>
       <h4>Position</h4>
-      <div class="fo-slider-row"><label style="color:#f66">X</label><input type="number" id="tfPosX" step="0.001" value="0" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#6f6">Y</label><input type="number" id="tfPosY" step="0.001" value="0" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#68f">Z</label><input type="number" id="tfPosZ" step="0.001" value="0" onchange="applyNumericTransform()"></div>
+      <div class="fo-slider-row"><label style="color:#f66">X</label><input type="number" id="tfPosX" step="0.001" value="0"></div>
+      <div class="fo-slider-row"><label style="color:#6f6">Y</label><input type="number" id="tfPosY" step="0.001" value="0"></div>
+      <div class="fo-slider-row"><label style="color:#68f">Z</label><input type="number" id="tfPosZ" step="0.001" value="0"></div>
       <h4>Rotation (deg)</h4>
-      <div class="fo-slider-row"><label style="color:#f66">RX</label><input type="number" id="tfRotX" step="1" value="0" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#6f6">RY</label><input type="number" id="tfRotY" step="1" value="0" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#68f">RZ</label><input type="number" id="tfRotZ" step="1" value="0" onchange="applyNumericTransform()"></div>
+      <div class="fo-slider-row"><label style="color:#f66">RX</label><input type="number" id="tfRotX" step="1" value="0"></div>
+      <div class="fo-slider-row"><label style="color:#6f6">RY</label><input type="number" id="tfRotY" step="1" value="0"></div>
+      <div class="fo-slider-row"><label style="color:#68f">RZ</label><input type="number" id="tfRotZ" step="1" value="0"></div>
       <h4>Scale</h4>
-      <div class="fo-slider-row"><label style="color:#f66">SX</label><input type="number" id="tfScaleX" step="0.01" value="1" min="0.001" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#6f6">SY</label><input type="number" id="tfScaleY" step="0.01" value="1" min="0.001" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#68f">SZ</label><input type="number" id="tfScaleZ" step="0.01" value="1" min="0.001" onchange="applyNumericTransform()"></div>
-      <div class="fo-slider-row"><label style="color:#aaa;font-size:9px">Uniform</label><input type="number" id="tfScale" step="0.01" value="1" min="0.001" onchange="applyUniformScale()"></div>
+      <div class="fo-slider-row"><label style="color:#f66">SX</label><input type="number" id="tfScaleX" step="0.01" value="1" min="0.001"></div>
+      <div class="fo-slider-row"><label style="color:#6f6">SY</label><input type="number" id="tfScaleY" step="0.01" value="1" min="0.001"></div>
+      <div class="fo-slider-row"><label style="color:#68f">SZ</label><input type="number" id="tfScaleZ" step="0.01" value="1" min="0.001"></div>
+      <div class="fo-slider-row"><label style="color:#aaa;font-size:9px">Uniform</label><input type="number" id="tfScale" step="0.01" value="1" min="0.001"></div>
       <div class="fo-sep"></div>
       <button class="fo-btn" onclick="resetTransform()">Reset Transform</button>
-      <button class="fo-btn" onclick="readCurrentTransform()">Read from Selected</button>
       <div class="fo-sep"></div>
       <h4>Mirror</h4>
       <div class="fo-row">
@@ -508,13 +510,6 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
         <button class="fo-btn" onclick="mirrorSelection('y')">Y</button>
         <button class="fo-btn" onclick="mirrorSelection('z')">Z</button>
       </div>
-      <h4>Align to 0</h4>
-      <div class="fo-row">
-        <button class="fo-btn" onclick="alignToAxis('x')">X</button>
-        <button class="fo-btn" onclick="alignToAxis('y')">Y</button>
-        <button class="fo-btn" onclick="alignToAxis('z')">Z</button>
-      </div>
-      <button class="fo-btn" onclick="duplicateSelection()">Duplicate <kbd>Shift+D</kbd></button>
     </div>
 
     <!-- Mesh flyout -->
@@ -528,26 +523,6 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
       <button class="fo-btn" onclick="flipNormals()">Flip Normals</button>
       <button class="fo-btn" onclick="centerOrigin()">Center Origin</button>
       <button class="fo-btn" onclick="recalcNormals()">Recalculate Normals</button>
-    </div>
-
-    <!-- Modifiers flyout -->
-    <div class="flyout" id="flyModifiers" style="top:162px">
-      <h3>Modifiers</h3>
-      <h4>Geometry</h4>
-      <button class="fo-btn" onclick="subdivideSelected(1)">Subdivide ×1</button>
-      <button class="fo-btn" onclick="subdivideSelected(2)">Subdivide ×2</button>
-      <button class="fo-btn" onclick="smoothSelected(3)">Smooth 3 iter</button>
-      <button class="fo-btn" onclick="smoothSelected(10)">Smooth 10 iter</button>
-      <h4>Reduce</h4>
-      <button class="fo-btn" onclick="decimateSelected(0.5)">Decimate 50%</button>
-      <button class="fo-btn" onclick="decimateSelected(0.25)">Decimate 25%</button>
-      <button class="fo-btn" onclick="decimateSelected(0.1)">Decimate 10%</button>
-      <h4>Mirror Modifier</h4>
-      <div class="fo-row">
-        <button class="fo-btn" onclick="applyMirrorModifier('x')">X</button>
-        <button class="fo-btn" onclick="applyMirrorModifier('y')">Y</button>
-        <button class="fo-btn" onclick="applyMirrorModifier('z')">Z</button>
-      </div>
     </div>
 
     <!-- Materials flyout -->
@@ -596,12 +571,10 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
     <div class="flyout" id="flyDisplay" style="top:254px">
       <h3>Display</h3>
       <button class="fo-btn" id="togWireframe" onclick="toggleWireframe()">Wireframe</button>
-      <button class="fo-btn" id="togFlatShade" onclick="toggleFlatShading()">Flat Shading</button>
       <button class="fo-btn" id="togXray" onclick="toggleXray()">X-Ray</button>
       <button class="fo-btn" id="togBBox" onclick="toggleBoundingBox()">Bounding Box</button>
       <button class="fo-btn" id="togNormals" onclick="toggleNormals()">Show Normals</button>
       <div class="fo-sep"></div>
-      <button class="fo-btn" onclick="toggleAutoRotate()">Toggle Auto-Rotate</button>
       <div class="fo-slider-row">
         <label>Exposure</label>
         <input type="range" id="exposureSlider" min="0.1" max="3" step="0.05" value="0.5" oninput="setExposure(this.value)">
@@ -609,58 +582,27 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
       </div>
     </div>
 
-    <!-- Sculpt flyout -->
-    <div class="flyout" id="flySculpt" style="top:300px">
-      <h3>Sculpt</h3>
-      <button class="fo-btn active-tool" id="sculptGrab" onclick="setSculptTool('grab')">Grab</button>
-      <button class="fo-btn" id="sculptSmooth" onclick="setSculptTool('smooth')">Smooth</button>
-      <button class="fo-btn" id="sculptInflate" onclick="setSculptTool('inflate')">Inflate</button>
-      <button class="fo-btn" id="sculptFlatten" onclick="setSculptTool('flatten')">Flatten</button>
-      <div class="fo-sep"></div>
-      <div class="fo-slider-row">
-        <label>Size</label>
-        <input type="range" id="brushSize" min="0.02" max="1" step="0.01" value="0.2" oninput="document.getElementById('brushSizeVal').textContent=parseFloat(this.value).toFixed(2)">
-        <span class="fo-val" id="brushSizeVal">0.20</span>
-      </div>
-      <div class="fo-slider-row">
-        <label>Strength</label>
-        <input type="range" id="brushStrength" min="0.01" max="1" step="0.01" value="0.3" oninput="document.getElementById('brushStrengthVal').textContent=parseFloat(this.value).toFixed(2)">
-        <span class="fo-val" id="brushStrengthVal">0.30</span>
-      </div>
-      <button class="fo-btn" id="sculptModeBtn" onclick="toggleSculptMode()" style="border-color:#f80;color:#f80;margin-top:4px">Enable Sculpt Mode</button>
-    </div>
-
-    <!-- Snap flyout -->
-    <div class="flyout" id="flySnap" style="top:346px">
-      <h3>Snap &amp; Pivot</h3>
-      <button class="fo-btn" id="togGridSnap" onclick="toggleGridSnap()">Grid Snap: OFF</button>
-      <div class="fo-slider-row">
-        <label>Grid Size</label>
-        <input type="range" id="gridSizeSlider" min="0.01" max="0.5" step="0.01" value="0.1" oninput="gridSize=parseFloat(this.value);document.getElementById('gridSizeVal').textContent=parseFloat(this.value).toFixed(2)">
-        <span class="fo-val" id="gridSizeVal">0.10</span>
-      </div>
-      <div class="fo-sep"></div>
-      <h4>Pivot</h4>
-      <button class="fo-btn active-tool" id="pivotMedian" onclick="setPivotMode('median')">Median Point</button>
-      <button class="fo-btn" id="pivotIndividual" onclick="setPivotMode('individual')">Individual Origins</button>
-      <button class="fo-btn" id="pivotWorld" onclick="setPivotMode('world')">World Origin</button>
-    </div>
-
     <!-- AI edit flyout -->
-    <div class="flyout" id="flyAiEdit" style="top:392px">
-      <h3>AI Edit</h3>
+    <!-- Remix flyout -->
+    <div class="flyout" id="flyAiRemix" style="top:254px">
+      <h3>Remix a Part</h3>
+      <p style="font-size:10px;color:#666;margin:0 0 12px;line-height:1.5">Select a part, then describe how it should change — tweak, transform, or totally reinvent it.</p>
       <h4>Model</h4>
       <select class="edit-model-select" id="editModelSelect" aria-label="AI edit model"></select>
-      <h4>Regenerate Selected Part</h4>
       <textarea class="edit-input" id="regenPrompt" placeholder="Describe how the selected part should change..."></textarea>
-      <button class="fo-btn" id="regenBtn" onclick="requestRegeneratePart()" style="border-color:#fff;color:#fff;margin-top:6px">Regenerate Selected Part</button>
+      <button class="fo-btn" id="regenBtn" onclick="requestRegeneratePart()" style="border-color:#fff;color:#fff;margin-top:6px">Remix Selected Part</button>
       <div class="edit-status" id="regenStatus"></div>
-      <div class="fo-sep"></div>
-      <h4>Add To Part</h4>
+    </div>
+
+    <!-- Grow flyout -->
+    <div class="flyout" id="flyAiGrow" style="top:300px">
+      <h3>Grow New Parts</h3>
+      <p style="font-size:10px;color:#666;margin:0 0 12px;line-height:1.5">Describe something new — we'll conjure it straight onto your model.</p>
+      <h4>Model</h4>
+      <select class="edit-model-select" id="editModelSelectGrow" aria-label="AI grow model"></select>
       <textarea class="edit-input" id="addPartPrompt" placeholder="Describe the new part to add..."></textarea>
-      <button class="fo-btn" id="addPartBtn" onclick="requestAddPart()" style="border-color:#fff;color:#fff;margin-top:6px">Add To Part</button>
+      <button class="fo-btn" id="addPartBtn" onclick="requestAddPart()" style="border-color:#fff;color:#fff;margin-top:6px">Grow It</button>
       <div class="edit-status" id="addPartStatus"></div>
-      <div class="edit-status" id="aiEditStatus"></div>
     </div>
 
     <!-- Loading overlay -->
@@ -1009,9 +951,6 @@ let autoRotateEnabled = true;
 try { autoRotateEnabled = localStorage.getItem('nova3d_autoRotate') !== 'false'; } catch(e){}
 
 let currentMode  = 'orbit';
-let gridSnap     = false;
-let gridSize     = 0.1;
-let pivotMode    = 'median';
 let sculptMode   = false;
 let sculptTool   = 'grab';
 let isSculpting  = false;
@@ -1029,6 +968,7 @@ let currentCodeArtifact = null;
 let currentModelUrl = null;
 let currentSourceWorkflowId = '';
 let activeEditRequestId = null;
+let activeOperation = null;
 let editModelOptions = [];
 let editDefaultModelId = '';
 const DEFAULT_EDIT_MODEL_OPTIONS = [
@@ -1151,12 +1091,6 @@ function init() {
   transformControls.addEventListener('dragging-changed', e => { controls.enabled = !e.value; });
   transformControls.addEventListener('mouseDown', () => pushUndoSnapshot('transform'));
   transformControls.addEventListener('objectChange', () => {
-    if (gridSnap && transformControls.object) {
-      const o = transformControls.object;
-      o.position.x = Math.round(o.position.x/gridSize)*gridSize;
-      o.position.y = Math.round(o.position.y/gridSize)*gridSize;
-      o.position.z = Math.round(o.position.z/gridSize)*gridSize;
-    }
   });
   scene.add(transformControls);
 
@@ -1173,6 +1107,7 @@ function init() {
   setupSculpting();
   setupViewportMode();
   syncHistoryUi();
+  setupTransformPanel();
 
   // ResizeObserver handles both the initial iframe sizing by Flutter
   // (which fires before window.resize) and all subsequent resizes.
@@ -1281,7 +1216,7 @@ function clearModel() {
   lastSelectionAction = null;
   while (modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
   boxHelpers.forEach(h=>scene.remove(h)); boxHelpers=[];
-  normalHelpers.forEach(h=>scene.remove(h)); normalHelpers=[];
+  normalHelpers.forEach(h=>{ h.parent ? h.parent.remove(h) : scene.remove(h); h.geometry?.dispose(); }); normalHelpers=[];
 }
 
 // ── Loading overlay ───────────────────────────────────────────────────────────
@@ -1464,6 +1399,20 @@ function detachProxy() {
   [...transformProxy.children].forEach(m=>{ (m.userData._origParent||modelGroup).attach(m); delete m.userData._origParent; });
 }
 
+// ── Transform panel — apply on Enter ─────────────────────────────────────────
+function setupTransformPanel() {
+  const tfFlyout = document.getElementById('flyTransform');
+  if (!tfFlyout) return;
+  tfFlyout.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const id = e.target?.id;
+    if (id === 'tfScale') { window.applyUniformScale(); }
+    else { window.applyNumericTransform(); }
+    e.target?.blur();
+  });
+}
+
 // ── Raycasting / selection ────────────────────────────────────────────────────
 function setupRaycasting() {
   let down = {x:0,y:0};
@@ -1477,7 +1426,13 @@ function setupRaycasting() {
     mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
     raycaster.setFromCamera(mouse, camera);
     const hits = raycaster.intersectObjects(loadedMeshes.map(m=>m.mesh).filter(m=>m.visible), false);
-    if (!hits.length) return;
+    if (!hits.length) {
+      if (selectedMeshIndices.size) {
+        selectedMeshIndices.clear(); lastSelectedMeshIndex=null;
+        transformControls.detach(); updateMeshList(); updateHighlights();
+      }
+      return;
+    }
     const idx = loadedMeshes.findIndex(m=>m.mesh===hits[0].object); if (idx===-1) return;
     if (e.ctrlKey||e.metaKey) { selectedMeshIndices.has(idx)?selectedMeshIndices.delete(idx):selectedMeshIndices.add(idx); }
     else if (e.shiftKey && selectedMeshIndices.size>0) { const last=Math.max(...selectedMeshIndices); for(let i=Math.min(last,idx);i<=Math.max(last,idx);i++) selectedMeshIndices.add(i); }
@@ -1486,6 +1441,14 @@ function setupRaycasting() {
     lastSelectedMeshIndex = idx;
     updateMeshList({ scrollToSelection:true }); updateHighlights();
     if (currentMode!=='orbit') attachTransformToSelection();
+  });
+  container.addEventListener('contextmenu', e=>{
+    if (!isFullUi()) return;
+    e.preventDefault();
+    if (selectedMeshIndices.size) {
+      selectedMeshIndices.clear(); lastSelectedMeshIndex=null;
+      transformControls.detach(); updateMeshList(); updateHighlights();
+    }
   });
 }
 
@@ -1783,7 +1746,7 @@ function restoreSnapshot(snap, options = {}) {
 
   detachProxy(); transformControls.detach();
   boxHelpers.forEach(h=>scene.remove(h)); boxHelpers=[];
-  normalHelpers.forEach(h=>scene.remove(h)); normalHelpers=[];
+  normalHelpers.forEach(h=>{ h.parent ? h.parent.remove(h) : scene.remove(h); h.geometry?.dispose(); }); normalHelpers=[];
   loadedMeshes.forEach(e=>{ e.mesh.removeFromParent(); e.mesh.geometry.dispose(); if(e.mesh.material&&e.mesh.material!==highlightMat) e.mesh.material.dispose(); });
   while (modelGroup.children.length) modelGroup.remove(modelGroup.children[0]);
   nextGroup.children.slice().forEach(mesh => modelGroup.add(mesh));
@@ -2186,7 +2149,7 @@ window.toggleBoundingBox = function() {
 };
 window.toggleNormals = function() {
   displayState.normals=!displayState.normals;
-  normalHelpers.forEach(h=>scene.remove(h)); normalHelpers=[];
+  normalHelpers.forEach(h=>{ h.parent ? h.parent.remove(h) : scene.remove(h); h.geometry?.dispose(); }); normalHelpers=[];
   if (displayState.normals) {
     const tgts=selectedMeshIndices.size?[...selectedMeshIndices]:loadedMeshes.map((_,i)=>i);
     tgts.forEach(i=>{
@@ -2267,21 +2230,10 @@ function applySculptBrush(hit) {
   pos.needsUpdate=true; sculptHitPt=hit.point.clone();
 }
 
-// ── Snap / pivot ──────────────────────────────────────────────────────────────
-window.toggleGridSnap = function() {
-  gridSnap=!gridSnap;
-  document.getElementById('togGridSnap').textContent=`Grid Snap: ${gridSnap?'ON':'OFF'}`;
-  document.getElementById('togGridSnap').classList.toggle('active-tool',gridSnap);
-};
-window.setPivotMode = function(mode) {
-  pivotMode=mode;
-  ['pivotMedian','pivotIndividual','pivotWorld'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('active-tool'); });
-  const el=document.getElementById('pivot'+mode[0].toUpperCase()+mode.slice(1)); if(el) el.classList.add('active-tool');
-};
 
 // ── Flyout system ─────────────────────────────────────────────────────────────
 function setupFlyouts() {
-  document.querySelectorAll('.et-btn').forEach(btn=>{
+  document.querySelectorAll('.et-btn:not(.et-btn-soon)').forEach(btn=>{
     btn.addEventListener('click', e=>{
       e.stopPropagation();
       const id=btn.dataset.flyout, flyout=document.getElementById(id);
@@ -2290,7 +2242,17 @@ function setupFlyouts() {
       if (!wasOpen) { flyout.classList.add('open'); btn.classList.add('active'); }
     });
   });
-  document.addEventListener('click', e=>{ if(!e.target.closest('.flyout')&&!e.target.closest('.et-btn')) closeFlyouts(); });
+  const soonBtn = document.getElementById('matSoonBtn');
+  if (soonBtn) {
+    soonBtn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const tip = soonBtn.querySelector('.et-tip');
+      if (!tip) return;
+      tip.style.display = 'block';
+      clearTimeout(soonBtn._soonTimer);
+      soonBtn._soonTimer = setTimeout(()=>{ tip.style.display=''; }, 2000);
+    });
+  }
 }
 function closeFlyouts() {
   document.querySelectorAll('.flyout').forEach(f=>f.classList.remove('open'));
@@ -2379,10 +2341,12 @@ function selectedPartType() {
 
 function setAiBusy(busy) {
   activeEditRequestId = busy ? activeEditRequestId : null;
-  ['regenBtn','addPartBtn','regenPrompt','addPartPrompt','editModelSelect'].forEach(id => {
+  if (!busy) activeOperation = null;
+  ['regenBtn','addPartBtn','regenPrompt','addPartPrompt','editModelSelect','editModelSelectGrow'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
+  document.querySelector('.edit-toolbar')?.classList.toggle('ai-busy', busy);
 }
 
 function showEditStatus(message, isError = false) {
@@ -2411,12 +2375,11 @@ function showSectionStatus(operation, message, isError = false) {
     el.classList.toggle('busy', !isError && Boolean(activeEditRequestId));
     try { el.scrollIntoView({ block:'nearest' }); } catch(_) {}
   }
-  showEditStatus(message, isError);
 }
 
 function editStatusMessage(message, workflowId) {
   const id = String(workflowId || '').trim();
-  return id ? `${message}\nWorkflow ID: ${id}` : message;
+  return id ? `${message}\nRequest ID: ${id}` : message;
 }
 
 function flashEditButton(operation, message) {
@@ -2430,25 +2393,27 @@ function flashEditButton(operation, message) {
 }
 
 function renderEditModelSelector() {
-  const select = document.getElementById('editModelSelect');
-  if (!select) return;
   if (!editModelOptions.length) editModelOptions = editModelOptionsFromStorage();
   if (!editModelOptions.length) editModelOptions = DEFAULT_EDIT_MODEL_OPTIONS;
-  const previous = select.value || editDefaultModelId;
-  select.innerHTML = '';
-  editModelOptions.forEach(option => {
-    const opt = document.createElement('option');
-    opt.value = option.id || '';
-    opt.textContent = option.provider ? `${option.label} · ${option.provider}` : option.label;
-    select.appendChild(opt);
+  ['editModelSelect','editModelSelectGrow'].forEach(selectId => {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    const previous = select.value || editDefaultModelId;
+    select.innerHTML = '';
+    editModelOptions.forEach(option => {
+      const opt = document.createElement('option');
+      opt.value = option.id || '';
+      opt.textContent = option.provider ? `${option.label} · ${option.provider}` : option.label;
+      select.appendChild(opt);
+    });
+    const next = editModelOptions.some(option => option.id === previous)
+      ? previous
+      : (editModelOptions.some(option => option.id === editDefaultModelId)
+          ? editDefaultModelId
+          : editModelOptions[0].id);
+    select.value = next || '';
+    select.disabled = Boolean(activeEditRequestId);
   });
-  const next = editModelOptions.some(option => option.id === previous)
-    ? previous
-    : (editModelOptions.some(option => option.id === editDefaultModelId)
-        ? editDefaultModelId
-        : editModelOptions[0].id);
-  select.value = next || '';
-  select.disabled = Boolean(activeEditRequestId);
 }
 
 function storageValue(name) {
@@ -2488,7 +2453,9 @@ function editModelOptionsFromStorage() {
 }
 
 function selectedEditModelId() {
-  return document.getElementById('editModelSelect')?.value || '';
+  const growOpen = document.getElementById('flyAiGrow')?.classList.contains('open');
+  const id = growOpen ? 'editModelSelectGrow' : 'editModelSelect';
+  return document.getElementById(id)?.value || '';
 }
 
 function applyEditConfig(data) {
@@ -2522,6 +2489,7 @@ function requestAiEdit(operation, description, partType = '') {
   }
   if (activeEditRequestId) return;
   activeEditRequestId = `edit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  activeOperation = operation;
   setAiBusy(true);
   const activeButton = document.getElementById(editButtonId(operation));
   if (activeButton) {
@@ -2568,14 +2536,13 @@ window.addEventListener('message', event => {
   }
   if (data.type !== 'nova3d-edit-result') return;
   if (data.requestId !== activeEditRequestId) return;
+  const op = activeOperation || 'regenerate_3d_part';
   if (data.status === 'running') {
-    showSectionStatus(
-      data.operation || 'regenerate_3d_part',
-      editStatusMessage(data.message || 'Editing model...', data.workflowId),
-    );
+    showSectionStatus(op, editStatusMessage(data.message || 'Editing model...', data.workflowId));
     return;
   }
   setAiBusy(false);
+  activeOperation = null;
   ['regenBtn','addPartBtn'].forEach(id => {
     const el = document.getElementById(id);
     if (el?.dataset.idleLabel) {
@@ -2584,28 +2551,17 @@ window.addEventListener('message', event => {
     }
   });
   if (data.status !== 'completed') {
-    showSectionStatus(
-      data.operation || 'regenerate_3d_part',
-      editStatusMessage(data.message || 'Edit failed.', data.workflowId),
-      true,
-    );
+    showSectionStatus(op, editStatusMessage(data.message || 'Edit failed.', data.workflowId), true);
     return;
   }
   if (!data.modelUrl || !data.codeArtifact) {
-    showSectionStatus(
-      data.operation || 'regenerate_3d_part',
-      editStatusMessage('Edit finished but did not return a usable model artifact.', data.workflowId),
-      true,
-    );
+    showSectionStatus(op, editStatusMessage('Edit finished but did not return a usable model artifact.', data.workflowId), true);
     return;
   }
-  pushUndoSnapshot(data.operation || 'ai-edit');
+  pushUndoSnapshot(op);
   currentCodeArtifact = data.codeArtifact;
   if (data.workflowId) currentSourceWorkflowId = String(data.workflowId);
-  showSectionStatus(
-    data.operation || 'regenerate_3d_part',
-    editStatusMessage('Edit complete.', data.workflowId),
-  );
+  showSectionStatus(op, editStatusMessage('Edit complete.', data.workflowId));
   loadGLB(data.modelUrl, { recordHistory:false });
 });
 
