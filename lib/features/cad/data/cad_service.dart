@@ -169,6 +169,70 @@ class CadService {
     );
   }
 
+  Future<String> startArticulation({
+    required Map<String, dynamic> codeArtifact,
+    required GenerationModelOption modelOption,
+    Map<String, dynamic>? modelArtifact,
+    String? modelUrl,
+    String? instructionPrompt,
+    String? articulationRequest,
+    List<String> selectedMeshes = const [],
+    List<String> screenshots = const [],
+    String? workflowId,
+  }) async {
+    final rawModelUrl = modelUrl?.trim();
+    final cleanModelUrl =
+        (rawModelUrl == null || rawModelUrl.startsWith('blob:'))
+        ? null
+        : rawModelUrl;
+    if (modelArtifact == null &&
+        (cleanModelUrl == null || cleanModelUrl.isEmpty)) {
+      throw CadException(
+        'This model does not include a source GLB artifact yet. Generate or edit it again before articulating.',
+      );
+    }
+
+    final requestedWorkflowId = workflowId ?? createWorkflowId();
+    try {
+      final apiKey = await _apiKeyFor(modelOption);
+      final payload = <String, dynamic>{
+        'code_artifact': codeArtifact,
+        if (cleanModelUrl != null && cleanModelUrl.isNotEmpty)
+          'model_url': cleanModelUrl,
+        if ((instructionPrompt ?? '').trim().isNotEmpty)
+          'instruction_prompt': instructionPrompt!.trim(),
+        if ((articulationRequest ?? '').trim().isNotEmpty)
+          'articulation_request': articulationRequest!.trim(),
+        if (selectedMeshes.isNotEmpty) 'selected_meshes': selectedMeshes,
+        if (screenshots.isNotEmpty) 'screenshots': screenshots,
+        'llm': modelOption.llm,
+        'provider': modelOption.payloadProvider,
+        'api_key': apiKey,
+      };
+      if (modelArtifact != null) payload['model_artifact'] = modelArtifact;
+
+      final response = await _dio.post(
+        '/run/state/$kArticulate3dModelWorkflow',
+        queryParameters: {'request_id': requestedWorkflowId},
+        data: {
+          'payload': payload,
+          'return_nodes': ['articulate_3d_model'],
+        },
+        options: await _authOptions(receiveTimeout: _startReceiveTimeout),
+      );
+      final returnedWorkflowId = response.data['workflow_id'] as String?;
+      if (returnedWorkflowId == null || returnedWorkflowId.isEmpty) {
+        throw CadException(
+          'Articulation workflow did not return a workflow id.',
+        );
+      }
+      return returnedWorkflowId;
+    } on DioException catch (e) {
+      if (_mayHaveStarted(e)) return requestedWorkflowId;
+      throw CadException(_errorMessage(e));
+    }
+  }
+
   Future<String> _startEditWorkflow({
     required String workflow,
     required String returnNode,

@@ -9,7 +9,11 @@ class GlbViewer extends StatelessWidget {
     super.key,
     required this.src,
     this.autoRotate = true,
+    this.modelArtifact,
     this.codeArtifact,
+    this.jointsArtifact,
+    this.joints = const [],
+    this.instructionPrompt,
     this.sourceWorkflowId,
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
@@ -17,7 +21,11 @@ class GlbViewer extends StatelessWidget {
 
   final String src;
   final bool autoRotate;
+  final Map<String, dynamic>? modelArtifact;
   final Map<String, dynamic>? codeArtifact;
+  final Map<String, dynamic>? jointsArtifact;
+  final List<Map<String, dynamic>> joints;
+  final String? instructionPrompt;
   final String? sourceWorkflowId;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
@@ -27,7 +35,11 @@ class GlbViewer extends StatelessWidget {
     return GlbViewerPlatform(
       src: src,
       autoRotate: autoRotate,
+      modelArtifact: modelArtifact,
       codeArtifact: codeArtifact,
+      jointsArtifact: jointsArtifact,
+      joints: joints,
+      instructionPrompt: instructionPrompt,
       sourceWorkflowId: sourceWorkflowId,
       editModelOptions: editModelOptions,
       defaultEditModelOptionId: defaultEditModelOptionId,

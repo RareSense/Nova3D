@@ -85,6 +85,7 @@ class WorkflowStatus {
     'sketch_to_3d_generator': 'Generating your 3D model...',
     'regenerate_3d_part': 'Regenerating the selected part...',
     'add_3d_part': 'Adding a new part...',
+    'articulate_3d_model': 'Articulating your 3D model...',
   };
 
   String get progressLabel {
@@ -119,38 +120,74 @@ class WorkflowStatus {
 
 class CadResult {
   final String? glbUrl;
+  final Map<String, dynamic>? modelArtifact;
   final Map<String, dynamic>? codeArtifact;
+  final Map<String, dynamic>? jointsArtifact;
+  final List<Map<String, dynamic>> joints;
+  final int jointCount;
   final bool failed;
   final String? errorMessage;
   final String? errorCategory;
   final String? provider;
+  final String? operation;
+  final Map<String, dynamic>? cost;
   final bool retryable;
 
   const CadResult({
     this.glbUrl,
+    this.modelArtifact,
     this.codeArtifact,
+    this.jointsArtifact,
+    this.joints = const [],
+    this.jointCount = 0,
     required this.failed,
     this.errorMessage,
     this.errorCategory,
     this.provider,
+    this.operation,
+    this.cost,
     this.retryable = false,
   });
 
   factory CadResult.fromJson(Map<String, dynamic> json) {
     final payload = _extractGeneratorPayload(json);
     final glbUrl = payload == null ? null : _extractGlbUrl(payload);
+    final modelArtifact = payload == null
+        ? null
+        : _extractModelArtifact(payload);
     final codeArtifact = payload == null ? null : _extractCodeArtifact(payload);
+    final jointsArtifact = payload == null
+        ? null
+        : _extractJointsArtifact(payload);
+    final joints = payload == null
+        ? const <Map<String, dynamic>>[]
+        : _extractJoints(payload);
+    final jointCount = payload == null
+        ? 0
+        : (_intValue(_unwrapResult(payload)['joint_count']) ?? joints.length);
+    final operation = payload == null
+        ? null
+        : _stringValue(_unwrapResult(payload)['operation']);
+    final cost = payload == null
+        ? null
+        : _asStringMap(_unwrapResult(payload)['cost']);
     final failure = payload == null ? null : _extractFailure(payload);
     final errorMessage = failure?.message ?? _extractRootError(json);
     final failed = glbUrl == null && (_isFailed(json) || errorMessage != null);
 
     return CadResult(
       glbUrl: glbUrl,
+      modelArtifact: modelArtifact,
       codeArtifact: codeArtifact,
+      jointsArtifact: jointsArtifact,
+      joints: joints,
+      jointCount: jointCount,
       failed: failed,
       errorMessage: errorMessage,
       errorCategory: failure?.category,
       provider: failure?.provider,
+      operation: operation,
+      cost: cost,
       retryable: failure?.retryable ?? false,
     );
   }
@@ -162,6 +199,7 @@ class CadResult {
       'sketch_to_3d_generator',
       'regenerate_3d_part',
       'add_3d_part',
+      'articulate_3d_model',
     ]) {
       final node = json[key];
       if (node is! List || node.isEmpty) continue;
@@ -187,6 +225,17 @@ class CadResult {
     return null;
   }
 
+  static Map<String, dynamic>? _extractModelArtifact(
+    Map<String, dynamic> payload,
+  ) {
+    final unwrapped = _unwrapResult(payload);
+    for (final artifactKey in ['model_artifact', 'model']) {
+      final artifact = _asStringMap(unwrapped[artifactKey]);
+      if (artifact != null) return artifact;
+    }
+    return null;
+  }
+
   static Map<String, dynamic>? _extractCodeArtifact(
     Map<String, dynamic> payload,
   ) {
@@ -200,6 +249,27 @@ class CadResult {
       if (artifact != null) return artifact;
     }
     return null;
+  }
+
+  static Map<String, dynamic>? _extractJointsArtifact(
+    Map<String, dynamic> payload,
+  ) {
+    final unwrapped = _unwrapResult(payload);
+    return _asStringMap(unwrapped['joints_artifact']);
+  }
+
+  static List<Map<String, dynamic>> _extractJoints(
+    Map<String, dynamic> payload,
+  ) {
+    final unwrapped = _unwrapResult(payload);
+    final raw = unwrapped['joints'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map(
+          (joint) => joint.map((key, value) => MapEntry(key.toString(), value)),
+        )
+        .toList(growable: false);
   }
 
   static _FailureInfo? _extractFailure(Map<String, dynamic> payload) {
@@ -281,6 +351,13 @@ class CadResult {
       if (normalized == 'true') return true;
       if (normalized == 'false') return false;
     }
+    return null;
+  }
+
+  static int? _intValue(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
     return null;
   }
 

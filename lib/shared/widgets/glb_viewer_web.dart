@@ -22,7 +22,11 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
     super.key,
     required this.src,
     required this.autoRotate,
+    this.modelArtifact,
     this.codeArtifact,
+    this.jointsArtifact,
+    this.joints = const [],
+    this.instructionPrompt,
     this.sourceWorkflowId,
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
@@ -30,7 +34,11 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
 
   final String src;
   final bool autoRotate;
+  final Map<String, dynamic>? modelArtifact;
   final Map<String, dynamic>? codeArtifact;
+  final Map<String, dynamic>? jointsArtifact;
+  final List<Map<String, dynamic>> joints;
+  final String? instructionPrompt;
   final String? sourceWorkflowId;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
@@ -81,7 +89,11 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       return;
     }
 
-    if (oldWidget.codeArtifact != widget.codeArtifact ||
+    if (oldWidget.modelArtifact != widget.modelArtifact ||
+        oldWidget.codeArtifact != widget.codeArtifact ||
+        oldWidget.jointsArtifact != widget.jointsArtifact ||
+        oldWidget.joints != widget.joints ||
+        oldWidget.instructionPrompt != widget.instructionPrompt ||
         oldWidget.sourceWorkflowId != widget.sourceWorkflowId ||
         oldWidget.defaultEditModelOptionId != widget.defaultEditModelOptionId ||
         !_sameModelOptions(
@@ -129,9 +141,17 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       'viewerId': _viewerId,
       'stateKey': widget.src.hashCode.toRadixString(16),
       'glb': modelUrl,
+      'sourceModelUrl': widget.src,
       'autoRotate': widget.autoRotate.toString(),
+      if (widget.modelArtifact != null)
+        'modelArtifact': json.encode(widget.modelArtifact),
       if (widget.codeArtifact != null)
         'codeArtifact': json.encode(widget.codeArtifact),
+      if (widget.jointsArtifact != null)
+        'jointsArtifact': json.encode(widget.jointsArtifact),
+      if (widget.joints.isNotEmpty) 'joints': json.encode(widget.joints),
+      if ((widget.instructionPrompt ?? '').isNotEmpty)
+        'instructionPrompt': widget.instructionPrompt!,
       if (widget.sourceWorkflowId != null)
         'sourceWorkflowId': widget.sourceWorkflowId!,
       'editModelOptions': json.encode(_editModelOptionsPayload()),
@@ -156,7 +176,13 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     _iframe.contentWindow?.postMessage(
       {
         'type': 'nova3d-edit-config',
+        if (widget.modelArtifact != null) 'modelArtifact': widget.modelArtifact,
         if (widget.codeArtifact != null) 'codeArtifact': widget.codeArtifact,
+        if (widget.jointsArtifact != null)
+          'jointsArtifact': widget.jointsArtifact,
+        'joints': widget.joints,
+        'sourceModelUrl': widget.src,
+        'instructionPrompt': widget.instructionPrompt ?? '',
         'sourceWorkflowId': widget.sourceWorkflowId ?? '',
         'editModelOptions': _editModelOptionsPayload(),
         'editDefaultModelId': widget.defaultEditModelOptionId ?? '',
@@ -184,6 +210,11 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       description: request.description,
       partType: request.partType,
       codeArtifact: request.codeArtifact,
+      modelArtifact: request.modelArtifact,
+      sourceModelUrl: request.sourceModelUrl,
+      instructionPrompt: request.instructionPrompt,
+      selectedMeshes: request.selectedMeshes,
+      screenshots: request.screenshots,
       sourceWorkflowId: request.sourceWorkflowId,
       modelOptionId: request.modelOptionId,
     );
@@ -195,6 +226,11 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     required String description,
     required String partType,
     required Map<String, dynamic>? codeArtifact,
+    required Map<String, dynamic>? modelArtifact,
+    required String sourceModelUrl,
+    required String instructionPrompt,
+    required List<String> selectedMeshes,
+    required List<String> screenshots,
     required String sourceWorkflowId,
     required String modelOptionId,
   }) async {
@@ -202,24 +238,34 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     final modelOption = GenerationModelOption.findById(
       widget.editModelOptions,
       modelOptionId,
-    ) ?? GenerationModelOption.findById(
-      GenerationModelOption.all,
-      modelOptionId,
     );
     var editableCodeArtifact = codeArtifact;
+    var editableModelArtifact = modelArtifact ?? widget.modelArtifact;
+    var editableModelUrl = sourceModelUrl.trim().isNotEmpty
+        ? sourceModelUrl.trim()
+        : widget.src;
     final workflowIdForSource = sourceWorkflowId.isNotEmpty
         ? sourceWorkflowId
         : (widget.sourceWorkflowId ?? '');
-    if (editableCodeArtifact == null && workflowIdForSource.isNotEmpty) {
+    final needsSourceResult =
+        workflowIdForSource.isNotEmpty &&
+        (editableCodeArtifact == null ||
+            (operation == 'articulate_3d_model' &&
+                editableModelArtifact == null &&
+                editableModelUrl.isEmpty));
+    if (needsSourceResult) {
       _postEditResult({
         'requestId': requestId,
         'status': 'running',
         'message': 'Loading editable source from the original workflow...',
       });
       try {
-        editableCodeArtifact = (await cad.getResult(
-          workflowIdForSource,
-        )).codeArtifact;
+        final sourceResult = await cad.getResult(workflowIdForSource);
+        editableCodeArtifact ??= sourceResult.codeArtifact;
+        editableModelArtifact ??= sourceResult.modelArtifact;
+        if (editableModelUrl.isEmpty && sourceResult.glbUrl != null) {
+          editableModelUrl = sourceResult.glbUrl!;
+        }
       } on CadException catch (e) {
         _postEditResult({
           'requestId': requestId,
@@ -239,6 +285,17 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       });
       return;
     }
+    if (operation == 'articulate_3d_model' &&
+        editableModelArtifact == null &&
+        editableModelUrl.isEmpty) {
+      _postEditResult({
+        'requestId': requestId,
+        'status': 'failed',
+        'message':
+            'This model does not include a source GLB artifact yet. Generate or edit it again before articulating.',
+      });
+      return;
+    }
     if (modelOption == null) {
       _postEditResult({
         'requestId': requestId,
@@ -252,22 +309,35 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       _postEditResult({
         'requestId': requestId,
         'status': 'running',
-        'message': operation == 'add_3d_part'
-            ? 'Starting add-part workflow...'
-            : 'Starting selected-part regeneration...',
+        'message': switch (operation) {
+          'add_3d_part' => 'Starting add-part workflow...',
+          'articulate_3d_model' => 'Starting articulation workflow...',
+          _ => 'Starting selected-part regeneration...',
+        },
       });
-      final workflowId = operation == 'add_3d_part'
-          ? await cad.startAddPart(
-              codeArtifact: editableCodeArtifact,
-              description: description,
-              modelOption: modelOption,
-            )
-          : await cad.startRegeneratePart(
-              codeArtifact: editableCodeArtifact,
-              description: description,
-              modelOption: modelOption,
-              partType: partType,
-            );
+      final workflowId = switch (operation) {
+        'add_3d_part' => await cad.startAddPart(
+          codeArtifact: editableCodeArtifact,
+          description: description,
+          modelOption: modelOption,
+        ),
+        'articulate_3d_model' => await cad.startArticulation(
+          codeArtifact: editableCodeArtifact,
+          modelArtifact: editableModelArtifact,
+          modelUrl: editableModelUrl,
+          instructionPrompt: instructionPrompt,
+          articulationRequest: description,
+          selectedMeshes: selectedMeshes,
+          screenshots: screenshots,
+          modelOption: modelOption,
+        ),
+        _ => await cad.startRegeneratePart(
+          codeArtifact: editableCodeArtifact,
+          description: description,
+          modelOption: modelOption,
+          partType: partType,
+        ),
+      };
 
       final result = await cad.runWorkflow(
         workflowId,
@@ -303,7 +373,12 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         'operation': operation,
         'workflowId': workflowId,
         'modelUrl': resolved,
+        'sourceModelUrl': result.glbUrl,
+        'modelArtifact': result.modelArtifact,
         'codeArtifact': result.codeArtifact,
+        'jointsArtifact': result.jointsArtifact,
+        'joints': result.joints,
+        'jointCount': result.jointCount,
       });
     } on CadException catch (e) {
       _postEditResult({
@@ -334,7 +409,12 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         partType: (request['partType'] as String?) ?? '',
         modelOptionId: (request['modelOptionId'] as String?) ?? '',
         sourceWorkflowId: (request['sourceWorkflowId'] as String?) ?? '',
+        sourceModelUrl: (request['sourceModelUrl'] as String?) ?? '',
+        instructionPrompt: (request['instructionPrompt'] as String?) ?? '',
         codeArtifact: _asStringMap(request['codeArtifact']),
+        modelArtifact: _asStringMap(request['modelArtifact']),
+        selectedMeshes: _asStringList(request['selectedMeshes']),
+        screenshots: _asStringList(request['screenshots']),
       );
     } catch (_) {
       return const _EditRequest();
@@ -344,6 +424,14 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   Map<String, dynamic>? _asStringMap(Object? value) {
     if (value is! Map) return null;
     return value.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  List<String> _asStringList(Object? value) {
+    if (value is! List) return const [];
+    return value
+        .map((entry) => entry.toString().trim())
+        .where((entry) => entry.isNotEmpty)
+        .toList(growable: false);
   }
 
   void _postEditResult(Map<String, dynamic> payload) {
@@ -388,7 +476,12 @@ class _EditRequest {
     this.partType = '',
     this.modelOptionId = '',
     this.sourceWorkflowId = '',
+    this.sourceModelUrl = '',
+    this.instructionPrompt = '',
     this.codeArtifact,
+    this.modelArtifact,
+    this.selectedMeshes = const [],
+    this.screenshots = const [],
   });
 
   final String requestId;
@@ -397,5 +490,10 @@ class _EditRequest {
   final String partType;
   final String modelOptionId;
   final String sourceWorkflowId;
+  final String sourceModelUrl;
+  final String instructionPrompt;
   final Map<String, dynamic>? codeArtifact;
+  final Map<String, dynamic>? modelArtifact;
+  final List<String> selectedMeshes;
+  final List<String> screenshots;
 }

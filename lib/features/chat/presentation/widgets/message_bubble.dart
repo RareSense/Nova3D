@@ -46,7 +46,11 @@ class MessageBubble extends ConsumerWidget {
                     child: GlbViewer(
                       key: ValueKey(message.id),
                       src: message.modelUrl!,
+                      modelArtifact: message.modelArtifact,
                       codeArtifact: message.codeArtifact,
+                      jointsArtifact: message.jointsArtifact,
+                      joints: message.joints,
+                      instructionPrompt: message.instructionPrompt,
                       sourceWorkflowId: message.workflowId,
                       editModelOptions: editModelOptions,
                       defaultEditModelOptionId: message.modelOptionId,

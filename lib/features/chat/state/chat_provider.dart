@@ -332,8 +332,12 @@ class MessagesNotifier extends StateNotifier<ChatMessagesState> {
         isStreaming: false,
         modelUrl: result.glbUrl,
         workflowId: startedWorkflowId,
+        modelArtifact: result.modelArtifact,
         codeArtifact: result.codeArtifact,
+        jointsArtifact: result.jointsArtifact,
+        joints: result.joints,
         modelOptionId: request.modelOption.id,
+        instructionPrompt: request.prompt.trim(),
         retryRequest: failed ? request : null,
       );
       _upsert(msg);
@@ -410,7 +414,10 @@ class MessagesNotifier extends StateNotifier<ChatMessagesState> {
           isStreaming: false,
           modelUrl: result.glbUrl,
           workflowId: workflowId,
+          modelArtifact: result.modelArtifact,
           codeArtifact: result.codeArtifact,
+          jointsArtifact: result.jointsArtifact,
+          joints: result.joints,
         ),
       );
     } on CadException catch (e) {

@@ -136,7 +136,7 @@ body.full-ui .viewport-action { left:12px; }
   border-right:1px solid rgba(255,255,255,.06);
   box-shadow:4px 0 20px rgba(0,0,0,.4);
 }
-.ai-busy .et-btn:not([data-flyout="flyAiRemix"]):not([data-flyout="flyAiGrow"]) {
+.ai-busy .et-btn:not([data-flyout="flyAiRemix"]):not([data-flyout="flyAiGrow"]):not([data-flyout="flyArticulate"]) {
   opacity:0.3; pointer-events:none;
 }
 .et-btn {
@@ -159,6 +159,69 @@ body.full-ui .viewport-action { left:12px; }
 .et-btn:hover .et-tip { display:block; }
 .et-tip-soon { color:#f90 !important; }
 .et-btn-soon:hover { opacity:0.8 !important; }
+
+/* ── Persistent articulation dock ── */
+.articulation-dock {
+  display:none; position:absolute; left:8px; bottom:82px; z-index:44;
+  width:132px; max-height:min(320px, calc(100vh - 180px)); min-height:92px;
+  padding:8px 6px;
+  background:linear-gradient(180deg,rgba(22,22,22,.95),rgba(14,14,14,.98));
+  backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.06); border-left:0; border-radius:0 8px 8px 0;
+  box-shadow:4px 0 20px rgba(0,0,0,.38);
+}
+body.full-ui .articulation-dock.active { display:block; }
+.articulation-dock h4 {
+  color:#666; font-size:8px; font-weight:700; text-transform:uppercase;
+  letter-spacing:1.3px; margin:0 0 6px; padding:0 4px;
+}
+.articulation-list {
+  display:flex; flex-direction:column; gap:3px; max-height:min(280px, calc(100vh - 224px));
+  overflow:auto; padding-right:1px;
+}
+.articulation-item {
+  width:100%; min-height:30px; padding:6px 7px;
+  border:1px solid transparent; border-radius:5px; background:transparent;
+  color:#888; cursor:pointer; text-align:left; font-size:10px; line-height:1.2;
+  overflow:hidden; text-overflow:ellipsis;
+}
+.articulation-item:hover { color:#fff; background:#242424; border-color:#303030; }
+.articulation-item.active { color:#050505; background:#f4f4f5; border-color:#fff; font-weight:700; }
+.articulation-control-panel {
+  display:none; position:absolute; left:158px; bottom:82px; z-index:47;
+  width:300px; padding:12px 14px;
+  background:linear-gradient(180deg,rgba(30,30,30,.96),rgba(18,18,18,.99));
+  backdrop-filter:blur(25px);
+  border:1px solid rgba(255,255,255,.08); border-radius:8px;
+  box-shadow:8px 8px 34px rgba(0,0,0,.55),0 0 1px rgba(255,255,255,.05);
+}
+body.full-ui .articulation-control-panel.active { display:block; }
+body.flyout-open .articulation-control-panel.active { display:none; }
+.articulation-control-panel h3 {
+  color:#fff; font-size:11px; margin:0 0 4px; text-transform:uppercase;
+  letter-spacing:1.7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.articulation-meta {
+  color:#777; font-size:9px; text-transform:uppercase; letter-spacing:.9px;
+  margin-bottom:10px;
+}
+.articulation-slider-row { display:flex; align-items:center; gap:8px; margin-bottom:9px; }
+.articulation-slider-row input { flex:1; height:3px; accent-color:#fff; }
+.articulation-slider-row span { width:50px; color:#aaa; font-size:10px; font-family:monospace; text-align:right; }
+.articulation-axis-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
+.articulation-axis-grid button {
+  height:28px; border:1px solid #2a2a2a; border-radius:5px;
+  background:#181818; color:#888; font-size:10px; cursor:pointer;
+}
+.articulation-axis-grid button:hover { color:#fff; border-color:#444; }
+.articulation-axis-grid button.active { color:#050505; background:#f4f4f5; border-color:#fff; font-weight:700; }
+.articulation-command-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:8px; }
+.articulation-command-grid button {
+  height:28px; border:1px solid #2a2a2a; border-radius:5px;
+  background:#181818; color:#aaa; font-size:10px; cursor:pointer;
+}
+.articulation-command-grid button:hover { color:#fff; border-color:#444; }
+.articulation-command-grid button.primary { color:#050505; background:#f4f4f5; border-color:#fff; font-weight:700; }
 
 /* ── Flyout panels ── */
 .flyout {
@@ -228,6 +291,66 @@ body.full-ui .viewport-action { left:12px; }
 .edit-status.active { display:block; }
 .edit-status.error { color:#fca5a5; border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08); }
 .edit-status.busy { color:#bfdbfe; border-color:rgba(96,165,250,.35); background:rgba(96,165,250,.08); }
+#flyArticulate {
+  top:70px !important;
+  width:340px;
+  max-height:calc(100vh - 92px);
+  padding:14px 16px;
+}
+#flyArticulate h3 { margin-bottom:10px; }
+#flyArticulate h4 { margin:10px 0 6px; }
+#flyArticulate .edit-model-select { height:32px; margin-bottom:8px; }
+#flyArticulate .edit-input {
+  min-height:64px;
+  max-height:96px;
+  padding:9px 10px;
+  resize:vertical;
+}
+#flyArticulate #articulateBtn {
+  padding:9px 12px !important;
+  margin-top:6px !important;
+}
+#flyArticulate .edit-status {
+  max-height:58px;
+  overflow:auto;
+  font-size:10px;
+  padding:7px 9px;
+}
+.joint-panel {
+  display:none; margin-top:10px; padding-top:8px; border-top:1px solid #2a2a2a;
+}
+.joint-panel.active { display:block; }
+.joint-toolbar {
+  display:grid; grid-template-columns:1.15fr .95fr .7fr; gap:5px; margin-bottom:7px;
+}
+.joint-toolbar .fo-btn {
+  margin-bottom:0; text-align:center; padding:7px 6px; font-size:10px;
+  white-space:nowrap;
+}
+#jointsList {
+  max-height:clamp(116px, calc(100vh - 545px), 300px);
+  overflow:auto;
+  padding-right:2px;
+}
+.joint-row {
+  padding:7px 0; border-top:1px solid rgba(255,255,255,.06);
+}
+.joint-row:first-child { border-top:0; }
+.joint-row-head {
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin-bottom:6px;
+}
+.joint-name { min-width:0; color:#ddd; font-size:11px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.joint-kind { color:#777; font-size:9px; text-transform:uppercase; letter-spacing:.9px; flex-shrink:0; }
+.joint-control { display:flex; align-items:center; gap:7px; }
+.joint-control input[type="range"] { flex:1; height:3px; accent-color:#fff; }
+.joint-value { width:44px; color:#aaa; font-size:10px; font-family:monospace; text-align:right; }
+.joint-axis-row { display:flex; gap:4px; margin-top:5px; }
+.joint-axis-btn {
+  flex:1; padding:4px 0; border:1px solid #2a2a2a; border-radius:5px;
+  background:#181818; color:#777; font-size:10px; cursor:pointer;
+}
+.joint-axis-btn.active { color:#050505; background:#f5f5f5; border-color:#fff; }
 
 /* ── Undo / Redo bar ── */
 .undo-bar {
@@ -409,7 +532,19 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
   }
   .et-btn .et-label { font-size:6px; }
   .et-btn .et-tip { left:50px; }
+  .articulation-dock {
+    width:116px; max-height:min(300px, calc(100vh - 170px));
+  }
+  .articulation-control-panel {
+    left:142px; width:272px;
+  }
+  .articulation-list { max-height:min(260px, calc(100vh - 214px)); }
   .flyout { left:54px; width:min(280px,calc(100% - 80px)); }
+  #flyArticulate {
+    width:min(320px,calc(100% - 80px));
+    max-height:calc(100vh - 116px);
+  }
+  #jointsList { max-height:clamp(104px, calc(100vh - 560px), 260px); }
   .mesh-panel {
     width:220px;
   }
@@ -441,6 +576,14 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
   }
   #tbAutoRotate { min-width:unset; }
   .edit-toolbar { top:104px; }
+  .articulation-dock,
+  .articulation-control-panel { display:none !important; }
+  #flyArticulate {
+    top:78px !important;
+    width:calc(100% - 76px);
+    max-height:calc(100vh - 92px);
+  }
+  #jointsList { max-height:clamp(104px, calc(100vh - 520px), 260px); }
   .stats {
     left:50%; bottom:calc(38vh + 22px); gap:16px; padding:10px 20px;
   }
@@ -454,6 +597,9 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
   }
   .et-btn { height:38px; }
   .flyout { max-height:calc(100vh - 120px); }
+  #flyArticulate { max-height:calc(100vh - 92px); }
+  #flyArticulate .edit-input { min-height:52px; max-height:70px; }
+  #jointsList { max-height:clamp(96px, calc(100vh - 470px), 220px); }
 }
 </style>
 </head>
@@ -483,7 +629,14 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
       <button class="et-btn" data-flyout="flyDisplay"><span>👁</span><span class="et-label">Display</span><div class="et-tip">Display</div></button>
       <button class="et-btn" data-flyout="flyAiRemix"><span>✦</span><span class="et-label">Remix</span><div class="et-tip">Remix a part — reshape, refine, or totally reinvent selected geometry</div></button>
       <button class="et-btn" data-flyout="flyAiGrow"><span>✚</span><span class="et-label">Grow</span><div class="et-tip">Grow new parts — conjure fresh geometry right onto your model</div></button>
+      <button class="et-btn" data-flyout="flyArticulate"><span>⚙</span><span class="et-label">Rig</span><div class="et-tip">Make articulated controls for the current model state</div></button>
     </div>
+
+    <div class="articulation-dock" id="articulationDock" aria-live="polite">
+      <h4>Articulated</h4>
+      <div class="articulation-list" id="articulationList"></div>
+    </div>
+    <div class="articulation-control-panel" id="articulationControlPanel"></div>
 
     <!-- Transform flyout -->
     <div class="flyout" id="flyTransform" style="top:70px">
@@ -603,6 +756,17 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
       <textarea class="edit-input" id="addPartPrompt" placeholder="Describe the new part to add..."></textarea>
       <button class="fo-btn" id="addPartBtn" onclick="requestAddPart()" style="border-color:#fff;color:#fff;margin-top:6px">Grow It</button>
       <div class="edit-status" id="addPartStatus"></div>
+    </div>
+
+    <!-- Articulation flyout -->
+    <div class="flyout" id="flyArticulate" style="top:346px">
+      <h3>Articulate</h3>
+      <p style="font-size:10px;color:#666;margin:0 0 12px;line-height:1.5">Select parts if useful, then describe the motion. Leave blank to infer joints automatically.</p>
+      <h4>Model</h4>
+      <select class="edit-model-select" id="editModelSelectArticulate" aria-label="AI articulation model"></select>
+      <textarea class="edit-input" id="articulationPrompt" placeholder="Optional: make the lid open, wheels rotate, drawers slide..."></textarea>
+      <button class="fo-btn" id="articulateBtn" onclick="requestArticulation()" style="border-color:#fff;color:#fff;margin-top:6px">Make it Articulated</button>
+      <div class="edit-status" id="articulationStatus"></div>
     </div>
 
     <!-- Loading overlay -->
@@ -966,18 +1130,26 @@ const redoHistory = [];
 const MAX_UNDO    = 30;
 let currentCodeArtifact = null;
 let currentModelUrl = null;
+let currentSourceModelUrl = '';
+let currentModelArtifact = null;
+let currentJointsArtifact = null;
+let currentJoints = [];
+let currentInstructionPrompt = '';
 let currentSourceWorkflowId = '';
 let activeEditRequestId = null;
 let activeOperation = null;
+let articulatedJoints = [];
+let selectedArticulatedJointName = '';
+let articulatedObjects = [];
+let jointSliderValues = {};
+let jointDirectionMultipliers = {};
+let jointDemoActive = true;
+let jointAutoPreviewEnabled = true;
+let jointDemoMode = 'all';
+let jointDemoTime = 0;
+let jointDemoLastFrame = 0;
 let editModelOptions = [];
 let editDefaultModelId = '';
-const DEFAULT_EDIT_MODEL_OPTIONS = [
-  { id:'anthropic_claude_sonnet', label:'claude-sonnet-4-6', provider:'Anthropic' },
-  { id:'anthropic_claude_opus', label:'claude-opus-4-6', provider:'Anthropic' },
-  { id:'anthropic_claude_opus_latest', label:'claude-opus-4-7', provider:'Anthropic' },
-  { id:'openai_gpt55', label:'gpt-5.5', provider:'OpenAI' },
-  { id:'gemini_gemini', label:'gemini-3.1-pro-preview', provider:'Gemini' },
-];
 let viewerId = 'standalone-viewer';
 let stateKey = 'standalone-viewer';
 
@@ -1117,6 +1289,8 @@ function init() {
 
 function animate() {
   requestAnimationFrame(animate);
+  tickJointDemo();
+  applyJointTransforms();
   controls.update();
   renderer.render(scene, camera);
 }
@@ -1175,6 +1349,7 @@ function loadGLB(url, options = {}) {
     gltf => {
       clearModel();
       currentModelUrl = url;
+      if (options.sourceModelUrl) currentSourceModelUrl = options.sourceModelUrl;
       const model = gltf.scene;
       const box  = new THREE.Box3().setFromObject(model);
       const ctr  = box.getCenter(new THREE.Vector3());
@@ -1191,6 +1366,10 @@ function loadGLB(url, options = {}) {
         loadedMeshes.push({ mesh:child, originalMaterial:child.material, name:child.name||`Mesh_${loadedMeshes.length}`, geometry:child.geometry.clone() });
       });
       updateMeshList(); updateMeshStats();
+      bindArticulatedJoints(currentJoints, {
+        preserveValues:true,
+        autoStart:options.startJointDemo === true,
+      });
       frameCameraToModel(modelGroup);
       hideLoading();
       const el = document.getElementById('statsBar'); if(el) el.style.display='flex';
@@ -1496,20 +1675,71 @@ function setupKeyboard() {
 }
 
 // ── Edit history ──────────────────────────────────────────────────────────────
+function structuredCloneSafe(value) {
+  if (value == null) return value;
+  try {
+    if (typeof structuredClone === 'function') return structuredClone(value);
+  } catch(_) {}
+  try { return JSON.parse(JSON.stringify(value)); } catch(_) { return value; }
+}
+
+function objectParentJointName(object) {
+  let node = object?.parent;
+  while (node && node !== modelGroup) {
+    if (articulatedObjects[node.name]) return node.name;
+    node = node.parent;
+  }
+  return null;
+}
+
+function captureJointNodes() {
+  return articulatedJoints.map(joint => {
+    const obj = articulatedObjects[joint.name];
+    if (!obj) return null;
+    return {
+      name:joint.name,
+      parentJointName:objectParentJointName(obj),
+      position:obj.position.clone(),
+      rotation:obj.rotation.clone(),
+      scale:obj.scale.clone(),
+      restPos:obj.userData.restPos?.clone?.() || obj.position.clone(),
+      restRot:obj.userData.restRot?.clone?.() || obj.rotation.clone(),
+    };
+  }).filter(Boolean);
+}
+
 function captureSnapshot(action) {
   if (!loadedMeshes.length) return null;
-  return { action, codeArtifact: currentCodeArtifact, modelUrl: currentModelUrl, meshes: loadedMeshes.map(entry => {
+  const preserveArticulation = articulatedJoints.length > 0;
+  return {
+    action,
+    codeArtifact: currentCodeArtifact,
+    modelUrl: currentModelUrl,
+    sourceModelUrl: currentSourceModelUrl,
+    modelArtifact: currentModelArtifact,
+    jointsArtifact: currentJointsArtifact,
+    joints: structuredCloneSafe(currentJoints),
+    selectedArticulatedJointName,
+    jointSliderValues: structuredCloneSafe(jointSliderValues) || {},
+    jointDirectionMultipliers: structuredCloneSafe(jointDirectionMultipliers) || {},
+    jointNodes: preserveArticulation ? captureJointNodes() : [],
+    meshes: loadedMeshes.map(entry => {
     const material = entry.originalMaterial?.clone?.() || entry.mesh.material?.clone?.() || new THREE.MeshStandardMaterial({ color:0xaaaaaa });
-    entry.mesh.updateMatrixWorld(true);
-    modelGroup.updateMatrixWorld(true);
     const geometry = entry.mesh.geometry.clone();
-    const toModelGroup = new THREE.Matrix4().copy(modelGroup.matrixWorld).invert().multiply(entry.mesh.matrixWorld);
-    geometry.applyMatrix4(toModelGroup);
+    if (!preserveArticulation) {
+      entry.mesh.updateMatrixWorld(true);
+      modelGroup.updateMatrixWorld(true);
+      const toModelGroup = new THREE.Matrix4().copy(modelGroup.matrixWorld).invert().multiply(entry.mesh.matrixWorld);
+      geometry.applyMatrix4(toModelGroup);
+    }
     return {
       name:entry.name, geometry,
       material,
-      position:new THREE.Vector3(), rotation:new THREE.Euler(),
-      scale:new THREE.Vector3(1,1,1), visible:entry.mesh.visible,
+      jointName:preserveArticulation ? objectParentJointName(entry.mesh) : null,
+      position:preserveArticulation ? entry.mesh.position.clone() : new THREE.Vector3(),
+      rotation:preserveArticulation ? entry.mesh.rotation.clone() : new THREE.Euler(),
+      scale:preserveArticulation ? entry.mesh.scale.clone() : new THREE.Vector3(1,1,1),
+      visible:entry.mesh.visible,
       matParams:serializeMaterial(material)
     };
   })};
@@ -1591,8 +1821,28 @@ function snapshotToData(snapshot) {
     action:snapshot.action,
     codeArtifact:snapshot.codeArtifact,
     modelUrl:snapshot.modelUrl,
+    sourceModelUrl:snapshot.sourceModelUrl,
+    modelArtifact:snapshot.modelArtifact,
+    jointsArtifact:snapshot.jointsArtifact,
+    joints:snapshot.joints || [],
+    selectedArticulatedJointName:snapshot.selectedArticulatedJointName || '',
+    jointSliderValues:snapshot.jointSliderValues || {},
+    jointDirectionMultipliers:snapshot.jointDirectionMultipliers || {},
+    jointNodes:(snapshot.jointNodes || []).map(node => ({
+      name:node.name,
+      parentJointName:node.parentJointName,
+      position:vecToData(node.position),
+      rotation:eulerToData(node.rotation),
+      scale:vecToData(node.scale),
+      restPos:vecToData(node.restPos),
+      restRot:eulerToData(node.restRot),
+    })),
     meshes:snapshot.meshes.map(mesh => ({
       name:mesh.name,
+      jointName:mesh.jointName,
+      position:vecToData(mesh.position),
+      rotation:eulerToData(mesh.rotation),
+      scale:vecToData(mesh.scale),
       visible:mesh.visible,
       geometry:serializeGeometry(mesh.geometry),
       material:serializeMaterial(mesh.material || materialFromParams(mesh.matParams)),
@@ -1606,17 +1856,59 @@ function snapshotFromData(data) {
     action:data.action,
     codeArtifact:data.codeArtifact,
     modelUrl:data.modelUrl,
+    sourceModelUrl:data.sourceModelUrl,
+    modelArtifact:data.modelArtifact,
+    jointsArtifact:data.jointsArtifact,
+    joints:Array.isArray(data.joints) ? data.joints : [],
+    selectedArticulatedJointName:data.selectedArticulatedJointName || '',
+    jointSliderValues:data.jointSliderValues || {},
+    jointDirectionMultipliers:data.jointDirectionMultipliers || {},
+    jointNodes:(data.jointNodes || []).map(node => ({
+      name:node.name,
+      parentJointName:node.parentJointName,
+      position:vecFromData(node.position),
+      rotation:eulerFromData(node.rotation),
+      scale:vecFromData(node.scale, 1),
+      restPos:vecFromData(node.restPos),
+      restRot:eulerFromData(node.restRot),
+    })),
     meshes:data.meshes.map(mesh => ({
       name:mesh.name,
+      jointName:mesh.jointName,
       visible:mesh.visible,
       geometry:geometryFromData(mesh.geometry),
       material:materialFromParams(mesh.material),
       matParams:mesh.material,
-      position:new THREE.Vector3(),
-      rotation:new THREE.Euler(),
-      scale:new THREE.Vector3(1,1,1),
+      position:vecFromData(mesh.position),
+      rotation:eulerFromData(mesh.rotation),
+      scale:vecFromData(mesh.scale, 1),
     })).filter(mesh => mesh.geometry),
   };
+}
+
+function vecToData(v) {
+  return v ? [v.x || 0, v.y || 0, v.z || 0] : [0,0,0];
+}
+
+function vecFromData(data, fallback = 0) {
+  return new THREE.Vector3(
+    Number(data?.[0] ?? fallback),
+    Number(data?.[1] ?? fallback),
+    Number(data?.[2] ?? fallback),
+  );
+}
+
+function eulerToData(e) {
+  return e ? [e.x || 0, e.y || 0, e.z || 0, e.order || 'XYZ'] : [0,0,0,'XYZ'];
+}
+
+function eulerFromData(data) {
+  return new THREE.Euler(
+    Number(data?.[0] ?? 0),
+    Number(data?.[1] ?? 0),
+    Number(data?.[2] ?? 0),
+    data?.[3] || 'XYZ',
+  );
 }
 
 // ── IndexedDB persistence ─────────────────────────────────────────────────────
@@ -1658,6 +1950,12 @@ function saveEditorState() {
   _saveTimer = setTimeout(_persistEditorState, 800);
 }
 
+function flushEditorState() {
+  clearTimeout(_saveTimer);
+  _saveTimer = null;
+  return _persistEditorState();
+}
+
 async function _persistEditorState() {
   if (!loadedMeshes.length) return;
   // Capture the current scene as a snapshot and convert everything to plain
@@ -1669,6 +1967,10 @@ async function _persistEditorState() {
     timestamp: Date.now(),
     codeArtifact: currentCodeArtifact,
     modelUrl: currentModelUrl,
+    sourceModelUrl: currentSourceModelUrl,
+    modelArtifact: currentModelArtifact,
+    jointsArtifact: currentJointsArtifact,
+    joints: currentJoints,
     currentState: snapshotToData(current),
     undoHistory:  undoHistory.map(snapshotToData),
     redoHistory:  redoHistory.map(snapshotToData),
@@ -1688,6 +1990,10 @@ async function restoreEditorState() {
 
     currentCodeArtifact = data.codeArtifact ?? null;
     currentModelUrl     = data.modelUrl     ?? null;
+    currentSourceModelUrl = data.sourceModelUrl ?? currentModelUrl ?? '';
+    currentModelArtifact = data.modelArtifact ?? null;
+    currentJointsArtifact = data.jointsArtifact ?? null;
+    currentJoints = Array.isArray(data.joints) ? data.joints : [];
 
     // Rebuild undo/redo stacks first so syncHistoryUi (called by restoreSnapshot)
     // sees the correct history.
@@ -1709,6 +2015,7 @@ async function restoreEditorState() {
 }
 
 function pushUndoSnapshot(action) {
+  stopJointAutoPreviewForEdit(action);
   const snapshot = captureSnapshot(action);
   if (!snapshot || !snapshot.meshes.length) return;
   undoHistory.push(snapshot);
@@ -1724,6 +2031,23 @@ function restoreSnapshot(snap, options = {}) {
   const nextMeshes = [];
 
   try {
+    const jointNodeMap = new Map();
+    (snap.jointNodes || []).forEach(node => {
+      if (!node?.name) return;
+      const obj = new THREE.Object3D();
+      obj.name = node.name;
+      obj.position.copy(node.position || new THREE.Vector3());
+      obj.rotation.copy(node.rotation || new THREE.Euler());
+      obj.scale.copy(node.scale || new THREE.Vector3(1,1,1));
+      obj.userData.restPos = (node.restPos || node.position || new THREE.Vector3()).clone();
+      obj.userData.restRot = (node.restRot || node.rotation || new THREE.Euler()).clone();
+      jointNodeMap.set(node.name, { obj, parentJointName:node.parentJointName || '' });
+    });
+    jointNodeMap.forEach(({ obj, parentJointName }) => {
+      const parent = parentJointName ? jointNodeMap.get(parentJointName)?.obj : null;
+      (parent || nextGroup).add(obj);
+    });
+
     snap.meshes.forEach(s=>{
       if (!s?.geometry) throw new Error('Snapshot mesh is missing geometry.');
       const mat = s.material?.clone?.() || materialFromParams(s.matParams);
@@ -1735,7 +2059,8 @@ function restoreSnapshot(snap, options = {}) {
       mesh.rotation.copy(s.rotation || new THREE.Euler());
       mesh.scale.copy(s.scale || new THREE.Vector3(1,1,1));
       mesh.visible=s.visible !== false;
-      nextGroup.add(mesh);
+      const jointParent = s.jointName ? jointNodeMap.get(s.jointName)?.obj : null;
+      (jointParent || nextGroup).add(mesh);
       nextMeshes.push({ mesh, originalMaterial:mat, name:mesh.name, geometry:geometry.clone() });
     });
   } catch (err) {
@@ -1754,6 +2079,17 @@ function restoreSnapshot(snap, options = {}) {
   selectedMeshIndices.clear();
   currentCodeArtifact = snap.codeArtifact ?? null;
   currentModelUrl = snap.modelUrl ?? null;
+  currentSourceModelUrl = snap.sourceModelUrl ?? currentModelUrl ?? '';
+  currentModelArtifact = snap.modelArtifact ?? null;
+  currentJointsArtifact = snap.jointsArtifact ?? null;
+  currentJoints = Array.isArray(snap.joints) ? snap.joints : [];
+  selectedArticulatedJointName = snap.selectedArticulatedJointName || '';
+  jointSliderValues = structuredCloneSafe(snap.jointSliderValues) || {};
+  jointDirectionMultipliers = structuredCloneSafe(snap.jointDirectionMultipliers) || {};
+  jointDemoActive = false;
+  jointAutoPreviewEnabled = false;
+  bindArticulatedJoints(currentJoints, { preserveValues:true });
+  applyJointTransforms();
   updateMeshList(); updateMeshStats(); updateHighlights();
   syncHistoryUi();
   if (!options.skipPersist) saveEditorState();
@@ -2239,7 +2575,11 @@ function setupFlyouts() {
       const id=btn.dataset.flyout, flyout=document.getElementById(id);
       const wasOpen=flyout.classList.contains('open');
       closeFlyouts();
-      if (!wasOpen) { flyout.classList.add('open'); btn.classList.add('active'); }
+      if (!wasOpen) {
+        flyout.classList.add('open');
+        btn.classList.add('active');
+        document.body.classList.add('flyout-open');
+      }
     });
   });
   const soonBtn = document.getElementById('matSoonBtn');
@@ -2257,6 +2597,7 @@ function setupFlyouts() {
 function closeFlyouts() {
   document.querySelectorAll('.flyout').forEach(f=>f.classList.remove('open'));
   document.querySelectorAll('.et-btn').forEach(b=>b.classList.remove('active'));
+  document.body.classList.remove('flyout-open');
 }
 
 // ── Compact preview / full editor mode ───────────────────────────────────────
@@ -2329,6 +2670,409 @@ function setupViewportMode() {
   });
 }
 
+// ── Articulation controls ────────────────────────────────────────────────────
+function findObjectForJoint(joint) {
+  let best = null;
+  modelGroup.traverse(node => {
+    if (best || !node.name) return;
+    if (node.name === joint.name) best = node;
+  });
+  return best;
+}
+
+function bindArticulatedJoints(joints, options = {}) {
+  currentJoints = Array.isArray(joints) ? joints.filter(Boolean) : [];
+  articulatedJoints = currentJoints.filter(j =>
+    j && j.name && !j.skipped_reason &&
+    (j.kind === 'rotation' || j.kind === 'translation') &&
+    j.axis
+  );
+  articulatedObjects = {};
+  if (!options.preserveValues) {
+    jointSliderValues = {};
+    jointDirectionMultipliers = {};
+  }
+
+  if (articulatedJoints.length === 0) {
+    selectedArticulatedJointName = '';
+    jointDemoActive = false;
+    jointAutoPreviewEnabled = false;
+    syncJointButtons();
+    renderJointSliders();
+    renderArticulationDock();
+    return;
+  }
+
+  articulatedJoints.forEach(joint => {
+    const obj = findObjectForJoint(joint);
+    if (!obj) return;
+    articulatedObjects[joint.name] = obj;
+    if (!obj.userData.restPos) obj.userData.restPos = obj.position.clone();
+    if (!obj.userData.restRot) obj.userData.restRot = obj.rotation.clone();
+    if (jointSliderValues[joint.name] === undefined) {
+      jointSliderValues[joint.name] = joint.kind === 'rotation'
+        ? (joint.rest_deg || 0)
+        : (joint.rest_m || 0);
+    }
+    if (jointDirectionMultipliers[joint.name] === undefined) {
+      jointDirectionMultipliers[joint.name] = 1;
+    }
+  });
+
+  articulatedJoints = articulatedJoints.filter(joint => articulatedObjects[joint.name]);
+  if (!articulatedJoints.some(joint => joint.name === selectedArticulatedJointName)) {
+    selectedArticulatedJointName = articulatedJoints[0]?.name || '';
+  }
+  renderJointSliders();
+  renderArticulationDock();
+  if (articulatedJoints.length === 0) {
+    selectedArticulatedJointName = '';
+    jointDemoActive = false;
+    syncJointButtons();
+    renderArticulationDock();
+    return;
+  }
+  if (articulatedJoints.length > 0 && options.autoStart === true) {
+    jointAutoPreviewEnabled = true;
+    jointDemoActive = true;
+    jointDemoMode = 'all';
+    jointDemoTime = 0;
+    jointDemoLastFrame = performance.now();
+  } else if (!options.preserveValues) {
+    jointDemoActive = false;
+    jointAutoPreviewEnabled = false;
+  }
+  syncJointButtons();
+}
+
+function renderJointSliders() {
+  const list = document.getElementById('jointsList');
+  if (!list) return;
+  list.innerHTML = '';
+  articulatedJoints.forEach(joint => {
+    const isRot = joint.kind === 'rotation';
+    const min = Number(isRot ? joint.min_deg : joint.min_m) || 0;
+    const max = Number(isRot ? joint.max_deg : joint.max_m) || 0;
+    const cur = Number(jointSliderValues[joint.name] ?? (isRot ? joint.rest_deg : joint.rest_m) ?? 0);
+    const unit = isRot ? 'deg' : 'm';
+    const safeName = joint.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const niceName = jointDisplayName(joint);
+    const row = document.createElement('div');
+    row.className = 'joint-row';
+    row.innerHTML = `
+      <div class="joint-row-head">
+        <span class="joint-name"></span>
+        <span class="joint-kind">${joint.kind} ${String(joint.axis || '').toUpperCase()}</span>
+      </div>
+      <div class="joint-control">
+        <input type="range" id="joint-slider-${safeName}" min="${min}" max="${max}" step="${isRot ? '0.5' : '0.001'}" value="${cur}">
+        <span class="joint-value" id="joint-value-${safeName}">${cur.toFixed(isRot ? 1 : 3)} ${unit}</span>
+      </div>
+      <div class="joint-axis-row">
+        <button class="joint-axis-btn" data-axis="X">X</button>
+        <button class="joint-axis-btn" data-axis="Y">Y</button>
+        <button class="joint-axis-btn" data-axis="Z">Z</button>
+        <button class="joint-axis-btn" data-axis="flip">Flip</button>
+      </div>
+    `;
+    row.querySelector('.joint-name').textContent = niceName;
+    list.appendChild(row);
+
+    const slider = row.querySelector('input');
+    slider.addEventListener('input', e => {
+      const value = parseFloat(e.target.value);
+      jointSliderValues[joint.name] = value;
+      updateJointValueUi(joint, value);
+      if (jointDemoActive) toggleJointDemo();
+      applyJointTransforms();
+      saveEditorState();
+    });
+    row.querySelectorAll('.joint-axis-btn').forEach(btn => {
+      const axis = btn.dataset.axis;
+      btn.classList.toggle('active', axis === String(joint.axis || '').toUpperCase());
+      btn.onclick = () => axis === 'flip'
+        ? flipJointDirection(joint.name)
+        : setJointAxis(joint.name, axis);
+    });
+  });
+}
+
+function jointDisplayName(joint) {
+  const raw = joint.child_mesh || joint.description || joint.name || 'joint';
+  return String(raw).replace(/^joint_/, '').replace(/_/g, ' ');
+}
+
+function jointSafeName(joint) {
+  return String(joint.name || '').replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+function jointUnit(joint) {
+  return joint.kind === 'rotation' ? 'deg' : 'm';
+}
+
+function jointPrecision(joint) {
+  return joint.kind === 'rotation' ? 1 : 3;
+}
+
+function updateJointValueUi(joint, value) {
+  const safeName = jointSafeName(joint);
+  const formatted = `${Number(value || 0).toFixed(jointPrecision(joint))} ${jointUnit(joint)}`;
+  const flyoutValue = document.getElementById(`joint-value-${safeName}`);
+  if (flyoutValue) flyoutValue.textContent = formatted;
+  const dockValue = document.getElementById(`articulation-value-${safeName}`);
+  if (dockValue) dockValue.textContent = formatted;
+  const flyoutSlider = document.getElementById(`joint-slider-${safeName}`);
+  if (flyoutSlider) flyoutSlider.value = value;
+  const dockSlider = document.getElementById(`articulation-slider-${safeName}`);
+  if (dockSlider) dockSlider.value = value;
+}
+
+function renderArticulationDock() {
+  const dock = document.getElementById('articulationDock');
+  const list = document.getElementById('articulationList');
+  if (!dock || !list) return;
+  const hasJoints = articulatedJoints.length > 0;
+  dock.classList.toggle('active', hasJoints);
+  if (!hasJoints) {
+    list.innerHTML = '';
+    renderArticulationDetail();
+    return;
+  }
+
+  list.innerHTML = '';
+  articulatedJoints.forEach(joint => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'articulation-item';
+    btn.classList.toggle('active', joint.name === selectedArticulatedJointName);
+    btn.textContent = jointDisplayName(joint);
+    btn.title = joint.description || joint.name;
+    btn.onclick = () => selectArticulatedJoint(joint.name);
+    list.appendChild(btn);
+  });
+  renderArticulationDetail();
+}
+
+function renderArticulationDetail() {
+  const panel = document.getElementById('articulationControlPanel');
+  if (!panel) return;
+  const joint = articulatedJoints.find(item => item.name === selectedArticulatedJointName);
+  panel.classList.toggle('active', Boolean(joint));
+  if (!joint) {
+    panel.innerHTML = '';
+    return;
+  }
+  const isRot = joint.kind === 'rotation';
+  const min = Number(isRot ? joint.min_deg : joint.min_m) || 0;
+  const max = Number(isRot ? joint.max_deg : joint.max_m) || 0;
+  const value = Number(jointSliderValues[joint.name] ?? (isRot ? joint.rest_deg : joint.rest_m) ?? 0);
+  const safeName = jointSafeName(joint);
+  panel.innerHTML = `
+    <h3></h3>
+    <div class="articulation-meta">${joint.kind} · local ${String(joint.axis || '').toUpperCase()} axis</div>
+    <div class="articulation-slider-row">
+      <input type="range" id="articulation-slider-${safeName}" min="${min}" max="${max}" step="${isRot ? '0.5' : '0.001'}" value="${value}">
+      <span id="articulation-value-${safeName}">${value.toFixed(jointPrecision(joint))} ${jointUnit(joint)}</span>
+    </div>
+    <div class="articulation-axis-grid">
+      <button type="button" data-axis="X" title="Use the joint node's local X axis">X</button>
+      <button type="button" data-axis="Y" title="Use the joint node's local Y axis">Y</button>
+      <button type="button" data-axis="Z" title="Use the joint node's local Z axis">Z</button>
+      <button type="button" data-axis="flip">Flip</button>
+    </div>
+    <div class="articulation-command-grid">
+      <button type="button" id="articulationAutoBtn" class="${jointDemoActive ? 'primary' : ''}">${jointDemoActive ? 'Stop Preview' : 'Auto Preview'}</button>
+      <button type="button" id="articulationRestoreBtn">Restore</button>
+    </div>
+  `;
+  panel.querySelector('h3').textContent = jointDisplayName(joint);
+  const slider = panel.querySelector(`#articulation-slider-${safeName}`);
+  slider?.addEventListener('input', e => {
+    const next = parseFloat(e.target.value);
+    jointSliderValues[joint.name] = next;
+    updateJointValueUi(joint, next);
+    if (jointDemoActive) toggleJointDemo();
+    applyJointTransforms();
+    saveEditorState();
+  });
+  panel.querySelectorAll('button[data-axis]').forEach(btn => {
+    const axis = btn.dataset.axis;
+    btn.classList.toggle('active', axis === String(joint.axis || '').toUpperCase());
+    btn.onclick = () => axis === 'flip'
+      ? flipJointDirection(joint.name)
+      : setJointAxis(joint.name, axis);
+  });
+  const autoBtn = panel.querySelector('#articulationAutoBtn');
+  if (autoBtn) autoBtn.onclick = () => toggleSelectedJointAutoPreview();
+  const restoreBtn = panel.querySelector('#articulationRestoreBtn');
+  if (restoreBtn) restoreBtn.onclick = () => restoreSelectedJointPose();
+}
+
+window.selectArticulatedJoint = function(jointName) {
+  selectArticulatedJoint(jointName);
+};
+
+function selectArticulatedJoint(jointName) {
+  if (!articulatedJoints.some(joint => joint.name === jointName)) return;
+  const previous = articulatedJoints.find(joint => joint.name === selectedArticulatedJointName);
+  if (jointAutoPreviewEnabled && previous && previous.name !== jointName) {
+    resetJointToRest(previous);
+  }
+  selectedArticulatedJointName = jointName;
+  if (jointAutoPreviewEnabled) {
+    jointDemoActive = true;
+    jointDemoTime = 0;
+    jointDemoLastFrame = performance.now();
+  }
+  renderArticulationDock();
+}
+
+function syncJointButtons() {
+  const demoBtn = document.getElementById('jointDemoBtn');
+  if (demoBtn) demoBtn.textContent = jointDemoActive ? 'Auto-demo: ON' : 'Auto-demo: OFF';
+  const modeBtn = document.getElementById('jointModeBtn');
+  if (modeBtn) modeBtn.textContent = jointDemoMode === 'all' ? 'Mode: All' : 'Mode: One';
+}
+
+window.toggleJointDemo = function() {
+  jointDemoActive = !jointDemoActive;
+  jointAutoPreviewEnabled = jointDemoActive;
+  if (jointDemoActive) {
+    jointDemoTime = 0;
+    jointDemoLastFrame = performance.now();
+  }
+  syncJointButtons();
+  renderArticulationDock();
+};
+
+window.toggleJointDemoMode = function() {
+  jointDemoMode = jointDemoMode === 'all' ? 'cycle' : 'all';
+  jointDemoTime = 0;
+  jointDemoLastFrame = performance.now();
+  syncJointButtons();
+};
+
+window.resetJointControls = function() {
+  articulatedJoints.forEach(joint => {
+    jointSliderValues[joint.name] = joint.kind === 'rotation'
+      ? (joint.rest_deg || 0)
+      : (joint.rest_m || 0);
+    jointDirectionMultipliers[joint.name] = 1;
+  });
+  renderJointSliders();
+  renderArticulationDock();
+  applyJointTransforms();
+  saveEditorState();
+};
+
+function resetJointToRest(joint) {
+  if (!joint) return;
+  jointSliderValues[joint.name] = joint.kind === 'rotation'
+    ? (joint.rest_deg || 0)
+    : (joint.rest_m || 0);
+  jointDirectionMultipliers[joint.name] = 1;
+  updateJointValueUi(joint, jointSliderValues[joint.name]);
+}
+
+function toggleSelectedJointAutoPreview() {
+  jointDemoActive = !jointDemoActive;
+  jointAutoPreviewEnabled = jointDemoActive;
+  if (jointDemoActive) {
+    jointDemoTime = 0;
+    jointDemoLastFrame = performance.now();
+  }
+  renderArticulationDock();
+}
+
+function restoreSelectedJointPose() {
+  const joint = articulatedJoints.find(item => item.name === selectedArticulatedJointName);
+  if (!joint) return;
+  jointDemoActive = false;
+  jointAutoPreviewEnabled = false;
+  resetJointToRest(joint);
+  renderJointSliders();
+  renderArticulationDock();
+  applyJointTransforms();
+  saveEditorState();
+}
+
+function stopJointAutoPreviewForEdit(action) {
+  if (!articulatedJoints.length) return;
+  if (action === 'articulate_3d_model') return;
+  jointDemoActive = false;
+  jointAutoPreviewEnabled = false;
+  renderArticulationDock();
+}
+
+window.flipJointDirection = function(jointName) {
+  jointDirectionMultipliers[jointName] = -(jointDirectionMultipliers[jointName] || 1);
+  renderArticulationDock();
+  applyJointTransforms();
+  saveEditorState();
+};
+
+window.setJointAxis = function(jointName, axis) {
+  const joint = articulatedJoints.find(item => item.name === jointName);
+  if (!joint) return;
+  joint.axis = String(axis || 'X').toUpperCase();
+  jointSliderValues[jointName] = joint.kind === 'rotation'
+    ? (joint.rest_deg || 0)
+    : (joint.rest_m || 0);
+  renderJointSliders();
+  renderArticulationDock();
+  applyJointTransforms();
+  saveEditorState();
+};
+
+function tickJointDemo() {
+  if (!jointDemoActive || articulatedJoints.length === 0) return;
+  const selectedJoint = articulatedJoints.find(joint => joint.name === selectedArticulatedJointName);
+  if (!selectedJoint) return;
+  const now = performance.now();
+  const dt = jointDemoLastFrame ? (now - jointDemoLastFrame) / 1000 : 0;
+  jointDemoLastFrame = now;
+  jointDemoTime += dt;
+
+  const setJointDemoValue = (joint, phase) => {
+    const isRot = joint.kind === 'rotation';
+    const min = Number(isRot ? joint.min_deg : joint.min_m) || 0;
+    const max = Number(isRot ? joint.max_deg : joint.max_m) || 0;
+    const span = max - min;
+    const safeMin = min + span * 0.15;
+    const safeMax = max - span * 0.15;
+    const value = safeMin + (safeMax - safeMin) * phase;
+    jointSliderValues[joint.name] = value;
+    const safeName = joint.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const slider = document.getElementById(`joint-slider-${safeName}`);
+    if (slider) slider.value = value;
+    updateJointValueUi(joint, value);
+  };
+
+  const phase = 0.5 - 0.5 * Math.cos((jointDemoTime / 3.5) * Math.PI * 2);
+  setJointDemoValue(selectedJoint, phase);
+}
+
+function applyJointTransforms() {
+  if (!articulatedJoints.length) return;
+  const axisMap = { X:'x', Y:'y', Z:'z' };
+  articulatedJoints.forEach(joint => {
+    const obj = articulatedObjects[joint.name];
+    if (!obj) return;
+    const axis = axisMap[String(joint.axis || 'X').toUpperCase()] || 'x';
+    const value = Number(jointSliderValues[joint.name] || 0);
+    const direction = jointDirectionMultipliers[joint.name] || 1;
+    if (joint.kind === 'rotation') {
+      const rest = obj.userData.restRot || new THREE.Euler();
+      obj.rotation.set(rest.x, rest.y, rest.z);
+      obj.rotation[axis] = rest[axis] + THREE.MathUtils.degToRad(value * direction);
+      return;
+    }
+    const rest = obj.userData.restPos || new THREE.Vector3();
+    obj.position.copy(rest);
+    obj.position[axis] = rest[axis] + value * direction;
+  });
+}
+
 // ── AI edit workflow bridge ──────────────────────────────────────────────────
 function selectedPartType() {
   if (!selectedMeshIndices.size) return 'selected part';
@@ -2339,10 +3083,18 @@ function selectedPartType() {
   return names.length ? names.join(', ') : 'selected part';
 }
 
+function selectedMeshNames() {
+  return [...selectedMeshIndices]
+    .map(i => loadedMeshes[i]?.name)
+    .filter(Boolean)
+    .slice(0, 30);
+}
+
 function setAiBusy(busy) {
   activeEditRequestId = busy ? activeEditRequestId : null;
   if (!busy) activeOperation = null;
-  ['regenBtn','addPartBtn','regenPrompt','addPartPrompt','editModelSelect','editModelSelectGrow'].forEach(id => {
+  if (busy) stopJointAutoPreviewForEdit(activeOperation || 'ai-edit');
+  ['regenBtn','addPartBtn','articulateBtn','regenPrompt','addPartPrompt','articulationPrompt','editModelSelect','editModelSelectGrow','editModelSelectArticulate'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -2359,11 +3111,15 @@ function showEditStatus(message, isError = false) {
 }
 
 function editStatusId(operation) {
-  return operation === 'add_3d_part' ? 'addPartStatus' : 'regenStatus';
+  if (operation === 'add_3d_part') return 'addPartStatus';
+  if (operation === 'articulate_3d_model') return 'articulationStatus';
+  return 'regenStatus';
 }
 
 function editButtonId(operation) {
-  return operation === 'add_3d_part' ? 'addPartBtn' : 'regenBtn';
+  if (operation === 'add_3d_part') return 'addPartBtn';
+  if (operation === 'articulate_3d_model') return 'articulateBtn';
+  return 'regenBtn';
 }
 
 function showSectionStatus(operation, message, isError = false) {
@@ -2394,8 +3150,7 @@ function flashEditButton(operation, message) {
 
 function renderEditModelSelector() {
   if (!editModelOptions.length) editModelOptions = editModelOptionsFromStorage();
-  if (!editModelOptions.length) editModelOptions = DEFAULT_EDIT_MODEL_OPTIONS;
-  ['editModelSelect','editModelSelectGrow'].forEach(selectId => {
+  ['editModelSelect','editModelSelectGrow','editModelSelectArticulate'].forEach(selectId => {
     const select = document.getElementById(selectId);
     if (!select) return;
     const previous = select.value || editDefaultModelId;
@@ -2453,14 +3208,23 @@ function editModelOptionsFromStorage() {
 }
 
 function selectedEditModelId() {
+  const articulateOpen = document.getElementById('flyArticulate')?.classList.contains('open');
   const growOpen = document.getElementById('flyAiGrow')?.classList.contains('open');
-  const id = growOpen ? 'editModelSelectGrow' : 'editModelSelect';
+  const id = articulateOpen ? 'editModelSelectArticulate' : (growOpen ? 'editModelSelectGrow' : 'editModelSelect');
   return document.getElementById(id)?.value || '';
 }
 
 function applyEditConfig(data) {
   if (!data || typeof data !== 'object') return;
+  if (data.modelArtifact !== undefined) currentModelArtifact = data.modelArtifact || null;
   if (data.codeArtifact !== undefined) currentCodeArtifact = data.codeArtifact || null;
+  if (data.jointsArtifact !== undefined) currentJointsArtifact = data.jointsArtifact || null;
+  if (Array.isArray(data.joints)) {
+    currentJoints = data.joints;
+    bindArticulatedJoints(currentJoints, { preserveValues:true });
+  }
+  if (data.sourceModelUrl !== undefined) currentSourceModelUrl = String(data.sourceModelUrl || '');
+  if (data.instructionPrompt !== undefined) currentInstructionPrompt = String(data.instructionPrompt || '');
   if (data.sourceWorkflowId !== undefined) currentSourceWorkflowId = String(data.sourceWorkflowId || '');
   if (Array.isArray(data.editModelOptions)) {
     editModelOptions = data.editModelOptions.filter(option => option && option.id && option.label);
@@ -2471,7 +3235,10 @@ function applyEditConfig(data) {
 
 function requestAiEdit(operation, description, partType = '') {
   const clean = description.trim();
-  if (!clean) {
+  const isArticulation = operation === 'articulate_3d_model';
+  const sourceModelUrl = currentSourceModelUrl || currentModelUrl || '';
+  const hasServerReadableModel = currentModelArtifact || (sourceModelUrl && !sourceModelUrl.startsWith('blob:'));
+  if (!clean && !isArticulation) {
     showSectionStatus(operation, 'Describe the edit first.', true);
     flashEditButton(operation, 'Needs description');
     return;
@@ -2479,6 +3246,11 @@ function requestAiEdit(operation, description, partType = '') {
   if (!currentCodeArtifact && !currentSourceWorkflowId) {
     showSectionStatus(operation, 'This model has no code artifact. Generate it again before AI editing.', true);
     flashEditButton(operation, 'No source code');
+    return;
+  }
+  if (isArticulation && !hasServerReadableModel) {
+    showSectionStatus(operation, 'This model has no source GLB artifact. Generate or edit it again before articulating.', true);
+    flashEditButton(operation, 'No model source');
     return;
   }
   const modelOptionId = selectedEditModelId();
@@ -2496,7 +3268,9 @@ function requestAiEdit(operation, description, partType = '') {
     activeButton.dataset.idleLabel = activeButton.textContent;
     activeButton.textContent = 'Starting...';
   }
-  showSectionStatus(operation, operation === 'add_3d_part' ? 'Starting add-part edit...' : 'Starting selected-part regeneration...');
+  showSectionStatus(operation, operation === 'add_3d_part'
+    ? 'Starting add-part edit...'
+    : (isArticulation ? 'Starting articulation...' : 'Starting selected-part regeneration...'));
   window.parent?.postMessage({
     type:'nova3d-edit-request',
     viewerId,
@@ -2505,6 +3279,10 @@ function requestAiEdit(operation, description, partType = '') {
     description:clean,
     partType,
     codeArtifact:currentCodeArtifact,
+    modelArtifact:currentModelArtifact,
+    sourceModelUrl:sourceModelUrl.startsWith('blob:') ? '' : sourceModelUrl,
+    instructionPrompt:currentInstructionPrompt,
+    selectedMeshes:selectedMeshNames(),
     sourceWorkflowId:currentSourceWorkflowId,
     modelOptionId,
   }, '*');
@@ -2528,6 +3306,10 @@ window.requestAddPart = function() {
   requestAiEdit('add_3d_part', document.getElementById('addPartPrompt')?.value || '');
 };
 
+window.requestArticulation = function() {
+  requestAiEdit('articulate_3d_model', document.getElementById('articulationPrompt')?.value || '');
+};
+
 window.addEventListener('message', event => {
   const data = event.data || {};
   if (data.type === 'nova3d-edit-config') {
@@ -2543,7 +3325,7 @@ window.addEventListener('message', event => {
   }
   setAiBusy(false);
   activeOperation = null;
-  ['regenBtn','addPartBtn'].forEach(id => {
+  ['regenBtn','addPartBtn','articulateBtn'].forEach(id => {
     const el = document.getElementById(id);
     if (el?.dataset.idleLabel) {
       el.textContent = el.dataset.idleLabel;
@@ -2560,9 +3342,20 @@ window.addEventListener('message', event => {
   }
   pushUndoSnapshot(op);
   currentCodeArtifact = data.codeArtifact;
+  currentModelArtifact = data.modelArtifact || null;
+  currentSourceModelUrl = String(data.sourceModelUrl || data.modelUrl || '');
+  currentJointsArtifact = data.jointsArtifact || null;
+  currentJoints = Array.isArray(data.joints) ? data.joints : [];
   if (data.workflowId) currentSourceWorkflowId = String(data.workflowId);
-  showSectionStatus(op, editStatusMessage('Edit complete.', data.workflowId));
-  loadGLB(data.modelUrl, { recordHistory:false });
+  showSectionStatus(op, editStatusMessage(op === 'articulate_3d_model' ? 'Articulation complete.' : 'Edit complete.', data.workflowId));
+  if (op === 'articulate_3d_model') {
+    window.setTimeout(closeFlyouts, 700);
+  }
+  loadGLB(data.modelUrl, {
+    recordHistory:false,
+    sourceModelUrl:currentSourceModelUrl,
+    startJointDemo:op === 'articulate_3d_model',
+  });
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -2582,6 +3375,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (artifactParam) {
     try { currentCodeArtifact = JSON.parse(artifactParam); } catch(e) { currentCodeArtifact = null; }
   }
+  const modelArtifactParam = params.get('modelArtifact');
+  if (modelArtifactParam) {
+    try { currentModelArtifact = JSON.parse(modelArtifactParam); } catch(e) { currentModelArtifact = null; }
+  }
+  const jointsArtifactParam = params.get('jointsArtifact');
+  if (jointsArtifactParam) {
+    try { currentJointsArtifact = JSON.parse(jointsArtifactParam); } catch(e) { currentJointsArtifact = null; }
+  }
+  const jointsParam = params.get('joints');
+  if (jointsParam) {
+    try {
+      const parsed = JSON.parse(jointsParam);
+      currentJoints = Array.isArray(parsed) ? parsed : [];
+    } catch(e) {
+      currentJoints = [];
+    }
+  }
   const modelOptionsParam = params.get('editModelOptions');
   if (modelOptionsParam) {
     try {
@@ -2594,6 +3404,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   editDefaultModelId = params.get('editDefaultModelId') || '';
+  currentSourceModelUrl = params.get('sourceModelUrl') || params.get('glb') || '';
+  currentInstructionPrompt = params.get('instructionPrompt') || '';
   currentSourceWorkflowId = params.get('sourceWorkflowId') || '';
   renderEditModelSelector();
 
@@ -2608,8 +3420,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  window.addEventListener('pagehide', saveEditorState);
-  window.addEventListener('beforeunload', saveEditorState);
+  window.addEventListener('pagehide', () => { void flushEditorState(); });
+  window.addEventListener('beforeunload', () => { void flushEditorState(); });
 
   // restoreEditorState is async (IndexedDB); only load from the URL param when
   // no saved state exists for this model.
@@ -2617,12 +3429,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (glbUrl && !restored) {
       const decoded = glbUrl;
       if (container.clientWidth > 0 && container.clientHeight > 0) {
-        loadGLB(decoded);
+        loadGLB(decoded, { sourceModelUrl:currentSourceModelUrl });
       } else {
         const ro = new ResizeObserver((_, obs) => {
           if (container.clientWidth > 0 && container.clientHeight > 0) {
             obs.disconnect();
-            loadGLB(decoded);
+            loadGLB(decoded, { sourceModelUrl:currentSourceModelUrl });
           }
         });
         ro.observe(container);
