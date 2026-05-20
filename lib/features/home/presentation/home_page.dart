@@ -17,6 +17,7 @@ import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:nova3d_frontend/features/home/presentation/widgets/suggestion_pills.dart';
+import 'package:nova3d_frontend/features/home/presentation/widgets/skills_carousel.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
 
@@ -275,6 +276,25 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               const SizedBox(height: 12),
               SuggestionPills(onSelect: _startConversation),
+              const SizedBox(height: 32),
+
+              // Skills section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('✦', style: TextStyle(color: kLilac, fontSize: 10)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'SKILLS',
+                    style: kSilkscreen(10, color: kInkMuted, letterSpacing: 0.8),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('✦', style: TextStyle(color: kLilac, fontSize: 10)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const SkillsCarousel(),
+              const SizedBox(height: 24),
             ],
           ),
         ),
