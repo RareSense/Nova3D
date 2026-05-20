@@ -83,28 +83,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     return Column(
       children: [
-        Expanded(
-          child: _buildBody(messagesAsync, messages, pendingDraft),
-        ),
+        Expanded(child: _buildBody(messagesAsync, messages, pendingDraft)),
 
         // Conversations are single-turn: once a generation exists, lock the
         // input and prompt the user to start a new conversation instead.
-        if (messages.any((m) => m.role == MessageRole.assistant))
-          const _NewCreationBar()
-        else
-          ChatInput(
-            modelOptions: availableOptions,
-            selectedModel: selectedModel,
-            onModelChanged: (option) =>
-                setState(() => _selectedModelId = option?.id),
-            disabled: messagesAsync.isLoading || isStreaming,
-            onSend: (request) async {
-              await ref
-                  .read(messagesProvider(widget.conversationId).notifier)
-                  .sendGeneration(request);
-              return true;
-            },
-          ),
+        // if (messages.any((m) => m.role == MessageRole.assistant))
+        const _NewCreationBar(),
+        // else
+        //   ChatInput(
+        //     modelOptions: availableOptions,
+        //     selectedModel: selectedModel,
+        //     onModelChanged: (option) =>
+        //         setState(() => _selectedModelId = option?.id),
+        //     disabled: messagesAsync.isLoading || isStreaming,
+        //     onSend: (request) async {
+        //       await ref
+        //           .read(messagesProvider(widget.conversationId).notifier)
+        //           .sendGeneration(request);
+        //       return true;
+        //     },
+        //   ),
       ],
     );
   }
@@ -203,39 +201,38 @@ class _NewCreationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: const BoxDecoration(
-          color: kSurface,
-          border: Border(top: BorderSide(color: kInk, width: 1.5)),
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Want to create something else?',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: kInkSoft, fontSize: 13),
-                ),
-                const SizedBox(width: 12),
-                TextButton.icon(
-                  onPressed: () => context.go('/'),
-                  icon: const Icon(Icons.add, size: 15, color: kLilac),
-                  label: const Text(
-                    'Start a new 3D creation',
-                    style: TextStyle(color: kLilac, fontSize: 13),
-                  ),
-                ),
-              ],
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    decoration: const BoxDecoration(
+      color: kSurface,
+      border: Border(top: BorderSide(color: kInk, width: 1.5)),
+    ),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Want to create something else?',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: kInkSoft, fontSize: 13),
             ),
-          ),
+            const SizedBox(width: 12),
+            TextButton.icon(
+              onPressed: () => context.go('/'),
+              icon: const Icon(Icons.add, size: 15, color: kLilac),
+              label: const Text(
+                'Start a new 3D creation',
+                style: TextStyle(color: kLilac, fontSize: 13),
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _EmptyState extends StatelessWidget {
