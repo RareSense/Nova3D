@@ -24,6 +24,56 @@ This repo is the client. It connects to our (currently) closed-source hosted ser
 
 ---
 
+## Prerequisites
+
+The client is built with Flutter/Dart. If you don't have Flutter 3.24+ installed, set it up first:
+
+<details>
+<summary>💻 macOS</summary>
+
+Install Flutter via [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask flutter
+flutter doctor
+```
+
+</details>
+
+<details>
+<summary>🪟 Windows</summary>
+
+Install Flutter via [Chocolatey](https://chocolatey.org) (run PowerShell as Administrator):
+
+```powershell
+choco install flutter
+```
+
+Then close and reopen your terminal, and verify:
+
+```powershell
+flutter doctor
+```
+
+> Don't have Chocolatey? [Install it here](https://chocolatey.org/install), or follow the [manual Flutter install guide](https://docs.flutter.dev/install/manual).
+
+</details>
+
+<details>
+<summary>🐧 Linux</summary>
+
+Install Flutter via Snap:
+
+```bash
+sudo snap install flutter --classic
+flutter sdk-path   # confirm install path
+flutter doctor
+```
+
+</details>
+
+Once `flutter doctor` shows no blocking issues, continue with Quick Start below.
+
 ## Quick Start
 
 Get it running locally in under 2 minutes. Requires [Flutter 3.24+](https://flutter.dev).
