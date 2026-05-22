@@ -51,6 +51,22 @@ flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5555
 [![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=rLzkfTzDdwY)
 ☝️Prompt: Make a washing machine with detailed internal mechanics
 
+## Comparison
+
+[![Nova3D vs TRELLIS vs Hunyuan3D](https://img.youtube.com/vi/iL_NX_hBq9k/maxresdefault.jpg)](https://youtu.be/iL_NX_hBq9k)
+☝️Side-by-side comparison with TRELLIS and Hunyuan3D
+
+Nova3D is optimized for **structured asset generation**, but the advantage is not limited to multipart editing. In this comparison, Nova3D also shows stronger **single-asset fidelity**: cleaner silhouette control, sharper feature delineation, more coherent surface transitions, and better preservation of distinct functional substructures.
+
+The important point is that **explicit part structure is an added capability, not a quality tradeoff**. Even when judged purely as a single 3D object, Nova3D aims for higher geometric clarity and stronger downstream readiness; preserving named, separately editable components comes on top of that.
+
+[![Nova3D vs PartPacker vs Tripo Segmentation](https://img.youtube.com/vi/msGZs4EMnvs/maxresdefault.jpg)](https://youtu.be/msGZs4EMnvs)
+☝️Part-aware comparison with NVIDIA PartPacker and Tripo
+
+For **part decomposition**, Nova3D emphasizes **semantic separation with usable structure**. The goal is not just to color or partition a mesh after generation, but to preserve discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality** for downstream workflows.
+
+In practice, that means Nova3D is designed for assets that need to remain actionable after generation: users can inspect, regenerate, restyle, articulate, or export components without collapsing the model back into a single undifferentiated mesh.
+
 ---
 
 ## Technical Philosophy
