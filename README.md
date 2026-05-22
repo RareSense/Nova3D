@@ -63,7 +63,7 @@ The important point is that **explicit part structure is an added capability, no
 [![Nova3D vs PartPacker vs Tripo Segmentation](https://img.youtube.com/vi/msGZs4EMnvs/maxresdefault.jpg)](https://youtu.be/msGZs4EMnvs)
 ☝️Part-aware comparison with NVIDIA PartPacker and Tripo
 
-For **part decomposition**, Nova3D emphasizes **semantic separation with usable structure**. The goal is not just to color or partition a mesh after generation, but to preserve discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality** for downstream workflows.
+Nova3D emphasizes **semantic separation with usable structure**. The goal is to preserve discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality**.
 
 In practice, that means Nova3D is designed for assets that need to remain actionable after generation: users can inspect, regenerate, restyle, articulate, or export components without collapsing the model back into a single undifferentiated mesh.
 
