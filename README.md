@@ -147,7 +147,12 @@ Unlike pure CSG/OpenSCAD systems which struggle with organic shapes, Nova3D leve
 ## Troubleshooting
 
 *   **Auth Loops:** Always use `http://127.0.0.1:5555`. Using `localhost:5555` will cause Google Sign-In to fail due to strict OAuth origin policies.
-*   **Self-Hosting Backend:** By default, this client communicates with the `nova3d.xyz` API (currently closed-source). Self-hosting is theoretically possible by setting --dart-define=API_BASE_URL=https://your-api.com, but you would have to build your own server from scratch.
+
+*   **API Key not working / generations failing silently:** Make sure your key is entered under **Settings → API Key** and that you've selected the matching provider (Gemini, OpenAI, or Anthropic). A key for the wrong provider will cause requests to fail immediately. **Avoid Gemini free-tier keys** — Nova3D's pipeline is token-intensive and free-tier Gemini quota is low enough that it may not function at all, even for a single generation. Use a paid-tier Gemini key, or switch to OpenAI or Anthropic.
+
+*   **Nothing happens after clicking Generate (no error shown):** This usually means the client can't reach the backend. If you're running the default setup, make sure you haven't accidentally overridden `API_BASE_URL` to a local address. The default build points to `nova3d.xyz` — no local backend is needed.
+
+*   **Self-Hosting Backend:** By default, this client communicates with the `nova3d.xyz` hosted API (currently closed-source). If you are building your own backend, point the client at it by passing `--dart-define=API_BASE_URL=https://your-api.com` at build or run time. **Do not set this to a `localhost` address unless you have a fully configured local backend running** — doing so will result in 400 errors on every generation attempt. If you're unsure, leave this flag out entirely and use the hosted service.
 
 ---
 
