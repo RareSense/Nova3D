@@ -8,6 +8,7 @@ import 'package:nova3d_frontend/features/auth/presentation/sign_in_page.dart';
 import 'package:nova3d_frontend/features/auth/presentation/sign_up_page.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/shared/models/user_model.dart';
+import 'package:nova3d_frontend/features/account_api_keys/presentation/account_api_keys_page.dart';
 import 'package:nova3d_frontend/features/chat/presentation/chat_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/home_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/model_preview_page.dart';
@@ -30,7 +31,10 @@ CustomTransitionPage<void> _fadePage(LocalKey key, Widget child) =>
 // via refreshListenable without recreating the router on every auth change.
 class _AuthRefreshNotifier extends ChangeNotifier {
   _AuthRefreshNotifier(Ref ref) {
-    ref.listen<AsyncValue<UserModel?>>(authProvider, (_, _) => notifyListeners());
+    ref.listen<AsyncValue<UserModel?>>(
+      authProvider,
+      (_, _) => notifyListeners(),
+    );
   }
 }
 
@@ -71,62 +75,58 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/forgot-password',
-        pageBuilder:
-            (_, state) =>
-                _fadePage(state.pageKey, const ForgotPasswordPage()),
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const ForgotPasswordPage()),
       ),
       GoRoute(
         path: '/oauth-callback',
-        pageBuilder:
-            (_, state) =>
-                _fadePage(state.pageKey, const OAuthCallbackPage()),
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const OAuthCallbackPage()),
       ),
 
       // ── Authenticated shell ──────────────────────────────────────────────
       ShellRoute(
-        builder: (_, _, child) => AuthGuard(
-          child: AppLayout(child: child),
-        ),
+        builder: (_, _, child) => AuthGuard(child: AppLayout(child: child)),
         routes: [
           GoRoute(
             path: '/',
-            pageBuilder:
-                (_, state) =>
-                    NoTransitionPage(key: state.pageKey, child: const HomePage()),
+            pageBuilder: (_, state) =>
+                NoTransitionPage(key: state.pageKey, child: const HomePage()),
           ),
           GoRoute(
             path: '/chat/:id',
-            pageBuilder:
-                (_, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: ChatPage(
-                    conversationId: state.pathParameters['id']!,
-                  ),
-                ),
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: ChatPage(conversationId: state.pathParameters['id']!),
+            ),
           ),
           GoRoute(
             path: '/subscription',
-            pageBuilder:
-                (_, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: const SubscriptionPage(),
-                ),
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SubscriptionPage(),
+            ),
+          ),
+          GoRoute(
+            path: '/api-key',
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const AccountApiKeysPage(),
+            ),
           ),
           GoRoute(
             path: '/settings',
-            pageBuilder:
-                (_, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: const SettingsPage(),
-                ),
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const SettingsPage(),
+            ),
           ),
           GoRoute(
             path: '/model-preview',
-            pageBuilder:
-                (_, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: const ModelPreviewPage(),
-                ),
+            pageBuilder: (_, state) => NoTransitionPage(
+              key: state.pageKey,
+              child: const ModelPreviewPage(),
+            ),
           ),
         ],
       ),

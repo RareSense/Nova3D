@@ -15,7 +15,7 @@ class ApiKeysSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Generation Keys',
+          'Bring Your Own Provider Key',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             color: kTextPrimary,
             fontWeight: FontWeight.w700,
@@ -23,7 +23,7 @@ class ApiKeysSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Add at least one provider key you already own. Before generating, make sure the provider account has at least \$10 in available credit.',
+          'Use your own OpenAI, Anthropic, or Gemini key for generation while Nova3D subscriptions are not active. These are third-party provider keys, not Nova3D n3d_ API tokens.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         if (state.message != null) ...[

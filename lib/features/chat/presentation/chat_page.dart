@@ -5,7 +5,6 @@ import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
-import 'package:nova3d_frontend/features/chat/presentation/widgets/chat_input.dart';
 import 'package:nova3d_frontend/features/chat/presentation/widgets/message_bubble.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -60,7 +59,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Widget build(BuildContext context) {
     final messagesAsync = ref.watch(messagesProvider(widget.conversationId));
     final messages = messagesAsync.valueOrNull?.messages ?? const [];
-    final isStreaming = messages.any((m) => m.isStreaming);
     final pendingDraft = ref.watch(
       generationDraftsProvider,
     )[widget.conversationId];

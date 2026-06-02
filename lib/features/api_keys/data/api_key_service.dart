@@ -55,10 +55,15 @@ class ApiKeyService {
         case AiProvider.openai:
           return await _validateOpenAi(apiKey);
       }
-    } catch (_) {
+    } catch (e) {
+      final hint = e is DioException &&
+              (e.type == DioExceptionType.connectionError ||
+                  e.type == DioExceptionType.unknown)
+          ? 'Check your internet connection and try again.'
+          : 'Unexpected error — please try again.';
       return ApiKeyValidationResult(
         isValid: false,
-        message: 'Could not validate ${provider.label}.',
+        message: 'Could not validate ${provider.label} key. $hint',
       );
     }
   }
@@ -70,17 +75,36 @@ class ApiKeyService {
         'https://generativelanguage.googleapis.com/v1beta/models',
         queryParameters: {'key': apiKey},
       );
-      return ApiKeyValidationResult(
+      return const ApiKeyValidationResult(
         isValid: true,
         message:
             'Gemini key saved. Keep at least \$10 credit available for generation.',
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      if (status == 400 || status == 403) {
+      if (status == 400) {
+        // 400 = INVALID_ARGUMENT — the key itself is malformed or invalid
         return const ApiKeyValidationResult(
           isValid: false,
-          message: 'Gemini rejected this key.',
+          message: 'Gemini rejected this key. Double-check it is correct.',
+        );
+      }
+      if (status == 403) {
+        // 403 = PERMISSION_DENIED — key is valid but the Generative Language
+        // API is not enabled in the associated Google Cloud project.
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message:
+              'Gemini key is recognised but access is denied. Enable the '
+              '"Generative Language API" in your Google Cloud Console, then try again.',
+        );
+      }
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.unknown) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message:
+              'Could not reach Gemini to validate the key. Check your connection and try again.',
         );
       }
       rethrow;

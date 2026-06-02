@@ -28,13 +28,12 @@ class SettingsPage extends ConsumerWidget {
                 children: [
                   Text('settings', style: kVt323(44, color: kInk)),
                   const SizedBox(width: 12),
-                  Text('✦',
-                      style: TextStyle(color: kPink, fontSize: 20)),
+                  Text('✦', style: TextStyle(color: kPink, fontSize: 20)),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
-                'Manage your account and the keys we use to generate.',
+                'Manage your account and bring-your-own provider keys.',
                 style: GoogleFonts.inter(fontSize: 14, color: kInkSoft),
               ),
               const SizedBox(height: 24),
@@ -54,17 +53,16 @@ class SettingsPage extends ConsumerWidget {
                           border: Border.all(color: kInk, width: 1.5),
                           boxShadow: const [
                             BoxShadow(
-                                color: kInk,
-                                offset: Offset(2, 2),
-                                blurRadius: 0)
+                              color: kInk,
+                              offset: Offset(2, 2),
+                              blurRadius: 0,
+                            ),
                           ],
                         ),
                         child: Center(
                           child: Text(
                             user != null && user.email.isNotEmpty
-                                ? user.email
-                                    .substring(0, 1)
-                                    .toUpperCase()
+                                ? user.email.substring(0, 1).toUpperCase()
                                 : '?',
                             style: kSilkscreen(16, color: kInk),
                           ),
@@ -78,24 +76,30 @@ class SettingsPage extends ConsumerWidget {
                             Text(
                               user?.email ?? '—',
                               style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: kInk,
-                                  fontWeight: FontWeight.w600),
+                                fontSize: 14,
+                                color: kInk,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFE6F5EC),
                                 borderRadius: BorderRadius.circular(99),
                                 border: Border.all(
-                                    color: const Color(0xFFA6D9B7)),
+                                  color: const Color(0xFFA6D9B7),
+                                ),
                               ),
                               child: Text(
                                 'ACTIVE',
-                                style: kSilkscreen(9,
-                                    color: const Color(0xFF1F7A3E)),
+                                style: kSilkscreen(
+                                  9,
+                                  color: const Color(0xFF1F7A3E),
+                                ),
                               ),
                             ),
                           ],
@@ -122,21 +126,29 @@ class SettingsPage extends ConsumerWidget {
                           children: [
                             Row(
                               children: [
-                                Text('Subscription',
-                                    style: kSilkscreen(11,
-                                        color: kInk, letterSpacing: 0.6)),
+                                Text(
+                                  'Subscription',
+                                  style: kSilkscreen(
+                                    11,
+                                    color: kInk,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: kLilacBg,
                                     borderRadius: BorderRadius.circular(99),
                                     border: Border.all(color: kLilac),
                                   ),
-                                  child: Text('COMING SOON',
-                                      style: kSilkscreen(9,
-                                          color: kInk)),
+                                  child: Text(
+                                    'COMING SOON',
+                                    style: kSilkscreen(9, color: kInk),
+                                  ),
                                 ),
                               ],
                             ),
@@ -144,7 +156,9 @@ class SettingsPage extends ConsumerWidget {
                             Text(
                               'You\'re on Free · BYOK — use your own provider keys.',
                               style: GoogleFonts.inter(
-                                  fontSize: 13, color: kInkSoft),
+                                fontSize: 13,
+                                color: kInkSoft,
+                              ),
                             ),
                           ],
                         ),
@@ -163,7 +177,7 @@ class SettingsPage extends ConsumerWidget {
 
               // Provider keys
               const _SectionCard(
-                title: 'Provider Keys',
+                title: 'BYOK Provider Keys',
                 children: [ApiKeysSection()],
               ),
               const SizedBox(height: 16),
@@ -181,7 +195,9 @@ class SettingsPage extends ConsumerWidget {
                         child: Text(
                           'Sign out of Nova 3D on this device.',
                           style: GoogleFonts.inter(
-                              fontSize: 13, color: kInkSoft),
+                            fontSize: 13,
+                            color: kInkSoft,
+                          ),
                         ),
                       ),
                       _SmallChunkyButton(
@@ -219,8 +235,10 @@ class SettingsPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(color: kInkMuted, fontSize: 13)),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(color: kInkMuted, fontSize: 13),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -228,11 +246,14 @@ class SettingsPage extends ConsumerWidget {
               await ref.read(authProvider.notifier).signOut();
               if (context.mounted) context.go('/signin');
             },
-            child: Text('Sign out',
-                style: GoogleFonts.inter(
-                    color: kErrorRed,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              'Sign out',
+              style: GoogleFonts.inter(
+                color: kErrorRed,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -261,34 +282,35 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: kChunkyCard(
-          bg: bg,
-          borderColor: borderColor,
-          shadowColor: shadowColor,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: kChunkyCard(
+      bg: bg,
+      borderColor: borderColor,
+      shadowColor: shadowColor,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Text(
-                  title.toUpperCase(),
-                  style: kSilkscreen(11,
-                      color: titleColor ?? kInk, letterSpacing: 1.2),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(height: 1.5, color: kLineSoft),
-                ),
-              ],
+            Text(
+              title.toUpperCase(),
+              style: kSilkscreen(
+                11,
+                color: titleColor ?? kInk,
+                letterSpacing: 1.2,
+              ),
             ),
-            const SizedBox(height: 16),
-            ...children,
+            const SizedBox(width: 12),
+            Expanded(child: Container(height: 1.5, color: kLineSoft)),
           ],
         ),
-      );
+        const SizedBox(height: 16),
+        ...children,
+      ],
+    ),
+  );
 }
 
 // ── Small chunky button ────────────────────────────────────────────────────────
@@ -316,33 +338,36 @@ class _SmallChunkyButtonState extends State<_SmallChunkyButton> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          transform: Matrix4.translationValues(
-              _pressed ? 2 : 0, _pressed ? 2 : 0, 0),
-          padding:
-              const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
-          decoration: BoxDecoration(
-            color: widget.color,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: widget.borderColor, width: 1.5),
-            boxShadow: _pressed
-                ? []
-                : [
-                    BoxShadow(
-                        color: widget.borderColor,
-                        offset: const Offset(2, 2),
-                        blurRadius: 0)
-                  ],
-          ),
-          child: Text(
-            widget.label,
-            style: kSilkscreen(10, color: widget.textColor),
-          ),
-        ),
-      );
+    onTapDown: (_) => setState(() => _pressed = true),
+    onTapUp: (_) => setState(() => _pressed = false),
+    onTapCancel: () => setState(() => _pressed = false),
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      transform: Matrix4.translationValues(
+        _pressed ? 2 : 0,
+        _pressed ? 2 : 0,
+        0,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+      decoration: BoxDecoration(
+        color: widget.color,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: widget.borderColor, width: 1.5),
+        boxShadow: _pressed
+            ? []
+            : [
+                BoxShadow(
+                  color: widget.borderColor,
+                  offset: const Offset(2, 2),
+                  blurRadius: 0,
+                ),
+              ],
+      ),
+      child: Text(
+        widget.label,
+        style: kSilkscreen(10, color: widget.textColor),
+      ),
+    ),
+  );
 }

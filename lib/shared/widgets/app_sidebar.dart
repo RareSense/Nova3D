@@ -74,26 +74,33 @@ class AppSidebar extends ConsumerWidget {
                 ),
               ),
               error: (_, _) => Center(
-                child: Text('Failed to load',
-                    style: GoogleFonts.inter(color: kInkMuted, fontSize: 12)),
+                child: Text(
+                  'Failed to load',
+                  style: GoogleFonts.inter(color: kInkMuted, fontSize: 12),
+                ),
               ),
               data: (convs) => convs.isEmpty
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text('No conversations yet',
-                            style: GoogleFonts.inter(
-                                color: kInkMuted, fontSize: 12)),
+                        child: Text(
+                          'No conversations yet',
+                          style: GoogleFonts.inter(
+                            color: kInkMuted,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       itemCount: convs.length,
                       itemBuilder: (_, i) {
                         final conv = convs[i];
-                        final isActive =
-                            currentLocation == '/chat/${conv.id}';
+                        final isActive = currentLocation == '/chat/${conv.id}';
                         return _ConversationTile(
                           title: conv.title,
                           isActive: isActive,
@@ -123,6 +130,12 @@ class AppSidebar extends ConsumerWidget {
             onTap: () => context.go('/subscription'),
           ),
           _SidebarNavItem(
+            icon: Icons.vpn_key_outlined,
+            label: 'Get API Key',
+            isActive: currentLocation == '/api-key',
+            onTap: () => context.go('/api-key'),
+          ),
+          _SidebarNavItem(
             icon: Icons.settings_outlined,
             label: 'Settings',
             isActive: currentLocation == '/settings',
@@ -135,8 +148,10 @@ class AppSidebar extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: kLilacBg,
                   borderRadius: BorderRadius.circular(10),
@@ -165,13 +180,16 @@ class AppSidebar extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         user.email,
-                        style: GoogleFonts.inter(
-                            color: kInkSoft, fontSize: 12),
+                        style: GoogleFonts.inter(color: kInkSoft, fontSize: 12),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.logout, size: 15, color: kInkMuted),
+                      icon: const Icon(
+                        Icons.logout,
+                        size: 15,
+                        color: kInkMuted,
+                      ),
                       tooltip: 'Sign out',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -192,7 +210,11 @@ class AppSidebar extends ConsumerWidget {
 
 // ── Accent button ──────────────────────────────────────────────────────────────
 class _AccentButton extends StatefulWidget {
-  const _AccentButton({required this.label, required this.icon, required this.onTap});
+  const _AccentButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
   final String label;
   final IconData icon;
   final VoidCallback onTap;
@@ -206,60 +228,63 @@ class _AccentButtonState extends State<_AccentButton> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          transform: Matrix4.translationValues(
-              _pressed ? 2 : 0, _pressed ? 2 : 0, 0),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          decoration: BoxDecoration(
-            color: kPink,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: kInk, width: 1.5),
-            boxShadow: _pressed
-                ? []
-                : const [
-                    BoxShadow(
-                        color: kInk, offset: Offset(2, 2), blurRadius: 0)
-                  ],
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icon, size: 16, color: kInk),
-              const SizedBox(width: 8),
-              Text(
-                widget.label.toUpperCase(),
-                style: kSilkscreen(11, color: kInk),
-              ),
-            ],
-          ),
-        ),
-      );
+    onTapDown: (_) => setState(() => _pressed = true),
+    onTapUp: (_) => setState(() => _pressed = false),
+    onTapCancel: () => setState(() => _pressed = false),
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      transform: Matrix4.translationValues(
+        _pressed ? 2 : 0,
+        _pressed ? 2 : 0,
+        0,
+      ),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      decoration: BoxDecoration(
+        color: kPink,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kInk, width: 1.5),
+        boxShadow: _pressed
+            ? []
+            : const [
+                BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+              ],
+      ),
+      child: Row(
+        children: [
+          Icon(widget.icon, size: 16, color: kInk),
+          const SizedBox(width: 8),
+          Text(widget.label.toUpperCase(), style: kSilkscreen(11, color: kInk)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ── Icon button ────────────────────────────────────────────────────────────────
 class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.icon, required this.onTap, required this.tooltip});
+  const _IconBtn({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
   final IconData icon;
   final VoidCallback onTap;
   final String tooltip;
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Icon(icon, color: kInkSoft, size: 20),
-          ),
-        ),
-      );
+    message: tooltip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, color: kInkSoft, size: 20),
+      ),
+    ),
+  );
 }
 
 // ── Conversation tile ──────────────────────────────────────────────────────────
@@ -284,72 +309,70 @@ class _ConversationTileState extends State<_ConversationTile> {
 
   @override
   Widget build(BuildContext context) => MouseRegion(
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 2),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: widget.isActive
-                  ? kPinkBg
-                  : _hovering
-                      ? kLineSoft
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: widget.isActive ? kInk : Colors.transparent,
-                width: 1.5,
-              ),
-              boxShadow: widget.isActive
-                  ? const [
-                      BoxShadow(
-                          color: kInk, offset: Offset(2, 2), blurRadius: 0)
-                    ]
-                  : [],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: kPink,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kInk),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: widget.isActive ? kInk : kInkSoft,
-                      fontSize: 13,
-                      fontWeight: widget.isActive
-                          ? FontWeight.w500
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ),
-                if (_hovering)
-                  InkWell(
-                    onTap: widget.onDelete,
-                    borderRadius: BorderRadius.circular(4),
-                    child: const Padding(
-                      padding: EdgeInsets.all(2),
-                      child: Icon(Icons.close, size: 14, color: kInkMuted),
-                    ),
-                  ),
-              ],
-            ),
+    onEnter: (_) => setState(() => _hovering = true),
+    onExit: (_) => setState(() => _hovering = false),
+    child: GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: widget.isActive
+              ? kPinkBg
+              : _hovering
+              ? kLineSoft
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: widget.isActive ? kInk : Colors.transparent,
+            width: 1.5,
           ),
+          boxShadow: widget.isActive
+              ? const [
+                  BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+                ]
+              : [],
         ),
-      );
+        child: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: kPink,
+                shape: BoxShape.circle,
+                border: Border.all(color: kInk),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: widget.isActive ? kInk : kInkSoft,
+                  fontSize: 13,
+                  fontWeight: widget.isActive
+                      ? FontWeight.w500
+                      : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (_hovering)
+              InkWell(
+                onTap: widget.onDelete,
+                borderRadius: BorderRadius.circular(4),
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Icon(Icons.close, size: 14, color: kInkMuted),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 // ── Sidebar nav item ───────────────────────────────────────────────────────────
@@ -374,48 +397,46 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 
   @override
   Widget build(BuildContext context) => MouseRegion(
-        onEnter: (_) => setState(() => _hovering = true),
-        onExit: (_) => setState(() => _hovering = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: widget.isActive
-                  ? kLilacBg
-                  : _hovering
-                      ? kLineSoft
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color:
-                    widget.isActive ? kInk : Colors.transparent,
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  widget.icon,
-                  size: 16,
-                  color: widget.isActive ? kInk : kInkSoft,
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.inter(
-                    color: widget.isActive ? kInk : kInkSoft,
-                    fontSize: 13,
-                    fontWeight: widget.isActive
-                        ? FontWeight.w500
-                        : FontWeight.normal,
-                  ),
-                ),
-              ],
-            ),
+    onEnter: (_) => setState(() => _hovering = true),
+    onExit: (_) => setState(() => _hovering = false),
+    child: GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: widget.isActive
+              ? kLilacBg
+              : _hovering
+              ? kLineSoft
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: widget.isActive ? kInk : Colors.transparent,
+            width: 1.5,
           ),
         ),
-      );
+        child: Row(
+          children: [
+            Icon(
+              widget.icon,
+              size: 16,
+              color: widget.isActive ? kInk : kInkSoft,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              widget.label,
+              style: GoogleFonts.inter(
+                color: widget.isActive ? kInk : kInkSoft,
+                fontSize: 13,
+                fontWeight: widget.isActive
+                    ? FontWeight.w500
+                    : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
