@@ -498,6 +498,11 @@
               description: String(data.description || ''),
               partType: String(data.partType || ''),
               codeArtifact: data.codeArtifact || null,
+              modelArtifact: data.modelArtifact || null,
+              sourceModelUrl: String(data.sourceModelUrl || ''),
+              instructionPrompt: String(data.instructionPrompt || ''),
+              selectedMeshes: Array.isArray(data.selectedMeshes) ? data.selectedMeshes : [],
+              screenshots: Array.isArray(data.screenshots) ? data.screenshots : [],
               sourceWorkflowId: String(data.sourceWorkflowId || ''),
               modelOptionId: String(data.modelOptionId || '')
             }));
@@ -512,6 +517,35 @@
             status: 'failed',
             message: 'Nova3D edit bridge is not ready. Close and reopen this model preview.'
           });
+        }
+        return;
+      }
+
+      if (data.type === 'nova3d-version-resolve-request') {
+        var versionFrame = findNova3dFrame(event.source);
+        if (!versionFrame) return;
+        function postVersionBridgeResult(payload) {
+          try {
+            versionFrame.contentWindow && versionFrame.contentWindow.postMessage(Object.assign({
+              type: 'nova3d-version-resolve-result',
+              requestId: String(data.requestId || '')
+            }, payload), '*');
+          } catch (_) {}
+        }
+        var versionHandler = window.__nova3dEditHandlers && window.__nova3dEditHandlers[String(data.viewerId || '')];
+        if (typeof versionHandler === 'function') {
+          try {
+            versionHandler(JSON.stringify({
+              type: 'version_resolve',
+              requestId: String(data.requestId || ''),
+              workflowId: String(data.workflowId || ''),
+              modelUrl: String(data.modelUrl || '')
+            }));
+          } catch (_) {
+            postVersionBridgeResult({ modelUrl: String(data.modelUrl || '') });
+          }
+        } else {
+          postVersionBridgeResult({ modelUrl: String(data.modelUrl || '') });
         }
         return;
       }

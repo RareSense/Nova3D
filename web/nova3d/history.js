@@ -68,6 +68,8 @@ import {
 let _detachProxy = () => {};
 let _refreshUi = () => {};
 let _saveEditorState = () => {};
+let _loadAssetVersion = () => {};
+let _activeVersionRequestId = '';
 
 export function setHistoryUiRefreshers({ detachProxy, refreshUi } = {}) {
   if (typeof detachProxy === 'function') _detachProxy = detachProxy;
@@ -75,6 +77,9 @@ export function setHistoryUiRefreshers({ detachProxy, refreshUi } = {}) {
 }
 export function setHistorySaveEditorState(fn) {
   _saveEditorState = typeof fn === 'function' ? fn : (() => {});
+}
+export function setHistoryAssetVersionLoader(fn) {
+  _loadAssetVersion = typeof fn === 'function' ? fn : (() => {});
 }
 
 // ── Geometry serialization ───────────────────────────────────────────────────
@@ -303,7 +308,10 @@ export function restoreSnapshot(snap, options = {}) {
 }
 
 export function popUndo() {
-  if (!state.undoHistory.length) return;
+  if (!state.undoHistory.length) {
+    if (state.aiVersionIndex > 0) switchAiVersion(state.aiVersionIndex - 1);
+    return;
+  }
   const current = captureSnapshot('redo-point');
   const snap = state.undoHistory.pop();
   if (restoreSnapshot(snap)) {
@@ -316,7 +324,12 @@ export function popUndo() {
 }
 
 export function popRedo() {
-  if (!state.redoHistory.length) return;
+  if (!state.redoHistory.length) {
+    if (state.aiVersionIndex >= 0 && state.aiVersionIndex < state.aiVersions.length - 1) {
+      switchAiVersion(state.aiVersionIndex + 1);
+    }
+    return;
+  }
   const current = captureSnapshot('undo-point');
   const snap = state.redoHistory.pop();
   if (restoreSnapshot(snap)) {
@@ -332,11 +345,26 @@ export function popRedo() {
 export function syncHistoryUi() {
   const undoBtn = document.getElementById('tbUndo');
   const redoBtn = document.getElementById('tbRedo');
-  if (undoBtn) undoBtn.disabled = state.undoHistory.length === 0;
-  if (redoBtn) redoBtn.disabled = state.redoHistory.length === 0;
+  const hasAiUndo = state.aiVersionIndex > 0;
+  const hasAiRedo = state.aiVersionIndex >= 0 && state.aiVersionIndex < state.aiVersions.length - 1;
+  if (undoBtn) undoBtn.disabled = state.undoHistory.length === 0 && !hasAiUndo;
+  if (redoBtn) redoBtn.disabled = state.redoHistory.length === 0 && !hasAiRedo;
 
   const list = document.getElementById('historyList');
   if (!list) return;
+  if (!state.undoHistory.length && !state.redoHistory.length && state.aiVersions.length > 1) {
+    list.innerHTML = state.aiVersions.map((version, idx) => {
+      const isActive = idx === state.aiVersionIndex;
+      return `<button class="history-item${isActive ? ' active' : ''}" type="button" data-ai-version-idx="${idx}">
+        ${escapeHtml(formatActionLabel(version.operation || version.label || 'Model version'))}
+        <small>${isActive ? 'Current state' : 'Saved AI version'}</small>
+      </button>`;
+    }).join('');
+    list.querySelectorAll('[data-ai-version-idx]').forEach(btn => {
+      btn.onclick = () => switchAiVersion(parseInt(btn.dataset.aiVersionIdx, 10));
+    });
+    return;
+  }
   const redoForward = state.redoHistory.slice().reverse();
   const entries = [
     'Initial model',
@@ -360,3 +388,49 @@ export function syncHistoryUi() {
     };
   });
 }
+
+export function switchAiVersion(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= state.aiVersions.length) return;
+  const version = state.aiVersions[index];
+  state.aiVersionIndex = index;
+  state.currentCodeArtifact = version.codeArtifact || null;
+  state.currentModelArtifact = version.modelArtifact || null;
+  state.currentJointsArtifact = version.jointsArtifact || null;
+  state.currentJoints = Array.isArray(version.joints) ? version.joints : [];
+  state.currentSourceWorkflowId = version.workflowId || '';
+  state.currentSourceModelUrl = version.sourceModelUrl || version.modelUrl || '';
+  syncHistoryUi();
+
+  const requestId = `version-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  _activeVersionRequestId = requestId;
+  try {
+    window.parent?.postMessage({
+      type: 'nova3d-version-resolve-request',
+      viewerId: state.viewerId,
+      requestId,
+      workflowId: version.workflowId,
+      modelUrl: version.modelUrl,
+    }, '*');
+  } catch (_) {}
+  window.setTimeout(() => {
+    if (_activeVersionRequestId === requestId) {
+      _loadAssetVersion({ url: version.modelUrl, version });
+      _activeVersionRequestId = '';
+    }
+  }, 5000);
+}
+
+window.addEventListener('message', event => {
+  const data = event.data || {};
+  if (data.type !== 'nova3d-version-resolve-result') return;
+  if (data.requestId !== _activeVersionRequestId) return;
+  _activeVersionRequestId = '';
+  const version = state.aiVersions[state.aiVersionIndex];
+  if (!version) return;
+  if (data.codeArtifact !== undefined) version.codeArtifact = data.codeArtifact || version.codeArtifact;
+  if (data.modelArtifact !== undefined) version.modelArtifact = data.modelArtifact || version.modelArtifact;
+  if (data.jointsArtifact !== undefined) version.jointsArtifact = data.jointsArtifact || version.jointsArtifact;
+  if (Array.isArray(data.joints)) version.joints = data.joints;
+  const url = String(data.modelUrl || version.modelUrl || '');
+  if (url) _loadAssetVersion({ url, version });
+});

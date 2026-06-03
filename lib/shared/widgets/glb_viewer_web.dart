@@ -5,6 +5,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/shared/services/glb_asset_cache.dart';
@@ -29,9 +30,11 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
     this.instructionPrompt,
     this.sourceWorkflowId,
     this.conversationId,
+    this.assetVersions = const [],
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
+    this.onEditCompleted,
     this.viewerStateKey,
   });
 
@@ -44,6 +47,7 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
   final String? instructionPrompt;
   final String? sourceWorkflowId;
   final String? conversationId;
+  final List<AssetVersion> assetVersions;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
 
@@ -56,6 +60,7 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
     List<Map<String, dynamic>> joints,
   )?
   onArticulationCompleted;
+  final void Function(AiEditCompletion completion)? onEditCompleted;
 
   /// Stable key for IndexedDB state persistence. Defaults to a hash of [src].
   final String? viewerStateKey;
@@ -72,6 +77,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   late final web.HTMLIFrameElement _iframe;
 
   String? _resolvedSrc;
+  String? _loadedSourceModelUrl;
   bool _loadError = false;
 
   @override
@@ -104,6 +110,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         oldWidget.autoRotate != widget.autoRotate) {
       GlbAssetCache.revoke(_resolvedSrc ?? '');
       _resolvedSrc = null;
+      _loadedSourceModelUrl = null;
       _resolveAndLoad(widget.src);
       return;
     }
@@ -114,11 +121,15 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         oldWidget.joints != widget.joints ||
         oldWidget.instructionPrompt != widget.instructionPrompt ||
         oldWidget.sourceWorkflowId != widget.sourceWorkflowId ||
+        !_sameAssetVersions(oldWidget.assetVersions, widget.assetVersions) ||
         oldWidget.defaultEditModelOptionId != widget.defaultEditModelOptionId ||
         !_sameModelOptions(
           oldWidget.editModelOptions,
           widget.editModelOptions,
         )) {
+      if (_loadError && widget.assetVersions.isNotEmpty) {
+        _resolveAndLoad(widget.src);
+      }
       _postEditConfig();
     }
   }
@@ -133,73 +144,100 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   Future<void> _resolveAndLoad(String src) async {
     if (_loadError) setState(() => _loadError = false);
 
-    final resolved = await GlbAssetCache.resolve(src);
+    final resolved = await _resolveModelCandidate(
+      modelUrl: src,
+      workflowId: widget.sourceWorkflowId,
+    );
     if (!mounted || src != widget.src) {
-      if (resolved != null) GlbAssetCache.revoke(resolved);
+      if (resolved != null) GlbAssetCache.revoke(resolved.objectUrl);
       return;
     }
 
     if (resolved != null) {
-      setState(() => _resolvedSrc = resolved);
-      _iframe.src = _buildViewerUrl(resolved);
-      _postEditConfigSoon(src);
+      _loadResolvedModel(resolved, expectedSrc: src);
       return;
     }
 
-    // URL inaccessible (expired SAS token). Re-fetch a fresh URL via the API.
-    final workflowId = widget.sourceWorkflowId;
-    if (workflowId == null || workflowId.isEmpty) {
-      setState(() => _loadError = true);
+    for (final version in widget.assetVersions.reversed) {
+      final versionResolved = await _resolveModelCandidate(
+        modelUrl: version.modelUrl,
+        workflowId: version.workflowId,
+      );
+      if (!mounted || src != widget.src) {
+        if (versionResolved != null) {
+          GlbAssetCache.revoke(versionResolved.objectUrl);
+        }
+        return;
+      }
+      if (versionResolved == null) continue;
+      _loadResolvedModel(versionResolved, expectedSrc: src);
       return;
     }
+
+    if (mounted && src == widget.src) setState(() => _loadError = true);
+  }
+
+  Future<_ResolvedGlb?> _resolveModelCandidate({
+    required String modelUrl,
+    String? workflowId,
+  }) async {
+    if (modelUrl.trim().isNotEmpty) {
+      final resolved = await GlbAssetCache.resolve(modelUrl);
+      if (resolved != null) {
+        return _ResolvedGlb(objectUrl: resolved, sourceUrl: modelUrl);
+      }
+    }
+
+    if (workflowId == null || workflowId.isEmpty) return null;
 
     try {
       final freshUrl =
           (await ref.read(cadServiceProvider).getResult(workflowId)).glbUrl;
-      if (!mounted || src != widget.src || freshUrl == null) {
-        if (mounted && src == widget.src) setState(() => _loadError = true);
-        return;
-      }
+      if (freshUrl == null || freshUrl.isEmpty) return null;
       final freshResolved = await GlbAssetCache.resolve(freshUrl);
-      if (!mounted || src != widget.src) {
-        if (freshResolved != null) GlbAssetCache.revoke(freshResolved);
-        return;
-      }
-      if (freshResolved == null) {
-        setState(() => _loadError = true);
-        return;
-      }
-      setState(() {
-        _resolvedSrc = freshResolved;
-        _loadError = false;
-      });
-      _iframe.src = _buildViewerUrl(freshResolved);
-      _postEditConfigSoon(freshUrl);
+      if (freshResolved == null) return null;
+      return _ResolvedGlb(objectUrl: freshResolved, sourceUrl: freshUrl);
     } catch (_) {
-      if (mounted && src == widget.src) setState(() => _loadError = true);
+      return null;
     }
   }
 
-  void _postEditConfigSoon(String src) {
+  void _loadResolvedModel(
+    _ResolvedGlb resolved, {
+    required String expectedSrc,
+  }) {
+    setState(() {
+      _resolvedSrc = resolved.objectUrl;
+      _loadedSourceModelUrl = resolved.sourceUrl;
+      _loadError = false;
+    });
+    _iframe.src = _buildViewerUrl(
+      resolved.objectUrl,
+      sourceModelUrl: resolved.sourceUrl,
+    );
+    _postEditConfigSoon(expectedSrc);
+  }
+
+  void _postEditConfigSoon(String expectedSrc) {
     for (final delay in const [
       Duration(milliseconds: 250),
       Duration(milliseconds: 1000),
       Duration(milliseconds: 2500),
     ]) {
       Future<void>.delayed(delay, () {
-        if (!mounted || src != widget.src) return;
+        if (!mounted || expectedSrc != widget.src) return;
         _postEditConfig();
       });
     }
   }
 
-  String _buildViewerUrl(String modelUrl) {
+  String _buildViewerUrl(String modelUrl, {String? sourceModelUrl}) {
     final params = {
       'viewerId': _viewerId,
       'stateKey':
           widget.viewerStateKey ?? widget.src.hashCode.toRadixString(16),
       'glb': modelUrl,
-      'sourceModelUrl': widget.src,
+      'sourceModelUrl': sourceModelUrl ?? widget.src,
       'autoRotate': widget.autoRotate.toString(),
       if (widget.modelArtifact != null)
         'modelArtifact': json.encode(widget.modelArtifact),
@@ -212,6 +250,10 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         'instructionPrompt': widget.instructionPrompt!,
       if (widget.sourceWorkflowId != null)
         'sourceWorkflowId': widget.sourceWorkflowId!,
+      if (widget.assetVersions.isNotEmpty)
+        'assetVersions': json.encode(
+          widget.assetVersions.map((version) => version.toJson()).toList(),
+        ),
       'editModelOptions': json.encode(_editModelOptionsPayload()),
       if (widget.defaultEditModelOptionId != null)
         'editDefaultModelId': widget.defaultEditModelOptionId!,
@@ -239,9 +281,12 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         if (widget.jointsArtifact != null)
           'jointsArtifact': widget.jointsArtifact,
         if (widget.joints.isNotEmpty) 'joints': widget.joints,
-        'sourceModelUrl': widget.src,
+        'sourceModelUrl': _loadedSourceModelUrl ?? widget.src,
         'instructionPrompt': widget.instructionPrompt ?? '',
         'sourceWorkflowId': widget.sourceWorkflowId ?? '',
+        'assetVersions': widget.assetVersions
+            .map((version) => version.toJson())
+            .toList(),
         'editModelOptions': _editModelOptionsPayload(),
         'editDefaultModelId': widget.defaultEditModelOptionId ?? '',
       }.jsify(),
@@ -260,8 +305,29 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     return true;
   }
 
+  bool _sameAssetVersions(List<AssetVersion> a, List<AssetVersion> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].messageId != b[i].messageId ||
+          a[i].workflowId != b[i].workflowId ||
+          a[i].modelUrl != b[i].modelUrl ||
+          a[i].operation != b[i].operation) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _handleEditRequest(JSString requestJson) {
     final request = _decodeEditRequest(requestJson.toDart);
+    if (request.requestType == 'version_resolve') {
+      _resolveAssetVersion(
+        requestId: request.requestId,
+        workflowId: request.sourceWorkflowId,
+        fallbackModelUrl: request.sourceModelUrl,
+      );
+      return;
+    }
     _runEditWorkflow(
       requestId: request.requestId,
       operation: request.operation,
@@ -276,6 +342,37 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       sourceWorkflowId: request.sourceWorkflowId,
       modelOptionId: request.modelOptionId,
     );
+  }
+
+  Future<void> _resolveAssetVersion({
+    required String requestId,
+    required String workflowId,
+    required String fallbackModelUrl,
+  }) async {
+    try {
+      final result = workflowId.isEmpty
+          ? null
+          : await ref.read(cadServiceProvider).getResult(workflowId);
+      final modelUrl = result?.glbUrl ?? fallbackModelUrl;
+      final resolved = modelUrl.isEmpty
+          ? null
+          : await GlbAssetCache.resolve(modelUrl);
+      _postVersionResolveResult({
+        'requestId': requestId,
+        'modelUrl': resolved ?? modelUrl,
+        if (result?.modelArtifact != null)
+          'modelArtifact': result!.modelArtifact,
+        if (result?.codeArtifact != null) 'codeArtifact': result!.codeArtifact,
+        if (result?.jointsArtifact != null)
+          'jointsArtifact': result!.jointsArtifact,
+        if (result != null && result.joints.isNotEmpty) 'joints': result.joints,
+      });
+    } catch (_) {
+      _postVersionResolveResult({
+        'requestId': requestId,
+        'modelUrl': fallbackModelUrl,
+      });
+    }
   }
 
   Future<void> _runEditWorkflow({
@@ -457,6 +554,21 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
           result.joints,
         );
       }
+      widget.onEditCompleted?.call(
+        AiEditCompletion(
+          operation: operation,
+          description: description,
+          modelUrl: result.glbUrl!,
+          workflowId: workflowId,
+          sourceModelUrl: result.glbUrl,
+          modelArtifact: result.modelArtifact,
+          codeArtifact: result.codeArtifact,
+          jointsArtifact: result.jointsArtifact,
+          joints: result.joints,
+          modelOptionId: modelOption.id,
+          instructionPrompt: instructionPrompt,
+        ),
+      );
     } on CadException catch (e) {
       _postEditResult({
         'requestId': requestId,
@@ -481,12 +593,19 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       );
       return _EditRequest(
         requestId: (request['requestId'] as String?) ?? '',
+        requestType: (request['type'] as String?) ?? '',
         operation: (request['operation'] as String?) ?? '',
         description: (request['description'] as String?) ?? '',
         partType: (request['partType'] as String?) ?? '',
         modelOptionId: (request['modelOptionId'] as String?) ?? '',
-        sourceWorkflowId: (request['sourceWorkflowId'] as String?) ?? '',
-        sourceModelUrl: (request['sourceModelUrl'] as String?) ?? '',
+        sourceWorkflowId:
+            (request['sourceWorkflowId'] as String?) ??
+            (request['workflowId'] as String?) ??
+            '',
+        sourceModelUrl:
+            (request['sourceModelUrl'] as String?) ??
+            (request['modelUrl'] as String?) ??
+            '',
         instructionPrompt: (request['instructionPrompt'] as String?) ?? '',
         codeArtifact: _asStringMap(request['codeArtifact']),
         modelArtifact: _asStringMap(request['modelArtifact']),
@@ -514,6 +633,13 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   void _postEditResult(Map<String, dynamic> payload) {
     _iframe.contentWindow?.postMessage(
       {'type': 'nova3d-edit-result', ...payload}.jsify(),
+      '*'.toJS,
+    );
+  }
+
+  void _postVersionResolveResult(Map<String, dynamic> payload) {
+    _iframe.contentWindow?.postMessage(
+      {'type': 'nova3d-version-resolve-result', ...payload}.jsify(),
       '*'.toJS,
     );
   }
@@ -574,6 +700,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
 class _EditRequest {
   const _EditRequest({
     this.requestId = '',
+    this.requestType = '',
     this.operation = '',
     this.description = '',
     this.partType = '',
@@ -588,6 +715,7 @@ class _EditRequest {
   });
 
   final String requestId;
+  final String requestType;
   final String operation;
   final String description;
   final String partType;
@@ -599,4 +727,11 @@ class _EditRequest {
   final Map<String, dynamic>? modelArtifact;
   final List<String> selectedMeshes;
   final List<String> screenshots;
+}
+
+class _ResolvedGlb {
+  const _ResolvedGlb({required this.objectUrl, required this.sourceUrl});
+
+  final String objectUrl;
+  final String sourceUrl;
 }

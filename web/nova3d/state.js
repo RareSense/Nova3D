@@ -59,6 +59,8 @@ export const state = {
   activeOperation: null,
   editModelOptions: [],
   editDefaultModelId: '',
+  aiVersions: [],
+  aiVersionIndex: -1,
 
   // ── Articulation ─────────────────────────────────────────────────────────
   articulatedJoints: [],

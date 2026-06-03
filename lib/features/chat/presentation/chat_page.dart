@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
@@ -122,22 +123,81 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       return _EmptyState();
     }
 
+    final visibleMessages = _visibleMessages(messages);
+    final assetVersions = _assetVersionsForConversation(messages);
+
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      itemCount: messages.length,
-      itemBuilder: (_, i) => _CenteredMessage(
-        child: MessageBubble(
-          message: messages[i],
-          conversationId: widget.conversationId,
-          onRetry: messages[i].retryRequest != null
-              ? () => ref
-                    .read(messagesProvider(widget.conversationId).notifier)
-                    .retry(messages[i].id)
-              : null,
-        ),
-      ),
+      itemCount: visibleMessages.length,
+      itemBuilder: (_, i) {
+        final message = visibleMessages[i];
+        return _CenteredMessage(
+          child: MessageBubble(
+            message: message,
+            conversationId: widget.conversationId,
+            assetVersions: _isInitialModelMessage(message)
+                ? assetVersions
+                : const [],
+            onRetry: message.retryRequest != null
+                ? () => ref
+                      .read(messagesProvider(widget.conversationId).notifier)
+                      .retry(message.id)
+                : null,
+          ),
+        );
+      },
     );
+  }
+
+  List<MessageModel> _visibleMessages(List<MessageModel> messages) => messages
+      .where(
+        (message) => !_isPersistedAiEditVersion(message) || message.isStreaming,
+      )
+      .toList(growable: false);
+
+  bool _isInitialModelMessage(MessageModel message) =>
+      message.role == MessageRole.assistant &&
+      message.modelUrl != null &&
+      (message.operation == null || message.operation == 'initial_generation');
+
+  bool _isPersistedAiEditVersion(MessageModel message) =>
+      message.role == MessageRole.assistant &&
+      message.modelUrl != null &&
+      message.workflowId != null &&
+      message.isAssetVersionEvent &&
+      message.operation != 'initial_generation';
+
+  List<AssetVersion> _assetVersionsForConversation(
+    List<MessageModel> messages,
+  ) {
+    final versions = <AssetVersion>[];
+    for (final message in messages) {
+      final modelUrl = message.modelUrl;
+      final workflowId = message.workflowId;
+      if (message.role != MessageRole.assistant ||
+          modelUrl == null ||
+          modelUrl.isEmpty ||
+          workflowId == null ||
+          workflowId.isEmpty) {
+        continue;
+      }
+      versions.add(
+        AssetVersion(
+          messageId: message.id,
+          label: message.text.isEmpty ? 'Model version' : message.text,
+          operation: message.operation ?? 'generation',
+          modelUrl: modelUrl,
+          workflowId: workflowId,
+          sourceModelUrl: message.sourceModelUrl ?? modelUrl,
+          modelArtifact: message.modelArtifact,
+          codeArtifact: message.codeArtifact,
+          jointsArtifact: message.jointsArtifact,
+          joints: message.joints,
+        ),
+      );
+    }
+    return versions;
   }
 }
 

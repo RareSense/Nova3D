@@ -22,7 +22,8 @@ import {
 } from '@nova/articulation.js';
 import {
   popUndo, popRedo, pushUndoSnapshot, syncHistoryUi,
-  setHistoryUiRefreshers, setHistorySaveEditorState,
+  setHistoryUiRefreshers, setHistorySaveEditorState, setHistoryAssetVersionLoader,
+  switchAiVersion,
 } from '@nova/history.js';
 import {
   saveEditorState, flushEditorState, restoreEditorState,
@@ -66,6 +67,20 @@ import {
 // reference at boot rather than importing).
 setSaveEditorState(saveEditorState);
 setHistorySaveEditorState(saveEditorState);
+setHistoryAssetVersionLoader(({ url, version }) => {
+  if (!version) return;
+  state.currentCodeArtifact = version.codeArtifact || null;
+  state.currentModelArtifact = version.modelArtifact || null;
+  state.currentJointsArtifact = version.jointsArtifact || null;
+  state.currentJoints = Array.isArray(version.joints) ? version.joints : [];
+  state.currentSourceWorkflowId = version.workflowId || '';
+  state.currentSourceModelUrl = version.sourceModelUrl || version.modelUrl || url;
+  loadGLB(url, {
+    recordHistory: false,
+    sourceModelUrl: state.currentSourceModelUrl,
+    startJointDemo: version.operation === 'articulate_3d_model',
+  });
+});
 setHistoryUiRefreshers({
   detachProxy: () => detachProxy(),
   refreshUi:   () => { updateMeshList(); updateMeshStats(); updateHighlights(); },
@@ -199,10 +214,43 @@ document.addEventListener('DOMContentLoaded', () => {
       state.editModelOptions = [];
     }
   }
+  const assetVersionsParam = params.get('assetVersions');
+  if (assetVersionsParam) {
+    try {
+      const parsed = JSON.parse(assetVersionsParam);
+      state.aiVersions = Array.isArray(parsed)
+        ? parsed.map(version => ({
+            messageId: String(version.message_id || version.messageId || version.workflow_id || ''),
+            label: String(version.label || 'Model version'),
+            operation: String(version.operation || 'generation'),
+            modelUrl: String(version.model_url || version.modelUrl || ''),
+            sourceModelUrl: String(version.source_model_url || version.sourceModelUrl || version.model_url || version.modelUrl || ''),
+            workflowId: String(version.workflow_id || version.workflowId || ''),
+            modelArtifact: version.model_artifact || version.modelArtifact || null,
+            codeArtifact: version.code_artifact || version.codeArtifact || null,
+            jointsArtifact: version.joints_artifact || version.jointsArtifact || null,
+            joints: Array.isArray(version.joints) ? version.joints : [],
+          })).filter(version => version.modelUrl && version.workflowId)
+        : [];
+      state.aiVersionIndex = state.aiVersions.length ? state.aiVersions.length - 1 : -1;
+    } catch (_) {
+      state.aiVersions = [];
+      state.aiVersionIndex = -1;
+    }
+  }
   state.editDefaultModelId      = params.get('editDefaultModelId') || '';
   state.currentSourceModelUrl   = params.get('sourceModelUrl') || params.get('glb') || '';
   state.currentInstructionPrompt = params.get('instructionPrompt') || '';
   state.currentSourceWorkflowId = params.get('sourceWorkflowId') || '';
+  const bootVersion = state.aiVersionIndex >= 0 ? state.aiVersions[state.aiVersionIndex] : null;
+  if (bootVersion) {
+    state.currentCodeArtifact = bootVersion.codeArtifact || state.currentCodeArtifact;
+    state.currentModelArtifact = bootVersion.modelArtifact || state.currentModelArtifact;
+    state.currentJointsArtifact = bootVersion.jointsArtifact || state.currentJointsArtifact;
+    state.currentJoints = Array.isArray(bootVersion.joints) ? bootVersion.joints : state.currentJoints;
+    state.currentSourceModelUrl = bootVersion.sourceModelUrl || bootVersion.modelUrl || state.currentSourceModelUrl;
+    state.currentSourceWorkflowId = bootVersion.workflowId || state.currentSourceWorkflowId;
+  }
   renderEditModelSelector();
 
   const glbUrl = params.get('glb');
@@ -221,6 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // when no saved state exists for this model.
   restoreEditorState().then(restored => {
     if (!glbUrl || restored) return;
+    if (bootVersion?.modelUrl) {
+      switchAiVersion(state.aiVersionIndex);
+      return;
+    }
     if (state.container.clientWidth > 0 && state.container.clientHeight > 0) {
       loadGLB(glbUrl, { sourceModelUrl: state.currentSourceModelUrl });
     } else {

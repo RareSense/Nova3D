@@ -7,6 +7,13 @@ import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 
+class RemoteMessageReceipt {
+  const RemoteMessageReceipt({required this.id, required this.inserted});
+
+  final String id;
+  final bool inserted;
+}
+
 class ChatService {
   final AuthService _auth;
   late final Dio _dio;
@@ -80,6 +87,53 @@ class ChatService {
       options: Options(headers: headers),
     );
     return ConversationModel.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<RemoteMessageReceipt> appendMessage(
+    String conversationId,
+    MessageModel message,
+  ) async {
+    final headers = await _authHeaders();
+    final resp = await _dio.post(
+      '/conversations/$conversationId/messages',
+      data: {
+        'client_message_id': message.id,
+        'role': message.role == MessageRole.user ? 'user' : 'assistant',
+        'status': message.isStreaming ? 'pending' : 'completed',
+        'content_text': message.text,
+        'content_json': message.toContentJson(),
+        'sent_at': message.createdAt.toUtc().toIso8601String(),
+      },
+      options: Options(headers: headers),
+    );
+    final data = resp.data as Map<String, dynamic>;
+    return RemoteMessageReceipt(
+      id: data['id'] as String,
+      inserted: resp.statusCode == 201,
+    );
+  }
+
+  Future<void> linkWorkflowToMessage(
+    String conversationId, {
+    required String workflowId,
+    required String remoteMessageId,
+    required String operation,
+  }) async {
+    final headers = await _authHeaders();
+    await _dio.post(
+      '/conversations/$conversationId/workflow-links',
+      data: {
+        'workflow_id': workflowId,
+        'message_id': remoteMessageId,
+        'relation_type': 'message_result',
+        'link_metadata': {
+          'operation': operation,
+          'client': 'flutter',
+          'client_relation': 'asset_version',
+        },
+      },
+      options: Options(headers: headers),
+    );
   }
 
   Future<void> deleteConversation(String id) async {

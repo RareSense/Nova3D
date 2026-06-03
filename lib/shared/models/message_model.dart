@@ -14,6 +14,9 @@ class MessageModel {
   final Map<String, dynamic>? codeArtifact;
   final Map<String, dynamic>? jointsArtifact;
   final List<Map<String, dynamic>> joints;
+  final String? messageType;
+  final String? operation;
+  final String? sourceModelUrl;
   final String? modelOptionId;
   final String? instructionPrompt;
   // Shown as a thumbnail in the user bubble.
@@ -33,6 +36,9 @@ class MessageModel {
     this.codeArtifact,
     this.jointsArtifact,
     this.joints = const [],
+    this.messageType,
+    this.operation,
+    this.sourceModelUrl,
     this.modelOptionId,
     this.instructionPrompt,
     this.imageDataUrl,
@@ -48,6 +54,9 @@ class MessageModel {
     Map<String, dynamic>? codeArtifact,
     Map<String, dynamic>? jointsArtifact,
     List<Map<String, dynamic>>? joints,
+    String? messageType,
+    String? operation,
+    String? sourceModelUrl,
     String? modelOptionId,
     String? instructionPrompt,
     String? imageDataUrl,
@@ -65,6 +74,9 @@ class MessageModel {
     codeArtifact: codeArtifact ?? this.codeArtifact,
     jointsArtifact: jointsArtifact ?? this.jointsArtifact,
     joints: joints ?? this.joints,
+    messageType: messageType ?? this.messageType,
+    operation: operation ?? this.operation,
+    sourceModelUrl: sourceModelUrl ?? this.sourceModelUrl,
     modelOptionId: modelOptionId ?? this.modelOptionId,
     instructionPrompt: instructionPrompt ?? this.instructionPrompt,
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
@@ -89,6 +101,9 @@ class MessageModel {
     if (codeArtifact != null) 'code_artifact': codeArtifact,
     if (jointsArtifact != null) 'joints_artifact': jointsArtifact,
     if (joints.isNotEmpty) 'joints': joints,
+    if (messageType != null) 'message_type': messageType,
+    if (operation != null) 'operation': operation,
+    if (sourceModelUrl != null) 'source_model_url': sourceModelUrl,
     if (modelOptionId != null) 'model_option_id': modelOptionId,
     if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
     if (imageDataUrl != null) 'image_data_url': imageDataUrl,
@@ -106,6 +121,9 @@ class MessageModel {
     codeArtifact: _asStringMap(json['code_artifact']),
     jointsArtifact: _asStringMap(json['joints_artifact']),
     joints: _asStringMapList(json['joints']),
+    messageType: json['message_type'] as String?,
+    operation: json['operation'] as String?,
+    sourceModelUrl: json['source_model_url'] as String?,
     modelOptionId: json['model_option_id'] as String?,
     instructionPrompt: json['instruction_prompt'] as String?,
     imageDataUrl: json['image_data_url'] as String?,
@@ -152,4 +170,11 @@ class MessageModel {
         )
         .toList(growable: false);
   }
+
+  bool get isAssetVersionEvent =>
+      messageType == 'asset_version' ||
+      id.startsWith('edit-') ||
+      operation == 'regenerate_3d_part' ||
+      operation == 'add_3d_part' ||
+      operation == 'articulate_3d_model';
 }

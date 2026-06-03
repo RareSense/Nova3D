@@ -129,6 +129,53 @@ function selectedEditModelId() {
   return document.getElementById(id)?.value || '';
 }
 
+function normalizeAssetVersion(version) {
+  if (!version || typeof version !== 'object') return null;
+  const modelUrl = String(version.model_url || version.modelUrl || '').trim();
+  const workflowId = String(version.workflow_id || version.workflowId || '').trim();
+  if (!modelUrl || !workflowId) return null;
+  return {
+    messageId: String(version.message_id || version.messageId || workflowId),
+    label: String(version.label || 'Model version'),
+    operation: String(version.operation || 'generation'),
+    modelUrl,
+    sourceModelUrl: String(version.source_model_url || version.sourceModelUrl || modelUrl),
+    workflowId,
+    modelArtifact: version.model_artifact || version.modelArtifact || null,
+    codeArtifact: version.code_artifact || version.codeArtifact || null,
+    jointsArtifact: version.joints_artifact || version.jointsArtifact || null,
+    joints: Array.isArray(version.joints) ? version.joints : [],
+  };
+}
+
+function setAssetVersions(versions) {
+  const parsed = Array.isArray(versions)
+    ? versions.map(normalizeAssetVersion).filter(Boolean)
+    : [];
+  if (!parsed.length) return;
+  state.aiVersions = parsed;
+  const currentWorkflow = String(state.currentSourceWorkflowId || '');
+  const currentModel = String(state.currentSourceModelUrl || state.currentModelUrl || '');
+  const idx = parsed.findIndex(version =>
+    (currentWorkflow && version.workflowId === currentWorkflow) ||
+    (currentModel && (version.modelUrl === currentModel || version.sourceModelUrl === currentModel))
+  );
+  state.aiVersionIndex = idx >= 0 ? idx : parsed.length - 1;
+}
+
+function appendAssetVersion(version) {
+  const parsed = normalizeAssetVersion(version);
+  if (!parsed) return;
+  const existingIdx = state.aiVersions.findIndex(item => item.workflowId === parsed.workflowId);
+  if (existingIdx >= 0) {
+    state.aiVersions[existingIdx] = parsed;
+    state.aiVersionIndex = existingIdx;
+    return;
+  }
+  state.aiVersions.push(parsed);
+  state.aiVersionIndex = state.aiVersions.length - 1;
+}
+
 export function renderEditModelSelector() {
   if (!state.editModelOptions.length) state.editModelOptions = editModelOptionsFromStorage();
   ['editModelSelect','editModelSelectGrow','editModelSelectArticulate'].forEach(selectId => {
@@ -164,6 +211,7 @@ export function applyEditConfig(data) {
   if (data.sourceModelUrl !== undefined) state.currentSourceModelUrl = String(data.sourceModelUrl || '');
   if (data.instructionPrompt !== undefined) state.currentInstructionPrompt = String(data.instructionPrompt || '');
   if (data.sourceWorkflowId !== undefined) state.currentSourceWorkflowId = String(data.sourceWorkflowId || '');
+  if (Array.isArray(data.assetVersions)) setAssetVersions(data.assetVersions);
   if (Array.isArray(data.editModelOptions)) {
     state.editModelOptions = data.editModelOptions.filter(option => option && option.id && option.label);
   }
@@ -283,6 +331,18 @@ export function setupEditBridge() {
       return;
     }
     pushUndoSnapshot(op);
+    appendAssetVersion({
+      messageId: `edit-${data.workflowId || Date.now()}`,
+      label: op === 'articulate_3d_model' ? 'Articulated model' : (op === 'add_3d_part' ? 'Added part' : 'Regenerated selected part'),
+      operation: op,
+      modelUrl: data.modelUrl,
+      sourceModelUrl: data.sourceModelUrl || data.modelUrl,
+      workflowId: data.workflowId,
+      modelArtifact: data.modelArtifact || null,
+      codeArtifact: data.codeArtifact || null,
+      jointsArtifact: data.jointsArtifact || null,
+      joints: Array.isArray(data.joints) ? data.joints : [],
+    });
     state.currentCodeArtifact = data.codeArtifact;
     state.currentModelArtifact = data.modelArtifact || null;
     state.currentSourceModelUrl = String(data.sourceModelUrl || data.modelUrl || '');

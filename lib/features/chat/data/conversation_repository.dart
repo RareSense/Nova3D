@@ -12,6 +12,7 @@ class ConversationRepository {
   final ConversationLocalSource _local;
   final ChatService _remote;
   final Map<String, Timer> _snapshotDebounce = {};
+  final Set<String> _messagePersistKeys = {};
 
   Future<List<ConversationModel>> load() => _local.loadConversations();
 
@@ -32,8 +33,11 @@ class ConversationRepository {
 
   Future<void> persist(List<ConversationModel> convs) => _local.save(convs);
 
-  Future<List<MessageModel>> loadRemoteSnapshot(String conversationId) =>
-      _remote.getSnapshotMessages(conversationId);
+  Future<List<MessageModel>> loadRemoteMessages(String conversationId) async {
+    final messages = await _remote.getMessages(conversationId);
+    final snapshotMessages = await _remote.getSnapshotMessages(conversationId);
+    return _mergeMessages(messages, snapshotMessages);
+  }
 
   Future<void> persistMessagesSnapshot({
     required ConversationModel conversation,
@@ -50,6 +54,7 @@ class ConversationRepository {
           title: conversation.title,
           messages: messages,
         );
+        await _persistStableMessages(conversation.id, messages);
         final current = await _local.loadConversations();
         await _local.save(_mergeConversations(current, [updated]));
       } catch (e, st) {
@@ -68,6 +73,28 @@ class ConversationRepository {
       const Duration(milliseconds: 900),
       () => unawaited(save()),
     );
+  }
+
+  Future<void> _persistStableMessages(
+    String conversationId,
+    List<MessageModel> messages,
+  ) async {
+    for (final message in messages) {
+      if (message.isStreaming) continue;
+      final key = '$conversationId:${message.id}';
+      if (_messagePersistKeys.contains(key)) continue;
+      final receipt = await _remote.appendMessage(conversationId, message);
+      final workflowId = message.workflowId;
+      if (workflowId != null && workflowId.isNotEmpty) {
+        await _remote.linkWorkflowToMessage(
+          conversationId,
+          workflowId: workflowId,
+          remoteMessageId: receipt.id,
+          operation: message.operation ?? 'generation',
+        );
+      }
+      _messagePersistKeys.add(key);
+    }
   }
 
   Future<void> delete(String id) async {
@@ -95,5 +122,56 @@ class ConversationRepository {
     final merged = byId.values.toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return merged;
+  }
+
+  List<MessageModel> _mergeMessages(
+    List<MessageModel> primary,
+    List<MessageModel> secondary,
+  ) {
+    final byId = <String, MessageModel>{};
+    for (final message in [...secondary, ...primary]) {
+      final existing = byId[message.id];
+      byId[message.id] = existing == null
+          ? message
+          : _preferRicherMessage(existing, message);
+    }
+    return byId.values.toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  MessageModel _preferRicherMessage(MessageModel a, MessageModel b) =>
+      _messageCompletenessScore(b) >= _messageCompletenessScore(a) ? b : a;
+
+  int _messageCompletenessScore(MessageModel message) {
+    var score = 0;
+    if (message.text.isNotEmpty) {
+      score++;
+    }
+    if (message.modelUrl != null && message.modelUrl!.isNotEmpty) {
+      score += 3;
+    }
+    if (message.workflowId != null && message.workflowId!.isNotEmpty) {
+      score += 3;
+    }
+    if (message.operation != null && message.operation!.isNotEmpty) {
+      score += 2;
+    }
+    if (message.messageType != null && message.messageType!.isNotEmpty) {
+      score += 2;
+    }
+    if (message.sourceModelUrl != null && message.sourceModelUrl!.isNotEmpty) {
+      score++;
+    }
+    if (message.modelArtifact != null) {
+      score += 2;
+    }
+    if (message.codeArtifact != null) {
+      score += 2;
+    }
+    if (message.jointsArtifact != null) {
+      score += 2;
+    }
+    score += message.joints.length;
+    return score;
   }
 }

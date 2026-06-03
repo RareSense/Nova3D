@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 
 import 'glb_viewer_stub.dart'
@@ -16,9 +17,11 @@ class GlbViewer extends StatelessWidget {
     this.instructionPrompt,
     this.sourceWorkflowId,
     this.conversationId,
+    this.assetVersions = const [],
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
+    this.onEditCompleted,
     this.viewerStateKey,
   });
 
@@ -31,6 +34,7 @@ class GlbViewer extends StatelessWidget {
   final String? instructionPrompt;
   final String? sourceWorkflowId;
   final String? conversationId;
+  final List<AssetVersion> assetVersions;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
   final void Function(
@@ -40,6 +44,7 @@ class GlbViewer extends StatelessWidget {
     List<Map<String, dynamic>> joints,
   )?
   onArticulationCompleted;
+  final void Function(AiEditCompletion completion)? onEditCompleted;
 
   /// Stable key used for IndexedDB state persistence. Pass the message ID so
   /// the key does not change even when the model URL is updated (e.g. after
@@ -58,9 +63,11 @@ class GlbViewer extends StatelessWidget {
       instructionPrompt: instructionPrompt,
       sourceWorkflowId: sourceWorkflowId,
       conversationId: conversationId,
+      assetVersions: assetVersions,
       editModelOptions: editModelOptions,
       defaultEditModelOptionId: defaultEditModelOptionId,
       onArticulationCompleted: onArticulationCompleted,
+      onEditCompleted: onEditCompleted,
       viewerStateKey: viewerStateKey,
     );
   }

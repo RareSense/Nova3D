@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
@@ -200,22 +201,55 @@ class MessagesNotifier
   }
 
   Future<void> _syncRemoteSnapshot() async {
-    if (_messages.isNotEmpty) return;
     try {
       final remoteMessages = await ref
           .read(conversationRepositoryProvider)
-          .loadRemoteSnapshot(arg);
-      if (remoteMessages.isEmpty || _messages.isNotEmpty) return;
+          .loadRemoteMessages(arg);
+      if (remoteMessages.isEmpty) return;
+      final merged = _mergeRemoteMessages(_messages, remoteMessages);
+      if (_sameMessageIds(_messages, merged)) return;
       state = AsyncValue.data(
-        ChatMessagesState(messages: remoteMessages, loaded: true),
+        ChatMessagesState(messages: merged, loaded: true),
       );
-      unawaited(
-        ref.read(messageRepositoryProvider).persist(arg, remoteMessages),
-      );
+      unawaited(ref.read(messageRepositoryProvider).persist(arg, merged));
       _resumeActiveGenerations();
     } catch (_) {
       // The local empty state is still valid for unsynced or deleted chats.
     }
+  }
+
+  List<MessageModel> _mergeRemoteMessages(
+    List<MessageModel> local,
+    List<MessageModel> remote,
+  ) {
+    final byId = <String, MessageModel>{};
+    for (final message in local) {
+      byId[message.id] = message;
+    }
+    for (final message in remote) {
+      final existing = byId[message.id];
+      if (existing == null || !existing.isStreaming) {
+        byId[message.id] = message;
+      }
+    }
+    final merged = byId.values.toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return merged;
+  }
+
+  bool _sameMessageIds(List<MessageModel> a, List<MessageModel> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].modelUrl != b[i].modelUrl ||
+          a[i].workflowId != b[i].workflowId ||
+          a[i].operation != b[i].operation ||
+          a[i].messageType != b[i].messageType ||
+          a[i].sourceModelUrl != b[i].sourceModelUrl) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void _resumeActiveGenerations() {
@@ -404,6 +438,8 @@ class MessagesNotifier
           codeArtifact: result.codeArtifact,
           jointsArtifact: result.jointsArtifact,
           joints: result.joints,
+          operation: 'initial_generation',
+          sourceModelUrl: result.glbUrl,
           modelOptionId: request.modelOption.id,
           instructionPrompt: request.prompt.trim(),
           retryRequest: failed ? request : null,
@@ -491,6 +527,8 @@ class MessagesNotifier
           codeArtifact: result.codeArtifact,
           jointsArtifact: result.jointsArtifact,
           joints: result.joints,
+          operation: 'initial_generation',
+          sourceModelUrl: result.glbUrl,
         ),
         immediateRemote: true,
       );
@@ -543,6 +581,43 @@ class MessagesNotifier
     }
     if (clean.toLowerCase().startsWith('generation failed')) return clean;
     return clean;
+  }
+
+  void appendAiEditResult(AiEditCompletion completion) {
+    final id = 'edit-${completion.workflowId}';
+    if (_messages.any((message) => message.id == id)) return;
+
+    _upsert(
+      MessageModel(
+        id: id,
+        role: MessageRole.assistant,
+        text: _editCompletionText(completion),
+        createdAt: DateTime.now(),
+        isStreaming: false,
+        modelUrl: completion.modelUrl,
+        workflowId: completion.workflowId,
+        modelArtifact: completion.modelArtifact,
+        codeArtifact: completion.codeArtifact,
+        jointsArtifact: completion.jointsArtifact,
+        joints: completion.joints,
+        messageType: 'asset_version',
+        operation: completion.operation,
+        sourceModelUrl: completion.sourceModelUrl ?? completion.modelUrl,
+        modelOptionId: completion.modelOptionId,
+        instructionPrompt: completion.instructionPrompt,
+      ),
+      immediateRemote: true,
+    );
+  }
+
+  String _editCompletionText(AiEditCompletion completion) {
+    final description = completion.description.trim();
+    final suffix = description.isEmpty ? '' : ': $description';
+    return switch (completion.operation) {
+      'add_3d_part' => 'Added part$suffix',
+      'articulate_3d_model' => 'Articulated model$suffix',
+      _ => 'Regenerated selected part$suffix',
+    };
   }
 
   void patchArticulation(

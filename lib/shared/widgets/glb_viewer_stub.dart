@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 
 class GlbViewerPlatform extends StatelessWidget {
@@ -14,9 +15,11 @@ class GlbViewerPlatform extends StatelessWidget {
     this.instructionPrompt,
     this.sourceWorkflowId,
     this.conversationId,
+    this.assetVersions = const [],
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
+    this.onEditCompleted,
     this.viewerStateKey,
   });
 
@@ -29,6 +32,7 @@ class GlbViewerPlatform extends StatelessWidget {
   final String? instructionPrompt;
   final String? sourceWorkflowId;
   final String? conversationId;
+  final List<AssetVersion> assetVersions;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
   final void Function(
@@ -38,6 +42,7 @@ class GlbViewerPlatform extends StatelessWidget {
     List<Map<String, dynamic>>,
   )?
   onArticulationCompleted;
+  final void Function(AiEditCompletion completion)? onEditCompleted;
   final String? viewerStateKey;
 
   @override

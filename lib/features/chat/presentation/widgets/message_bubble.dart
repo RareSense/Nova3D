@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/presentation/widgets/generation_progress_card.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
@@ -17,10 +18,12 @@ class MessageBubble extends ConsumerWidget {
     required this.message,
     this.onRetry,
     this.conversationId,
+    this.assetVersions = const [],
   });
   final MessageModel message;
   final VoidCallback? onRetry;
   final String? conversationId;
+  final List<AssetVersion> assetVersions;
 
   bool get _isUser => message.role == MessageRole.user;
 
@@ -28,6 +31,7 @@ class MessageBubble extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final editModelOptions =
         ref.watch(generationModelOptionsProvider).valueOrNull ?? const [];
+    final currentVersion = assetVersions.isNotEmpty ? assetVersions.last : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -58,30 +62,31 @@ class MessageBubble extends ConsumerWidget {
                     height: kViewerDefaultHeight,
                     child: GlbViewer(
                       key: ValueKey(message.id),
-                      src: message.modelUrl!,
+                      src: currentVersion?.modelUrl ?? message.modelUrl!,
                       viewerStateKey: message.id,
-                      modelArtifact: message.modelArtifact,
-                      codeArtifact: message.codeArtifact,
-                      jointsArtifact: message.jointsArtifact,
-                      joints: message.joints,
+                      modelArtifact:
+                          currentVersion?.modelArtifact ??
+                          message.modelArtifact,
+                      codeArtifact:
+                          currentVersion?.codeArtifact ?? message.codeArtifact,
+                      jointsArtifact:
+                          currentVersion?.jointsArtifact ??
+                          message.jointsArtifact,
+                      joints: currentVersion?.joints ?? message.joints,
                       instructionPrompt: message.instructionPrompt,
-                      sourceWorkflowId: message.workflowId,
+                      sourceWorkflowId:
+                          currentVersion?.workflowId ?? message.workflowId,
                       conversationId: conversationId,
+                      assetVersions: assetVersions,
                       editModelOptions: editModelOptions,
                       defaultEditModelOptionId: message.modelOptionId,
-                      onArticulationCompleted: conversationId != null
-                          ? (glbUrl, workflowId, jointsArtifact, joints) {
+                      onEditCompleted: conversationId != null
+                          ? (completion) {
                               ref
                                   .read(
                                     messagesProvider(conversationId!).notifier,
                                   )
-                                  .patchArticulation(
-                                    message.id,
-                                    modelUrl: glbUrl,
-                                    workflowId: workflowId,
-                                    jointsArtifact: jointsArtifact,
-                                    joints: joints,
-                                  );
+                                  .appendAiEditResult(completion);
                             }
                           : null,
                     ),
