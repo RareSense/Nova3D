@@ -107,9 +107,6 @@ class AppSidebar extends ConsumerWidget {
                           onTap: () => context.go('/chat/${conv.id}'),
                           onDelete: () {
                             ref
-                                .read(chatServiceProvider)
-                                .deleteConversation(conv.id);
-                            ref
                                 .read(conversationsProvider.notifier)
                                 .remove(conv.id);
                             if (isActive) context.go('/');

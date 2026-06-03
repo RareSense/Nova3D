@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
@@ -39,11 +41,37 @@ final messageRepositoryProvider = Provider<MessageRepository>((ref) {
 
 class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
   @override
-  Future<List<ConversationModel>> build() =>
-      ref.watch(conversationRepositoryProvider).load();
+  Future<List<ConversationModel>> build() async {
+    final local = await ref.watch(conversationRepositoryProvider).load();
+    Future.microtask(_syncLatest);
+    return local;
+  }
+
+  Future<ConversationModel> create(String title) async {
+    final conv = await ref.read(conversationRepositoryProvider).create(title);
+    await prepend(conv);
+    return conv;
+  }
+
+  Future<void> _syncLatest() async {
+    try {
+      final synced = await ref
+          .read(conversationRepositoryProvider)
+          .syncLatest();
+      state = AsyncValue.data(synced);
+    } catch (_) {
+      // Local cache remains authoritative for rendering when remote history
+      // sync is temporarily unavailable.
+    }
+  }
 
   Future<void> prepend(ConversationModel conv) async {
-    final updated = <ConversationModel>[conv, ...state.valueOrNull ?? []];
+    final updated = <ConversationModel>[
+      conv,
+      ...(state.valueOrNull ?? <ConversationModel>[]).where(
+        (item) => item.id != conv.id,
+      ),
+    ];
     state = AsyncValue.data(updated);
     await ref.read(conversationRepositoryProvider).persist(updated);
   }
@@ -136,6 +164,7 @@ class MessagesNotifier
     }
 
     final initial = ChatMessagesState(messages: msgs, loaded: true);
+    Future.microtask(_syncRemoteSnapshot);
     Future.microtask(_resumeActiveGenerations);
     return initial;
   }
@@ -144,9 +173,49 @@ class MessagesNotifier
 
   List<MessageModel> get _messages => state.valueOrNull?.messages ?? [];
 
-  void _save(List<MessageModel> msgs) {
+  ConversationModel? get _conversation {
+    final convs = ref.read(conversationsProvider).valueOrNull;
+    if (convs == null) return null;
+    for (final conv in convs) {
+      if (conv.id == arg) return conv;
+    }
+    return null;
+  }
+
+  void _save(List<MessageModel> msgs, {bool immediateRemote = false}) {
     // Fire-and-forget — errors are logged by MessageLocalSource.
-    ref.read(messageRepositoryProvider).persist(arg, msgs);
+    unawaited(ref.read(messageRepositoryProvider).persist(arg, msgs));
+    final conv = _conversation;
+    if (conv != null) {
+      unawaited(
+        ref
+            .read(conversationRepositoryProvider)
+            .persistMessagesSnapshot(
+              conversation: conv,
+              messages: msgs,
+              immediate: immediateRemote,
+            ),
+      );
+    }
+  }
+
+  Future<void> _syncRemoteSnapshot() async {
+    if (_messages.isNotEmpty) return;
+    try {
+      final remoteMessages = await ref
+          .read(conversationRepositoryProvider)
+          .loadRemoteSnapshot(arg);
+      if (remoteMessages.isEmpty || _messages.isNotEmpty) return;
+      state = AsyncValue.data(
+        ChatMessagesState(messages: remoteMessages, loaded: true),
+      );
+      unawaited(
+        ref.read(messageRepositoryProvider).persist(arg, remoteMessages),
+      );
+      _resumeActiveGenerations();
+    } catch (_) {
+      // The local empty state is still valid for unsynced or deleted chats.
+    }
   }
 
   void _resumeActiveGenerations() {
@@ -299,6 +368,7 @@ class MessagesNotifier
       final startedWorkflowId = await cad.startGeneration(
         request,
         workflowId: workflowId,
+        conversationId: arg,
       );
       _upsert(
         MessageModel(
@@ -338,6 +408,7 @@ class MessagesNotifier
           instructionPrompt: request.prompt.trim(),
           retryRequest: failed ? request : null,
         ),
+        immediateRemote: true,
       );
     } on CadException catch (e) {
       _upsert(
@@ -350,6 +421,7 @@ class MessagesNotifier
           workflowId: workflowId,
           retryRequest: request,
         ),
+        immediateRemote: true,
       );
     } catch (_) {
       _upsert(
@@ -362,6 +434,7 @@ class MessagesNotifier
           workflowId: workflowId,
           retryRequest: request,
         ),
+        immediateRemote: true,
       );
     } finally {
       _busy = false;
@@ -419,6 +492,7 @@ class MessagesNotifier
           jointsArtifact: result.jointsArtifact,
           joints: result.joints,
         ),
+        immediateRemote: true,
       );
     } on CadException catch (e) {
       _upsert(
@@ -430,6 +504,7 @@ class MessagesNotifier
           isStreaming: false,
           workflowId: workflowId,
         ),
+        immediateRemote: true,
       );
     } finally {
       _busy = false;
@@ -487,13 +562,11 @@ class MessagesNotifier
       jointsArtifact: jointsArtifact,
       joints: joints,
     );
-    state = AsyncValue.data(
-      ChatMessagesState(messages: updated, loaded: true),
-    );
-    _save(updated);
+    state = AsyncValue.data(ChatMessagesState(messages: updated, loaded: true));
+    _save(updated, immediateRemote: true);
   }
 
-  void _upsert(MessageModel msg) {
+  void _upsert(MessageModel msg, {bool immediateRemote = false}) {
     final current = _messages;
     final idx = current.indexWhere((m) => m.id == msg.id);
     final updated = [...current];
@@ -503,7 +576,7 @@ class MessagesNotifier
       updated[idx] = msg;
     }
     state = AsyncValue.data(ChatMessagesState(messages: updated, loaded: true));
-    _save(updated);
+    _save(updated, immediateRemote: immediateRemote);
   }
 }
 

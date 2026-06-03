@@ -92,6 +92,7 @@ class CadService {
   Future<String> startGeneration(
     GenerationRequest request, {
     String? workflowId,
+    String? conversationId,
   }) async {
     final readiness = await checkReadiness();
     if (!readiness.ready) throw CadException(readiness.userMessage);
@@ -119,6 +120,12 @@ class CadService {
             },
           },
           'return_nodes': ['sketch_to_3d_generator'],
+          if (conversationId != null)
+            'conversation': _conversationLink(
+              conversationId,
+              relationType: 'initial_generation',
+              operation: kSketchTo3dWorkflow,
+            ),
         },
         options: await _authOptions(receiveTimeout: _startReceiveTimeout),
       );
@@ -141,11 +148,13 @@ class CadService {
     required GenerationModelOption modelOption,
     String? partType,
     String? workflowId,
+    String? conversationId,
   }) {
     return _startEditWorkflow(
       workflow: kRegenerate3dPartWorkflow,
       returnNode: 'regenerate_3d_part',
       workflowId: workflowId,
+      conversationId: conversationId,
       modelOption: modelOption,
       payload: {
         'code_artifact': codeArtifact,
@@ -162,11 +171,13 @@ class CadService {
     required String description,
     required GenerationModelOption modelOption,
     String? workflowId,
+    String? conversationId,
   }) {
     return _startEditWorkflow(
       workflow: kAdd3dPartWorkflow,
       returnNode: 'add_3d_part',
       workflowId: workflowId,
+      conversationId: conversationId,
       modelOption: modelOption,
       payload: {
         'code_artifact': codeArtifact,
@@ -185,6 +196,7 @@ class CadService {
     List<String> selectedMeshes = const [],
     List<String> screenshots = const [],
     String? workflowId,
+    String? conversationId,
   }) async {
     final rawModelUrl = modelUrl?.trim();
     final cleanModelUrl =
@@ -223,6 +235,12 @@ class CadService {
         data: {
           'payload': payload,
           'return_nodes': ['articulate_3d_model'],
+          if (conversationId != null)
+            'conversation': _conversationLink(
+              conversationId,
+              relationType: 'articulate_model',
+              operation: kArticulate3dModelWorkflow,
+            ),
         },
         options: await _authOptions(receiveTimeout: _startReceiveTimeout),
       );
@@ -245,6 +263,7 @@ class CadService {
     required Map<String, dynamic> payload,
     required GenerationModelOption modelOption,
     String? workflowId,
+    String? conversationId,
   }) async {
     if ((payload['description'] as String? ?? '').isEmpty) {
       throw CadException('Describe the edit you want to make.');
@@ -266,6 +285,12 @@ class CadService {
             'api_key': apiKey,
           },
           'return_nodes': [returnNode],
+          if (conversationId != null)
+            'conversation': _conversationLink(
+              conversationId,
+              relationType: workflow,
+              operation: workflow,
+            ),
         },
         options: await _authOptions(receiveTimeout: _startReceiveTimeout),
       );
@@ -387,4 +412,14 @@ class CadService {
         message.contains('request failed (503)') ||
         message.contains('request failed (504)');
   }
+
+  Map<String, dynamic> _conversationLink(
+    String conversationId, {
+    required String relationType,
+    required String operation,
+  }) => {
+    'conversation_id': conversationId,
+    'relation_type': relationType,
+    'link_metadata': {'operation': operation, 'client': 'flutter'},
+  };
 }

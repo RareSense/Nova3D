@@ -33,8 +33,9 @@ class MessageBubble extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment:
-            _isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: _isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!_isUser) ...[_Avatar(isUser: false), const SizedBox(width: 10)],
           Flexible(
@@ -65,6 +66,7 @@ class MessageBubble extends ConsumerWidget {
                       joints: message.joints,
                       instructionPrompt: message.instructionPrompt,
                       sourceWorkflowId: message.workflowId,
+                      conversationId: conversationId,
                       editModelOptions: editModelOptions,
                       defaultEditModelOptionId: message.modelOptionId,
                       onArticulationCompleted: conversationId != null
@@ -143,7 +145,7 @@ class _BubbleContentState extends State<_BubbleContent> {
               borderRadius: radius,
               border: Border.all(color: kInk, width: 1.5),
               boxShadow: const [
-                BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0)
+                BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
               ],
             ),
             child: widget.message.isStreaming && widget.message.text.isEmpty
@@ -175,32 +177,31 @@ class _WorkflowIdBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: kBubbleMaxWidth),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: SelectableText(
-                'WF $workflowId',
-                style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.4),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Tooltip(
-              message: 'Copy workflow id',
-              child: IconButton(
-                onPressed: () =>
-                    Clipboard.setData(ClipboardData(text: workflowId)),
-                icon: const Icon(Icons.copy, size: 14),
-                color: kInkMuted,
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              ),
-            ),
-          ],
+    constraints: BoxConstraints(maxWidth: kBubbleMaxWidth),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: SelectableText(
+            'WF $workflowId',
+            style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.4),
+          ),
         ),
-      );
+        const SizedBox(width: 4),
+        Tooltip(
+          message: 'Copy workflow id',
+          child: IconButton(
+            onPressed: () => Clipboard.setData(ClipboardData(text: workflowId)),
+            icon: const Icon(Icons.copy, size: 14),
+            color: kInkMuted,
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _CopyButton extends StatelessWidget {
@@ -209,25 +210,24 @@ class _CopyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message: 'Copy',
-        child: InkWell(
-          onTap: () => Clipboard.setData(ClipboardData(text: text)),
+    message: 'Copy',
+    child: InkWell(
+      onTap: () => Clipboard.setData(ClipboardData(text: text)),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: kSurface,
           borderRadius: BorderRadius.circular(6),
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: kSurface,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: kInk, width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                    color: kInk, offset: Offset(1, 1), blurRadius: 0)
-              ],
-            ),
-            child: const Icon(Icons.copy, size: 14, color: kInkSoft),
-          ),
+          border: Border.all(color: kInk, width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: kInk, offset: Offset(1, 1), blurRadius: 0),
+          ],
         ),
-      );
+        child: const Icon(Icons.copy, size: 14, color: kInkSoft),
+      ),
+    ),
+  );
 }
 
 class _Avatar extends StatelessWidget {
@@ -264,9 +264,9 @@ class _Timestamp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        _formatTime(time),
-        style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.4),
-      );
+    _formatTime(time),
+    style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.4),
+  );
 
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
@@ -284,24 +284,23 @@ class _ImageThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: kInk, width: 1.5),
-          boxShadow: const [
-            BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0)
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8.5),
-          child: Image.network(
-            dataUrl,
-            height: 160,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                const SizedBox.shrink(),
-          ),
-        ),
-      );
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: kInk, width: 1.5),
+      boxShadow: const [
+        BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(8.5),
+      child: Image.network(
+        dataUrl,
+        height: 160,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      ),
+    ),
+  );
 }
 
 class _RetryButton extends StatelessWidget {
@@ -310,32 +309,30 @@ class _RetryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: GestureDetector(
-          onTap: onRetry,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: kSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kInk, width: 1.5),
-              boxShadow: const [
-                BoxShadow(
-                    color: kInk, offset: Offset(2, 2), blurRadius: 0)
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.refresh, size: 14, color: kInkSoft),
-                const SizedBox(width: 6),
-                Text('RETRY', style: kSilkscreen(10, color: kInk)),
-              ],
-            ),
-          ),
+    alignment: Alignment.centerLeft,
+    child: GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: kInk, width: 1.5),
+          boxShadow: const [
+            BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+          ],
         ),
-      );
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.refresh, size: 14, color: kInkSoft),
+            const SizedBox(width: 6),
+            Text('RETRY', style: kSilkscreen(10, color: kInk)),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _TypingIndicator extends StatefulWidget {
@@ -366,24 +363,21 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _ctrl,
-        builder: (_, _) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(3, (i) {
-            final delay = i / 3;
-            final t = (_ctrl.value - delay).clamp(0.0, 1.0);
-            final opacity = (t < 0.5 ? t * 2 : (1 - t) * 2).clamp(0.3, 1.0);
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Opacity(
-                opacity: opacity,
-                child: CircleAvatar(
-                  radius: 4,
-                  backgroundColor: kInkSoft,
-                ),
-              ),
-            );
-          }),
-        ),
-      );
+    animation: _ctrl,
+    builder: (_, _) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        final delay = i / 3;
+        final t = (_ctrl.value - delay).clamp(0.0, 1.0);
+        final opacity = (t < 0.5 ? t * 2 : (1 - t) * 2).clamp(0.3, 1.0);
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Opacity(
+            opacity: opacity,
+            child: CircleAvatar(radius: 4, backgroundColor: kInkSoft),
+          ),
+        );
+      }),
+    ),
+  );
 }

@@ -75,7 +75,9 @@ class MessageModel {
 
   // ── Local persistence (SharedPreferences) ─────────────────────────────────
 
-  Map<String, dynamic> toLocalJson() => {
+  Map<String, dynamic> toLocalJson() => toContentJson();
+
+  Map<String, dynamic> toContentJson() => {
     'id': id,
     'role': role == MessageRole.user ? 'user' : 'assistant',
     'text': text,
@@ -111,21 +113,30 @@ class MessageModel {
 
   // ── Remote API response ───────────────────────────────────────────────────
 
-  factory MessageModel.fromJson(Map<String, dynamic> json) => MessageModel(
-    id: json['id'] as String,
-    role: json['role'] == 'user' ? MessageRole.user : MessageRole.assistant,
-    text: (json['content']?['text'] as String?) ?? '',
-    createdAt: DateTime.parse(json['created_at'] as String),
-    modelUrl: json['content']?['model_url'] as String?,
-    workflowId: json['content']?['workflow_id'] as String?,
-    modelArtifact: _asStringMap(json['content']?['model_artifact']),
-    codeArtifact: _asStringMap(json['content']?['code_artifact']),
-    jointsArtifact: _asStringMap(json['content']?['joints_artifact']),
-    joints: _asStringMapList(json['content']?['joints']),
-    modelOptionId: json['content']?['model_option_id'] as String?,
-    instructionPrompt: json['content']?['instruction_prompt'] as String?,
-    imageDataUrl: json['content']?['image_data_url'] as String?,
-  );
+  factory MessageModel.fromJson(Map<String, dynamic> json) {
+    final remoteContent =
+        _asStringMap(json['content_json']) ?? _asStringMap(json['content']);
+    final content = remoteContent ?? json;
+    final sentAt = json['sent_at'] as String?;
+    final createdAt = json['created_at'] as String?;
+    return MessageModel.fromLocalJson({
+      ...content,
+      'id':
+          (content['id'] as String?) ??
+          (json['client_message_id'] as String?) ??
+          (json['id'] as String),
+      'role': (content['role'] as String?) ?? (json['role'] as String),
+      'text':
+          (content['text'] as String?) ??
+          (json['content_text'] as String?) ??
+          '',
+      'created_at':
+          (content['created_at'] as String?) ??
+          sentAt ??
+          createdAt ??
+          DateTime.now().toIso8601String(),
+    });
+  }
 
   static Map<String, dynamic>? _asStringMap(Object? value) {
     if (value is! Map) return null;

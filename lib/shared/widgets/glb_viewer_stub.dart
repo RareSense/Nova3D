@@ -13,6 +13,7 @@ class GlbViewerPlatform extends StatelessWidget {
     this.joints = const [],
     this.instructionPrompt,
     this.sourceWorkflowId,
+    this.conversationId,
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
@@ -27,6 +28,7 @@ class GlbViewerPlatform extends StatelessWidget {
   final List<Map<String, dynamic>> joints;
   final String? instructionPrompt;
   final String? sourceWorkflowId;
+  final String? conversationId;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
   final void Function(
@@ -34,7 +36,8 @@ class GlbViewerPlatform extends StatelessWidget {
     String,
     Map<String, dynamic>?,
     List<Map<String, dynamic>>,
-  )? onArticulationCompleted;
+  )?
+  onArticulationCompleted;
   final String? viewerStateKey;
 
   @override

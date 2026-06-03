@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
+import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 
@@ -11,10 +12,12 @@ class ChatService {
   late final Dio _dio;
 
   ChatService(this._auth) {
-    _dio = Dio(BaseOptions(
-      baseUrl: kApiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-    ));
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: kApiBaseUrl,
+        connectTimeout: const Duration(seconds: 10),
+      ),
+    );
   }
 
   Future<Map<String, String>> _authHeaders() async {
@@ -25,23 +28,55 @@ class ChatService {
 
   // ── Conversations ─────────────────────────────────────────────────────────
 
-  Future<List<ConversationModel>> getConversations() async {
+  Future<List<ConversationModel>> getConversations({
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final headers = await _authHeaders();
-    final resp = await _dio.get('/conversations',
-        options: Options(headers: headers));
-    final list = resp.data as List<dynamic>;
+    final resp = await _dio.get(
+      '/conversations',
+      queryParameters: {'kind': 'generation', 'limit': limit, 'offset': offset},
+      options: Options(headers: headers),
+    );
+    final list = _items(resp.data);
     return list
         .map((e) => ConversationModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  Future<ConversationModel> createConversation(String firstMessage) async {
+  Future<ConversationModel> createConversation(
+    String firstMessage, {
+    Map<String, dynamic>? metadata,
+  }) async {
     final headers = await _authHeaders();
     final resp = await _dio.post(
       '/conversations',
-      data: {'title': firstMessage.length > 50
-          ? '${firstMessage.substring(0, 50)}…'
-          : firstMessage},
+      data: {
+        'source': 'flutter',
+        'kind': 'generation',
+        'title': firstMessage.length > 50
+            ? '${firstMessage.substring(0, 50)}...'
+            : firstMessage,
+        ...?(metadata == null ? null : {'conversation_metadata': metadata}),
+      },
+      options: Options(headers: headers),
+    );
+    return ConversationModel.fromJson(resp.data as Map<String, dynamic>);
+  }
+
+  Future<ConversationModel> updateConversationSnapshot(
+    String id, {
+    required String title,
+    required List<MessageModel> messages,
+  }) async {
+    final headers = await _authHeaders();
+    final resp = await _dio.patch(
+      '/conversations/$id',
+      data: {
+        'title': title,
+        'kind': 'generation',
+        'conversation_metadata': buildChatSnapshotMetadata(messages),
+      },
       options: Options(headers: headers),
     );
     return ConversationModel.fromJson(resp.data as Map<String, dynamic>);
@@ -49,28 +84,42 @@ class ChatService {
 
   Future<void> deleteConversation(String id) async {
     final headers = await _authHeaders();
-    await _dio.delete('/conversations/$id',
-        options: Options(headers: headers));
+    await _dio.delete('/conversations/$id', options: Options(headers: headers));
   }
 
   // ── Messages ──────────────────────────────────────────────────────────────
 
   Future<List<MessageModel>> getMessages(String conversationId) async {
     final headers = await _authHeaders();
-    final resp = await _dio.get('/conversations/$conversationId/messages',
-        options: Options(headers: headers));
-    final list = resp.data as List<dynamic>;
+    final resp = await _dio.get(
+      '/conversations/$conversationId/messages',
+      options: Options(headers: headers),
+    );
+    final list = _items(resp.data);
     return list
         .map((e) => MessageModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
+  Future<List<MessageModel>> getSnapshotMessages(String conversationId) async {
+    final headers = await _authHeaders();
+    final resp = await _dio.get(
+      '/conversations/$conversationId',
+      options: Options(headers: headers),
+    );
+    final conv = ConversationModel.fromJson(resp.data as Map<String, dynamic>);
+    return parseChatSnapshotMessages(conv.metadata);
+  }
+
+  List<dynamic> _items(Object? data) {
+    if (data is List) return data;
+    if (data is Map && data['items'] is List) return data['items'] as List;
+    return const [];
+  }
+
   // ── Streaming send ────────────────────────────────────────────────────────
   // Yields partial MessageModel updates as the server streams JSON lines.
-  Stream<MessageModel> sendMessage(
-    String conversationId,
-    String text,
-  ) async* {
+  Stream<MessageModel> sendMessage(String conversationId, String text) async* {
     final token = await _auth.getToken();
     if (token == null) throw AuthException('Not authenticated');
 
@@ -116,8 +165,7 @@ class ChatService {
           }
           if (data['done'] == true) {
             final finalMsg = data['message'] != null
-                ? MessageModel.fromJson(
-                    data['message'] as Map<String, dynamic>)
+                ? MessageModel.fromJson(data['message'] as Map<String, dynamic>)
                 : placeholder.copyWith(text: accumulated, isStreaming: false);
             yield finalMsg;
           }

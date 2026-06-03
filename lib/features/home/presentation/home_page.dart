@@ -10,7 +10,6 @@ import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
 import 'package:nova3d_frontend/core/utils.dart';
 import 'package:nova3d_frontend/features/api_keys/state/api_key_provider.dart';
-import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
@@ -18,7 +17,6 @@ import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:nova3d_frontend/features/home/presentation/widgets/suggestion_pills.dart';
 import 'package:nova3d_frontend/features/home/presentation/widgets/skills_carousel.dart';
-import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
 
 const _genericReadinessError =
@@ -104,19 +102,12 @@ class _HomePageState extends ConsumerState<HomePage> {
         return;
       }
 
-      final user = ref.read(authProvider).valueOrNull;
-      final id = 'conv_${DateTime.now().millisecondsSinceEpoch}';
-      final conv = ConversationModel(
-        id: id,
-        title: request.conversationTitle,
-        userId: user?.id ?? '',
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-      ref.read(conversationsProvider.notifier).prepend(conv);
-      ref.read(generationDraftsProvider.notifier).put(id, request);
-      ref.read(messagesProvider(id).notifier).seed(request);
-      if (mounted) context.go('/chat/$id');
+      final conv = await ref
+          .read(conversationsProvider.notifier)
+          .create(request.conversationTitle);
+      ref.read(generationDraftsProvider.notifier).put(conv.id, request);
+      ref.read(messagesProvider(conv.id).notifier).seed(request);
+      if (mounted) context.go('/chat/${conv.id}');
     } on CadException catch (e) {
       _showInlineMessage(e.message);
     } catch (_) {
@@ -286,7 +277,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                   const SizedBox(width: 8),
                   Text(
                     'SKILLS',
-                    style: kSilkscreen(10, color: kInkMuted, letterSpacing: 0.8),
+                    style: kSilkscreen(
+                      10,
+                      color: kInkMuted,
+                      letterSpacing: 0.8,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text('✦', style: TextStyle(color: kLilac, fontSize: 10)),

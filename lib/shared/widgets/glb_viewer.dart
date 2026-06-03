@@ -15,6 +15,7 @@ class GlbViewer extends StatelessWidget {
     this.joints = const [],
     this.instructionPrompt,
     this.sourceWorkflowId,
+    this.conversationId,
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
@@ -29,6 +30,7 @@ class GlbViewer extends StatelessWidget {
   final List<Map<String, dynamic>> joints;
   final String? instructionPrompt;
   final String? sourceWorkflowId;
+  final String? conversationId;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
   final void Function(
@@ -36,7 +38,9 @@ class GlbViewer extends StatelessWidget {
     String workflowId,
     Map<String, dynamic>? jointsArtifact,
     List<Map<String, dynamic>> joints,
-  )? onArticulationCompleted;
+  )?
+  onArticulationCompleted;
+
   /// Stable key used for IndexedDB state persistence. Pass the message ID so
   /// the key does not change even when the model URL is updated (e.g. after
   /// articulation replaces the GLB). Defaults to a hash of [src].
@@ -53,6 +57,7 @@ class GlbViewer extends StatelessWidget {
       joints: joints,
       instructionPrompt: instructionPrompt,
       sourceWorkflowId: sourceWorkflowId,
+      conversationId: conversationId,
       editModelOptions: editModelOptions,
       defaultEditModelOptionId: defaultEditModelOptionId,
       onArticulationCompleted: onArticulationCompleted,

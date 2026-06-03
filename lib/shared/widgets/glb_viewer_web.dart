@@ -28,6 +28,7 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
     this.joints = const [],
     this.instructionPrompt,
     this.sourceWorkflowId,
+    this.conversationId,
     this.editModelOptions = const [],
     this.defaultEditModelOptionId,
     this.onArticulationCompleted,
@@ -42,8 +43,10 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> joints;
   final String? instructionPrompt;
   final String? sourceWorkflowId;
+  final String? conversationId;
   final List<GenerationModelOption> editModelOptions;
   final String? defaultEditModelOptionId;
+
   /// Called when articulation completes. Provides the articulated model's
   /// persistent URL, workflow ID, and joint data so the caller can persist them.
   final void Function(
@@ -51,7 +54,9 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
     String workflowId,
     Map<String, dynamic>? jointsArtifact,
     List<Map<String, dynamic>> joints,
-  )? onArticulationCompleted;
+  )?
+  onArticulationCompleted;
+
   /// Stable key for IndexedDB state persistence. Defaults to a hash of [src].
   final String? viewerStateKey;
 
@@ -149,7 +154,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     }
 
     try {
-      final freshUrl = (await ref.read(cadServiceProvider).getResult(workflowId)).glbUrl;
+      final freshUrl =
+          (await ref.read(cadServiceProvider).getResult(workflowId)).glbUrl;
       if (!mounted || src != widget.src || freshUrl == null) {
         if (mounted && src == widget.src) setState(() => _loadError = true);
         return;
@@ -190,7 +196,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   String _buildViewerUrl(String modelUrl) {
     final params = {
       'viewerId': _viewerId,
-      'stateKey': widget.viewerStateKey ?? widget.src.hashCode.toRadixString(16),
+      'stateKey':
+          widget.viewerStateKey ?? widget.src.hashCode.toRadixString(16),
       'glb': modelUrl,
       'sourceModelUrl': widget.src,
       'autoRotate': widget.autoRotate.toString(),
@@ -371,6 +378,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
           codeArtifact: editableCodeArtifact,
           description: description,
           modelOption: modelOption,
+          conversationId: widget.conversationId,
         ),
         'articulate_3d_model' => await cad.startArticulation(
           codeArtifact: editableCodeArtifact,
@@ -381,12 +389,14 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
           selectedMeshes: selectedMeshes,
           screenshots: screenshots,
           modelOption: modelOption,
+          conversationId: widget.conversationId,
         ),
         _ => await cad.startRegeneratePart(
           codeArtifact: editableCodeArtifact,
           description: description,
           modelOption: modelOption,
           partType: partType,
+          conversationId: widget.conversationId,
         ),
       };
 
