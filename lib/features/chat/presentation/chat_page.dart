@@ -10,6 +10,9 @@ import 'package:nova3d_frontend/features/chat/presentation/widgets/message_bubbl
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
+import 'package:nova3d_frontend/shared/widgets/artifact_drawer.dart';
+
+enum _PanelMode { none, side }
 
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key, required this.conversationId});
@@ -22,6 +25,8 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final _scrollCtrl = ScrollController();
   String? _selectedModelId;
+  _PanelMode _panelMode = _PanelMode.none;
+  MessageModel? _panelMessage;
 
   @override
   void initState() {
@@ -43,6 +48,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _scrollCtrl.dispose();
     super.dispose();
   }
+
+  void _openSidePanel(MessageModel message) => setState(() {
+    _panelMode = _PanelMode.side;
+    _panelMessage = message;
+  });
+
+  void _closePanel() => setState(() {
+    _panelMode = _PanelMode.none;
+    _panelMessage = null;
+  });
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -80,10 +95,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       _scrollToBottom();
     });
 
-    return Column(
+    final chatColumn = Column(
       children: [
-        Expanded(child: _buildBody(messagesAsync, messages, pendingDraft)),
-
+        Expanded(
+          child: _buildBody(
+            messagesAsync,
+            messages,
+            pendingDraft,
+            availableOptions,
+            narrowColumn: _panelMode == _PanelMode.side,
+          ),
+        ),
         // Conversations are single-turn: once a generation exists, lock the
         // input and prompt the user to start a new conversation instead.
         // if (messages.any((m) => m.role == MessageRole.assistant))
@@ -104,13 +126,40 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         //   ),
       ],
     );
+
+    if (_panelMode == _PanelMode.side) {
+      return Row(
+        children: [
+          Expanded(child: chatColumn),
+          ArtifactDrawer(
+            message: _panelMessage!,
+            onClose: _closePanel,
+            editModelOptions: availableOptions,
+            onArticulationCompleted: (glbUrl, workflowId, jointsArtifact, joints) =>
+                ref
+                    .read(messagesProvider(widget.conversationId).notifier)
+                    .patchArticulation(
+                      _panelMessage!.id,
+                      modelUrl: glbUrl,
+                      workflowId: workflowId,
+                      jointsArtifact: jointsArtifact,
+                      joints: joints,
+                    ),
+          ),
+        ],
+      );
+    }
+
+    return chatColumn;
   }
 
   Widget _buildBody(
     AsyncValue<ChatMessagesState> messagesAsync,
     List<MessageModel> messages,
     GenerationRequest? pendingDraft,
-  ) {
+    List<GenerationModelOption> availableOptions, {
+    required bool narrowColumn,
+  }) {
     if (messagesAsync.isLoading) {
       return const Center(child: CircularProgressIndicator(color: kLilac));
     }
@@ -125,6 +174,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     final visibleMessages = _visibleMessages(messages);
     final assetVersions = _assetVersionsForConversation(messages);
+    final maxWidth = narrowColumn ? 460.0 : kContentMaxWidth;
 
     return ListView.builder(
       controller: _scrollCtrl,
@@ -133,6 +183,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       itemBuilder: (_, i) {
         final message = visibleMessages[i];
         return _CenteredMessage(
+          maxWidth: maxWidth,
           child: MessageBubble(
             message: message,
             conversationId: widget.conversationId,
@@ -143,6 +194,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ? () => ref
                       .read(messagesProvider(widget.conversationId).notifier)
                       .retry(message.id)
+                : null,
+            onOpenSidePanel: !narrowColumn && message.codeArtifact != null
+                ? () => _openSidePanel(message)
                 : null,
           ),
         );
@@ -240,13 +294,17 @@ class _PendingView extends StatelessWidget {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 class _CenteredMessage extends StatelessWidget {
-  const _CenteredMessage({required this.child});
+  const _CenteredMessage({
+    required this.child,
+    this.maxWidth = kContentMaxWidth,
+  });
   final Widget child;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: kContentMaxWidth),
+      constraints: BoxConstraints(maxWidth: maxWidth),
       child: child,
     ),
   );

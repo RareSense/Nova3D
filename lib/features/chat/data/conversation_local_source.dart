@@ -58,4 +58,23 @@ class ConversationLocalSource {
       );
     }
   }
+
+  /// Removes all conversation and message data for any user from local storage.
+  /// Called on logout to prevent data leaking into the next user's session.
+  Future<void> clearAll() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final toRemove = prefs
+          .getKeys()
+          .where(
+            (k) => k == _kConversationsKey || k.startsWith(_kMessagesPrefix),
+          )
+          .toList();
+      for (final key in toRemove) {
+        await prefs.remove(key);
+      }
+    } catch (e, st) {
+      debugPrint('[ConversationLocalSource] clearAll failed: $e\n$st');
+    }
+  }
 }

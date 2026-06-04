@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:nova3d_frontend/features/chat/data/chat_service.dart';
+import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
 import 'package:nova3d_frontend/features/chat/data/conversation_local_source.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
@@ -33,9 +34,18 @@ class ConversationRepository {
 
   Future<void> persist(List<ConversationModel> convs) => _local.save(convs);
 
-  Future<List<MessageModel>> loadRemoteMessages(String conversationId) async {
+  /// Loads messages from the server. If [cachedMetadata] is provided (i.e. the
+  /// conversation was already fetched as part of the list API), its embedded
+  /// snapshot is used directly and the redundant GET /conversations/{id} call
+  /// is skipped.
+  Future<List<MessageModel>> loadRemoteMessages(
+    String conversationId, {
+    Map<String, dynamic>? cachedMetadata,
+  }) async {
+    final snapshotMessages = cachedMetadata != null
+        ? parseChatSnapshotMessages(cachedMetadata)
+        : await _remote.getSnapshotMessages(conversationId);
     final messages = await _remote.getMessages(conversationId);
-    final snapshotMessages = await _remote.getSnapshotMessages(conversationId);
     return _mergeMessages(messages, snapshotMessages);
   }
 
@@ -97,6 +107,17 @@ class ConversationRepository {
     }
   }
 
+  /// Cancels all pending snapshot debounce timers and clears the persist-once
+  /// set. Must be called on logout so stale background writes don't fire after
+  /// the session ends.
+  void cancelPendingTimers() {
+    for (final timer in _snapshotDebounce.values) {
+      timer.cancel();
+    }
+    _snapshotDebounce.clear();
+    _messagePersistKeys.clear();
+  }
+
   Future<void> delete(String id) async {
     // Best-effort remote delete — a 404 or network error is non-fatal since
     // the conversation is already removed from the local list.
@@ -120,7 +141,7 @@ class ConversationRepository {
       }
     }
     final merged = byId.values.toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return merged;
   }
 

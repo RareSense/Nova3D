@@ -13,6 +13,7 @@ import 'package:nova3d_frontend/features/chat/data/conversation_repository.dart'
 import 'package:nova3d_frontend/features/chat/data/message_local_source.dart';
 import 'package:nova3d_frontend/features/chat/data/message_repository.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
+import 'package:nova3d_frontend/shared/models/user_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 
 final chatServiceProvider = Provider<ChatService>((ref) {
@@ -28,10 +29,12 @@ final messageLocalSourceProvider = Provider<MessageLocalSource>(
 );
 
 final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
-  return ConversationRepository(
+  final repo = ConversationRepository(
     ref.watch(conversationLocalSourceProvider),
     ref.watch(chatServiceProvider),
   );
+  ref.onDispose(repo.cancelPendingTimers);
+  return repo;
 });
 
 final messageRepositoryProvider = Provider<MessageRepository>((ref) {
@@ -43,7 +46,23 @@ final messageRepositoryProvider = Provider<MessageRepository>((ref) {
 class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
   @override
   Future<List<ConversationModel>> build() async {
-    final local = await ref.watch(conversationRepositoryProvider).load();
+    // Clear persisted user data on explicit logout (authenticated → null
+    // transition only; ignores the initial loading → null startup path).
+    ref.listen<AsyncValue<UserModel?>>(authProvider, (previous, next) {
+      final wasLoggedIn = previous?.valueOrNull != null;
+      final isNowLoggedOut = next is AsyncData && next.value == null;
+      if (wasLoggedIn && isNowLoggedOut) {
+        ref.read(conversationRepositoryProvider).cancelPendingTimers();
+        unawaited(ref.read(conversationLocalSourceProvider).clearAll());
+      }
+    });
+
+    // Rebuild automatically whenever the authenticated user changes so that
+    // a newly logged-in user never sees another user's in-memory conversations.
+    final user = ref.watch(authProvider).valueOrNull;
+    if (user == null) return [];
+
+    final local = await ref.read(conversationRepositoryProvider).load();
     Future.microtask(_syncLatest);
     return local;
   }
@@ -55,10 +74,21 @@ class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
   }
 
   Future<void> _syncLatest() async {
+    final userId = ref.read(authProvider).valueOrNull?.id;
+    if (userId == null) return;
     try {
       final synced = await ref
           .read(conversationRepositoryProvider)
           .syncLatest();
+      // Guard against a user switch that completed while the fetch was in
+      // flight — don't overwrite the new user's state with stale data.
+      if (ref.read(authProvider).valueOrNull?.id != userId) return;
+      // Pre-seed local message cache from the snapshot data already embedded
+      // in each conversation so that opening one is instant without an extra
+      // API call. Fire-and-forget; non-fatal if it fails.
+      unawaited(
+        ref.read(messageLocalSourceProvider).seedFromSnapshots(synced),
+      );
       state = AsyncValue.data(synced);
     } catch (_) {
       // Local cache remains authoritative for rendering when remote history
@@ -97,7 +127,11 @@ final conversationsProvider =
 class GenerationDraftsNotifier
     extends Notifier<Map<String, GenerationRequest>> {
   @override
-  Map<String, GenerationRequest> build() => {};
+  Map<String, GenerationRequest> build() {
+    // Reset drafts whenever the authenticated user changes (login/logout).
+    ref.watch(authProvider);
+    return {};
+  }
 
   void put(String conversationId, GenerationRequest request) =>
       state = {...state, conversationId: request};
@@ -204,7 +238,7 @@ class MessagesNotifier
     try {
       final remoteMessages = await ref
           .read(conversationRepositoryProvider)
-          .loadRemoteMessages(arg);
+          .loadRemoteMessages(arg, cachedMetadata: _conversation?.metadata);
       if (remoteMessages.isEmpty) return;
       final merged = _mergeRemoteMessages(_messages, remoteMessages);
       if (_sameMessageIds(_messages, merged)) return;

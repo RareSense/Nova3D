@@ -57,7 +57,10 @@ class AccountApiKeysState {
 class AccountApiKeysNotifier extends Notifier<AccountApiKeysState> {
   @override
   AccountApiKeysState build() {
-    Future.microtask(load);
+    // Only load when authenticated; reset to empty state on logout so that
+    // a subsequent user never sees another user's account keys.
+    final user = ref.watch(authProvider).valueOrNull;
+    if (user != null) Future.microtask(load);
     return const AccountApiKeysState();
   }
 

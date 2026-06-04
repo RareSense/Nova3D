@@ -47,7 +47,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/models/
     - assets/gifs/nova3d/
     - assets/gifs/nova3d/adam-cad-comparison/
 

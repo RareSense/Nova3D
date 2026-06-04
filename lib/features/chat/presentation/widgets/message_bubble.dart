@@ -9,7 +9,7 @@ import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/presentation/widgets/generation_progress_card.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
-import 'package:nova3d_frontend/shared/widgets/glb_viewer.dart';
+import 'package:nova3d_frontend/shared/widgets/generation_preview.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
 
 class MessageBubble extends ConsumerWidget {
@@ -19,11 +19,13 @@ class MessageBubble extends ConsumerWidget {
     this.onRetry,
     this.conversationId,
     this.assetVersions = const [],
+    this.onOpenSidePanel,
   });
   final MessageModel message;
   final VoidCallback? onRetry;
   final String? conversationId;
   final List<AssetVersion> assetVersions;
+  final VoidCallback? onOpenSidePanel;
 
   bool get _isUser => message.role == MessageRole.user;
 
@@ -60,7 +62,7 @@ class MessageBubble extends ConsumerWidget {
                   const SizedBox(height: 8),
                   SizedBox(
                     height: kViewerDefaultHeight,
-                    child: GlbViewer(
+                    child: GenerationPreview(
                       key: ValueKey(message.id),
                       src: currentVersion?.modelUrl ?? message.modelUrl!,
                       viewerStateKey: message.id,
@@ -89,6 +91,7 @@ class MessageBubble extends ConsumerWidget {
                                   .appendAiEditResult(completion);
                             }
                           : null,
+                      onOpenSidePanel: onOpenSidePanel,
                     ),
                   ),
                 ],

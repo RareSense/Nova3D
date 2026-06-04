@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:nova3d_frontend/core/errors.dart';
+import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
+import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +52,27 @@ class MessageLocalSource {
         kind: AppErrorKind.persistence,
         cause: e,
       );
+    }
+  }
+
+  /// Seeds message storage from snapshot data already embedded in the given
+  /// conversations. Only writes for conversations with no existing local entry
+  /// so that richer local state (e.g. an in-progress generation) is preserved.
+  Future<void> seedFromSnapshots(List<ConversationModel> conversations) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final conv in conversations) {
+        final key = '$_kMessagesPrefix${conv.id}';
+        if (prefs.containsKey(key)) continue;
+        final messages = parseChatSnapshotMessages(conv.metadata);
+        if (messages.isEmpty) continue;
+        await prefs.setString(
+          key,
+          json.encode(messages.map((m) => m.toLocalJson()).toList()),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[MessageLocalSource] seedFromSnapshots failed: $e\n$st');
     }
   }
 }
