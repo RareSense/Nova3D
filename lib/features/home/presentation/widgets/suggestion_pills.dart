@@ -7,27 +7,22 @@ class SuggestionPills extends StatelessWidget {
   final void Function(String) onSelect;
 
   static const _suggestions = [
-    ('A modern chair with wooden legs', kPinkBg),
-    ('A low-poly mountain landscape', kMintBg),
     ('A sci-fi space helmet', kLilacBg),
-    ('A medieval stone castle tower', kButterBg),
-    ('A futuristic car concept', kPinkBg),
+    ('A flower in a pot', kMintBg),
+    ('A microwave oven with its internal assembly', kButterBg),
+    ('A WALL-E-inspired robot', kPinkBg),
   ];
 
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: _suggestions.map((entry) {
-          final (text, bg) = entry;
-          return _Pill(
-            text: text,
-            bg: bg,
-            onTap: () => onSelect(text),
-          );
-        }).toList(),
-      );
+    spacing: 8,
+    runSpacing: 8,
+    alignment: WrapAlignment.center,
+    children: _suggestions.map((entry) {
+      final (text, bg) = entry;
+      return _Pill(text: text, bg: bg, onTap: () => onSelect(text));
+    }).toList(),
+  );
 }
 
 class _Pill extends StatefulWidget {
@@ -45,41 +40,43 @@ class _PillState extends State<_Pill> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          transform: Matrix4.translationValues(
-              _pressed ? 2 : 0, _pressed ? 2 : 0, 0),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: widget.bg,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: kInk, width: 1.5),
-            boxShadow: _pressed
-                ? []
-                : const [
-                    BoxShadow(
-                        color: kInk, offset: Offset(2, 2), blurRadius: 0)
-                  ],
+    onTapDown: (_) => setState(() => _pressed = true),
+    onTapUp: (_) => setState(() => _pressed = false),
+    onTapCancel: () => setState(() => _pressed = false),
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      transform: Matrix4.translationValues(
+        _pressed ? 2 : 0,
+        _pressed ? 2 : 0,
+        0,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: widget.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: kInk, width: 1.5),
+        boxShadow: _pressed
+            ? []
+            : const [
+                BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+              ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('✦', style: TextStyle(color: kInkSoft, fontSize: 10)),
+          const SizedBox(width: 6),
+          Text(
+            widget.text,
+            style: GoogleFonts.inter(
+              color: kInk,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('✦',
-                  style: TextStyle(color: kInkSoft, fontSize: 10)),
-              const SizedBox(width: 6),
-              Text(
-                widget.text,
-                style: GoogleFonts.inter(
-                    color: kInk,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

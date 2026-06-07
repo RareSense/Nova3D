@@ -13,6 +13,7 @@ import 'package:nova3d_frontend/features/chat/presentation/chat_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/home_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/model_preview_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/settings_page.dart';
+import 'package:nova3d_frontend/features/subscription/presentation/payment_success_page.dart';
 import 'package:nova3d_frontend/features/subscription/presentation/subscription_page.dart';
 import 'package:nova3d_frontend/shared/widgets/app_layout.dart';
 import 'package:nova3d_frontend/shared/widgets/auth_guard.dart';
@@ -56,11 +57,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/signup',
         '/forgot-password',
         '/oauth-callback',
+        '/success',
+      };
+      const authEntryPaths = {
+        '/signin',
+        '/signup',
+        '/forgot-password',
+        '/oauth-callback',
       };
 
       if (isLoading) return null;
       if (!isAuthenticated && !publicPaths.contains(path)) return '/signin';
-      if (isAuthenticated && publicPaths.contains(path)) return '/';
+      if (isAuthenticated && authEntryPaths.contains(path)) return '/';
       return null;
     },
     routes: [
@@ -82,6 +90,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/oauth-callback',
         pageBuilder: (_, state) =>
             _fadePage(state.pageKey, const OAuthCallbackPage()),
+      ),
+      GoRoute(
+        path: '/success',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const PaymentSuccessPage()),
       ),
 
       // ── Authenticated shell ──────────────────────────────────────────────

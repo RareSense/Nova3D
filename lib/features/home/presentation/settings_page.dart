@@ -111,9 +111,9 @@ class SettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // Subscription teaser
+              // Credits
               _SectionCard(
-                title: 'Subscription',
+                title: 'Credits',
                 bg: kButterBg,
                 children: [
                   Row(
@@ -127,34 +127,18 @@ class SettingsPage extends ConsumerWidget {
                             Row(
                               children: [
                                 Text(
-                                  'Subscription',
+                                  'Nova3D Credits',
                                   style: kSilkscreen(
                                     11,
                                     color: kInk,
                                     letterSpacing: 0.6,
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: kLilacBg,
-                                    borderRadius: BorderRadius.circular(99),
-                                    border: Border.all(color: kLilac),
-                                  ),
-                                  child: Text(
-                                    'COMING SOON',
-                                    style: kSilkscreen(9, color: kInk),
-                                  ),
-                                ),
                               ],
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'You\'re on Free · BYOK — use your own provider keys.',
+                              'Buy Nova3D credits or use your own provider key.',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 color: kInkSoft,
@@ -165,7 +149,7 @@ class SettingsPage extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       _SmallChunkyButton(
-                        label: 'View plans →',
+                        label: 'Buy credits',
                         onTap: () => context.go('/subscription'),
                         color: kSurface,
                       ),
