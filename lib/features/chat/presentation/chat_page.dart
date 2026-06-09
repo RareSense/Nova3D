@@ -79,7 +79,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       generationDraftsProvider,
     )[widget.conversationId];
     final modelOptions = ref.watch(generationModelOptionsProvider);
+    final editModelOptions = ref.watch(byokGenerationModelOptionsProvider);
     final availableOptions = modelOptions.valueOrNull ?? const [];
+    final availableEditOptions = editModelOptions.valueOrNull ?? const [];
 
     final selectedModel = GenerationModelOption.findById(
       availableOptions,
@@ -134,9 +136,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ArtifactDrawer(
             message: _panelMessage!,
             onClose: _closePanel,
-            editModelOptions: availableOptions,
-            onArticulationCompleted: (glbUrl, workflowId, jointsArtifact, joints) =>
-                ref
+            editModelOptions: availableEditOptions,
+            onArticulationCompleted:
+                (glbUrl, workflowId, jointsArtifact, joints) => ref
                     .read(messagesProvider(widget.conversationId).notifier)
                     .patchArticulation(
                       _panelMessage!.id,

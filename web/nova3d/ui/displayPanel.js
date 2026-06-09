@@ -7,6 +7,7 @@
 import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { pushUndoSnapshot } from '@nova/history.js';
+import { highlightMat } from '@nova/materials.js';
 
 function selectedOrAll() {
   return state.selectedMeshIndices.size
@@ -14,12 +15,50 @@ function selectedOrAll() {
     : state.loadedMeshes.map((_, i) => i);
 }
 
+function eachMaterial(material, fn) {
+  (Array.isArray(material) ? material : [material]).forEach(mat => {
+    if (mat) fn(mat);
+  });
+}
+
+function syncDisplayFlags(material) {
+  eachMaterial(material, mat => {
+    mat.wireframe = state.displayState.wireframe;
+    mat.flatShading = state.displayState.flatShading;
+    mat.transparent = state.displayState.xray;
+    mat.opacity = state.displayState.xray ? .3 : 1;
+    mat.depthWrite = !state.displayState.xray;
+    mat.needsUpdate = true;
+  });
+}
+
+export function applyMaterialDisplayMode() {
+  state.loadedMeshes.forEach((entry, idx) => {
+    const material = state.displayState.categoryColors
+      ? (entry.categoryMaterial || entry.originalMaterial)
+      : (entry.sourceMaterial || entry.originalMaterial);
+    entry.originalMaterial = material;
+    syncDisplayFlags(material);
+    if (!state.selectedMeshIndices.has(idx) && entry.mesh.material !== highlightMat) {
+      entry.mesh.material = material;
+    }
+  });
+}
+
+export function toggleCategoryColors() {
+  state.displayState.categoryColors = !state.displayState.categoryColors;
+  applyMaterialDisplayMode();
+  document.getElementById('togCategoryColors')?.classList.toggle('active-tool', state.displayState.categoryColors);
+}
+
 export function toggleWireframe() {
   pushUndoSnapshot('wireframe');
   state.displayState.wireframe = !state.displayState.wireframe;
   selectedOrAll().forEach(i => {
-    state.loadedMeshes[i].originalMaterial.wireframe = state.displayState.wireframe;
-    state.loadedMeshes[i].originalMaterial.needsUpdate = true;
+    eachMaterial(state.loadedMeshes[i].originalMaterial, mat => {
+      mat.wireframe = state.displayState.wireframe;
+      mat.needsUpdate = true;
+    });
   });
   document.getElementById('togWireframe').classList.toggle('active-tool', state.displayState.wireframe);
 }
@@ -28,8 +67,10 @@ export function toggleFlatShading() {
   pushUndoSnapshot('flat-shading');
   state.displayState.flatShading = !state.displayState.flatShading;
   selectedOrAll().forEach(i => {
-    state.loadedMeshes[i].originalMaterial.flatShading = state.displayState.flatShading;
-    state.loadedMeshes[i].originalMaterial.needsUpdate = true;
+    eachMaterial(state.loadedMeshes[i].originalMaterial, mat => {
+      mat.flatShading = state.displayState.flatShading;
+      mat.needsUpdate = true;
+    });
   });
   document.getElementById('togFlatShade')?.classList.toggle('active-tool', state.displayState.flatShading);
 }
@@ -38,11 +79,12 @@ export function toggleXray() {
   pushUndoSnapshot('xray');
   state.displayState.xray = !state.displayState.xray;
   selectedOrAll().forEach(i => {
-    const m = state.loadedMeshes[i].originalMaterial;
-    m.transparent = state.displayState.xray;
-    m.opacity     = state.displayState.xray ? .3 : 1;
-    m.depthWrite  = !state.displayState.xray;
-    m.needsUpdate = true;
+    eachMaterial(state.loadedMeshes[i].originalMaterial, mat => {
+      mat.transparent = state.displayState.xray;
+      mat.opacity     = state.displayState.xray ? .3 : 1;
+      mat.depthWrite  = !state.displayState.xray;
+      mat.needsUpdate = true;
+    });
   });
   document.getElementById('togXray').classList.toggle('active-tool', state.displayState.xray);
 }

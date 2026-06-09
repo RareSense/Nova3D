@@ -71,6 +71,12 @@ let _saveEditorState = () => {};
 let _loadAssetVersion = () => {};
 let _activeVersionRequestId = '';
 
+function disposeMaterial(material) {
+  (Array.isArray(material) ? material : [material]).forEach(mat => {
+    if (mat && mat !== highlightMat) mat.dispose?.();
+  });
+}
+
 export function setHistoryUiRefreshers({ detachProxy, refreshUi } = {}) {
   if (typeof detachProxy === 'function') _detachProxy = detachProxy;
   if (typeof refreshUi === 'function')   _refreshUi   = refreshUi;
@@ -269,11 +275,22 @@ export function restoreSnapshot(snap, options = {}) {
       mesh.visible = s.visible !== false;
       const jointParent = s.jointName ? jointNodeMap.get(s.jointName)?.obj : null;
       (jointParent || nextGroup).add(mesh);
-      nextMeshes.push({ mesh, originalMaterial: mat, name: mesh.name, geometry: geometry.clone() });
+      nextMeshes.push({
+        mesh,
+        originalMaterial: mat,
+        sourceMaterial: mat,
+        categoryMaterial: mat,
+        name: mesh.name,
+        geometry: geometry.clone(),
+      });
     });
   } catch (err) {
     console.error('Undo restore failed before model swap:', err);
-    nextMeshes.forEach(e => { e.geometry.dispose(); e.mesh.geometry.dispose(); if (e.mesh.material) e.mesh.material.dispose(); });
+    nextMeshes.forEach(e => {
+      e.geometry.dispose();
+      e.mesh.geometry.dispose();
+      [e.mesh.material, e.originalMaterial, e.sourceMaterial, e.categoryMaterial].forEach(disposeMaterial);
+    });
     return false;
   }
 
@@ -282,7 +299,11 @@ export function restoreSnapshot(snap, options = {}) {
   state.boxHelpers.forEach(h => state.scene.remove(h));     state.boxHelpers = [];
   state.normalHelpers.forEach(h => { h.parent ? h.parent.remove(h) : state.scene.remove(h); h.geometry?.dispose(); });
   state.normalHelpers = [];
-  state.loadedMeshes.forEach(e => { e.mesh.removeFromParent(); e.mesh.geometry.dispose(); if (e.mesh.material && e.mesh.material !== highlightMat) e.mesh.material.dispose(); });
+  state.loadedMeshes.forEach(e => {
+    e.mesh.removeFromParent();
+    e.mesh.geometry.dispose();
+    [e.mesh.material, e.originalMaterial, e.sourceMaterial, e.categoryMaterial].forEach(disposeMaterial);
+  });
   while (state.modelGroup.children.length) state.modelGroup.remove(state.modelGroup.children[0]);
   nextGroup.children.slice().forEach(mesh => state.modelGroup.add(mesh));
   state.loadedMeshes = nextMeshes;

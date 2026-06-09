@@ -18,6 +18,7 @@ class MessageModel {
   final String? operation;
   final String? sourceModelUrl;
   final String? modelOptionId;
+  final String? modelLabel;
   final String? instructionPrompt;
   // Shown as a thumbnail in the user bubble.
   final String? imageDataUrl;
@@ -40,6 +41,7 @@ class MessageModel {
     this.operation,
     this.sourceModelUrl,
     this.modelOptionId,
+    this.modelLabel,
     this.instructionPrompt,
     this.imageDataUrl,
     this.retryRequest,
@@ -58,6 +60,7 @@ class MessageModel {
     String? operation,
     String? sourceModelUrl,
     String? modelOptionId,
+    String? modelLabel,
     String? instructionPrompt,
     String? imageDataUrl,
     GenerationRequest? retryRequest,
@@ -78,6 +81,7 @@ class MessageModel {
     operation: operation ?? this.operation,
     sourceModelUrl: sourceModelUrl ?? this.sourceModelUrl,
     modelOptionId: modelOptionId ?? this.modelOptionId,
+    modelLabel: modelLabel ?? this.modelLabel,
     instructionPrompt: instructionPrompt ?? this.instructionPrompt,
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
     retryRequest: clearRetryRequest
@@ -105,6 +109,7 @@ class MessageModel {
     if (operation != null) 'operation': operation,
     if (sourceModelUrl != null) 'source_model_url': sourceModelUrl,
     if (modelOptionId != null) 'model_option_id': modelOptionId,
+    if (modelLabel != null) 'model_label': modelLabel,
     if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
     if (imageDataUrl != null) 'image_data_url': imageDataUrl,
   };
@@ -125,6 +130,7 @@ class MessageModel {
     operation: json['operation'] as String?,
     sourceModelUrl: json['source_model_url'] as String?,
     modelOptionId: json['model_option_id'] as String?,
+    modelLabel: json['model_label'] as String?,
     instructionPrompt: json['instruction_prompt'] as String?,
     imageDataUrl: json['image_data_url'] as String?,
   );

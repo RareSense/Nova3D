@@ -12,7 +12,9 @@
 /**
  * @typedef {Object} MeshEntry
  * @property {THREE.Mesh} mesh                     The live mesh in the scene.
- * @property {THREE.Material} originalMaterial     The mesh's material before the highlight overlay swaps it.
+ * @property {THREE.Material|THREE.Material[]} originalMaterial Active non-highlight material.
+ * @property {THREE.Material|THREE.Material[]} sourceMaterial   Imported/user material.
+ * @property {THREE.Material|THREE.Material[]} categoryMaterial Color-coded inspection material.
  * @property {string} name                         Display name (used by mesh list, AI edit selectors).
  * @property {THREE.BufferGeometry} geometry       A clone of the rest-state geometry (used by smooth/subdivide/decimate to derive next state).
  */
@@ -23,7 +25,7 @@ import { pushUndoSnapshot } from '@nova/history.js';
 import { saveEditorState } from '@nova/persistence.js';
 import { bindArticulatedJoints } from '@nova/articulation.js';
 import {
-  assignCategoryColors,
+  buildCategoryMaterialMap,
   applyRenderProfileToObject,
   highlightMat,
   makeDiamond,
@@ -38,6 +40,48 @@ let _refreshHighlights  = () => {};
 let _detachProxy        = () => {};
 let _frameCameraToModel = () => {};
 let _showDownloadError  = (msg) => console.error(msg);
+
+function activeMaterialSlot() {
+  return state.displayState.categoryColors ? 'categoryMaterial' : 'sourceMaterial';
+}
+
+function makeMeshEntry(mesh, material, name, geometry, categoryMaterial = null) {
+  const sourceMaterial = material;
+  const activeMaterial = state.displayState.categoryColors
+    ? (categoryMaterial || sourceMaterial)
+    : sourceMaterial;
+  mesh.material = activeMaterial;
+  return {
+    mesh,
+    originalMaterial: activeMaterial,
+    sourceMaterial,
+    categoryMaterial: categoryMaterial || sourceMaterial,
+    name,
+    geometry,
+  };
+}
+
+function setEntryMaterial(entry, material) {
+  entry[activeMaterialSlot()] = material;
+  entry.originalMaterial = material;
+  entry.mesh.material = material;
+}
+
+function disposeMaterial(material) {
+  (Array.isArray(material) ? material : [material]).forEach(mat => {
+    if (mat && mat !== highlightMat) mat.dispose?.();
+  });
+}
+
+function disposeMeshEntry(entry) {
+  const materials = new Set([
+    entry.mesh.material,
+    entry.originalMaterial,
+    entry.sourceMaterial,
+    entry.categoryMaterial,
+  ]);
+  materials.forEach(disposeMaterial);
+}
 
 export function setModelHooks({
   refreshMeshUi, refreshHighlights, detachProxy, frameCameraToModel, showDownloadError,
@@ -99,12 +143,18 @@ export function loadGLB(url, options = {}) {
       model.scale.setScalar(2.2 / Math.max(size.x, size.y, size.z));
       state.modelGroup.position.set(0,0,0); state.modelGroup.scale.setScalar(1); state.modelGroup.rotation.set(0,0,0);
       model.traverse(child => { if (child.isMesh && child.geometry) { child.castShadow = true; child.receiveShadow = true; } });
-      assignCategoryColors(model);
       applyRenderProfileToObject(model);
+      const categoryMaterials = buildCategoryMaterialMap(model).materials;
       state.modelGroup.add(model);
       model.traverse(child => {
         if (!child.isMesh || !child.geometry) return;
-        state.loadedMeshes.push({ mesh: child, originalMaterial: child.material, name: child.name || `Mesh_${state.loadedMeshes.length}`, geometry: child.geometry.clone() });
+        state.loadedMeshes.push(makeMeshEntry(
+          child,
+          child.material,
+          child.name || `Mesh_${state.loadedMeshes.length}`,
+          child.geometry.clone(),
+          categoryMaterials.get(child),
+        ));
       });
       _refreshMeshUi();
       bindArticulatedJoints(state.currentJoints, {
@@ -131,9 +181,11 @@ export function loadGLB(url, options = {}) {
 
 export function clearModel() {
   state.transformControls?.detach();
-  state.loadedMeshes.forEach(m => { if (m.mesh.material && m.mesh.material !== highlightMat) m.mesh.material.dispose(); });
+  state.loadedMeshes.forEach(disposeMeshEntry);
   state.loadedMeshes = []; state.selectedMeshIndices.clear();
   state.lastSelectionAction = null;
+  state.displayState.categoryColors = false;
+  document.getElementById('togCategoryColors')?.classList.remove('active-tool');
   while (state.modelGroup.children.length) state.modelGroup.remove(state.modelGroup.children[0]);
   state.boxHelpers.forEach(h => state.scene.remove(h));     state.boxHelpers = [];
   state.normalHelpers.forEach(h => { h.parent ? h.parent.remove(h) : state.scene.remove(h); h.geometry?.dispose(); });
@@ -169,7 +221,7 @@ export function deleteSelected() {
   if (!state.selectedMeshIndices.size) return;
   pushUndoSnapshot('delete'); _detachProxy(); state.transformControls.detach();
   const idxs = [...state.selectedMeshIndices].sort((a,b) => b - a);
-  idxs.forEach(i => { const e = state.loadedMeshes[i]; e.mesh.removeFromParent(); e.mesh.geometry.dispose(); if (e.mesh.material && e.mesh.material !== highlightMat) e.mesh.material.dispose(); });
+  idxs.forEach(i => { const e = state.loadedMeshes[i]; e.mesh.removeFromParent(); e.mesh.geometry.dispose(); disposeMeshEntry(e); });
   idxs.forEach(i => state.loadedMeshes.splice(i, 1));
   state.selectedMeshIndices.clear();
   _refreshMeshUi();
@@ -187,7 +239,7 @@ export function duplicateSelection() {
     mesh.rotation.copy(e.mesh.rotation); mesh.scale.copy(e.mesh.scale);
     mesh.name = e.name + '_copy'; state.modelGroup.add(mesh);
     const ni = state.loadedMeshes.length;
-    state.loadedMeshes.push({ mesh, originalMaterial: mat, name: mesh.name, geometry: geom.clone() });
+    state.loadedMeshes.push(makeMeshEntry(mesh, mat, mesh.name, geom.clone()));
     newIdxs.add(ni);
   });
   state.selectedMeshIndices = newIdxs;
@@ -208,8 +260,8 @@ export function mergeSelected() {
     merged.computeVertexNormals();
     const mat = state.loadedMeshes[idxs[0]].originalMaterial.clone();
     const mesh = new THREE.Mesh(merged, mat); mesh.name = 'Merged'; state.modelGroup.add(mesh);
-    idxs.sort((a,b) => b - a).forEach(i => { state.loadedMeshes[i].mesh.removeFromParent(); state.loadedMeshes[i].mesh.geometry.dispose(); state.loadedMeshes.splice(i, 1); });
-    state.loadedMeshes.push({ mesh, originalMaterial: mat, name: 'Merged', geometry: merged.clone() });
+    idxs.sort((a,b) => b - a).forEach(i => { state.loadedMeshes[i].mesh.removeFromParent(); state.loadedMeshes[i].mesh.geometry.dispose(); disposeMeshEntry(state.loadedMeshes[i]); state.loadedMeshes.splice(i, 1); });
+    state.loadedMeshes.push(makeMeshEntry(mesh, mat, 'Merged', merged.clone()));
     state.selectedMeshIndices.clear(); state.selectedMeshIndices.add(state.loadedMeshes.length - 1);
     _refreshMeshUi(); _refreshHighlights();
   } catch (e) { console.error('Merge error:', e); }
@@ -266,8 +318,10 @@ export function separateByLooseParts() {
     ng.setAttribute('position', new THREE.BufferAttribute(newPos, 3)); ng.setIndex(newIdx); ng.computeVertexNormals();
     const mat = entry.originalMaterial.clone(), mesh = new THREE.Mesh(ng, mat);
     mesh.name = `${entry.name}_part${gi}`; mesh.position.copy(entry.mesh.position); mesh.rotation.copy(entry.mesh.rotation); mesh.scale.copy(entry.mesh.scale);
-    state.modelGroup.add(mesh); state.loadedMeshes.push({ mesh, originalMaterial: mat, name: mesh.name, geometry: ng.clone() });
+    state.modelGroup.add(mesh); state.loadedMeshes.push(makeMeshEntry(mesh, mat, mesh.name, ng.clone()));
   });
+  entry.mesh.geometry.dispose();
+  disposeMeshEntry(entry);
   _refreshMeshUi();
 }
 
@@ -370,7 +424,7 @@ export function applyMaterialPreset(name) {
       mat = new THREE.MeshPhysicalMaterial({ color: p.color, metalness: 0, roughness: 0, transmission: p.transmission, ior: p.ior, thickness: p.thickness, envMap: state.envMap, envMapIntensity: 2, clearcoat: 1, clearcoatRoughness: 0, transparent: true, opacity: 1, side: THREE.DoubleSide, specularIntensity: 1.5, specularColor: new THREE.Color(0xffffff), attenuationDistance: 1, attenuationColor: new THREE.Color(p.color) });
       entry.mesh.material = mat;
     }
-    if (mat) entry.originalMaterial = mat;
+    if (mat) setEntryMaterial(entry, mat);
   });
   _refreshHighlights();
 }
@@ -383,7 +437,7 @@ export function applyCustomMaterial() {
   const clearcoat = parseFloat(document.getElementById('customClearcoat').value);
   state.selectedMeshIndices.forEach(i => {
     const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(color), metalness, roughness, clearcoat, clearcoatRoughness: .1, envMap: state.envMap, envMapIntensity: 1.5 });
-    state.loadedMeshes[i].mesh.material = mat; state.loadedMeshes[i].originalMaterial = mat;
+    setEntryMaterial(state.loadedMeshes[i], mat);
   });
   _refreshHighlights();
 }

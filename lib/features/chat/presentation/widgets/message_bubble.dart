@@ -32,7 +32,7 @@ class MessageBubble extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final editModelOptions =
-        ref.watch(generationModelOptionsProvider).valueOrNull ?? const [];
+        ref.watch(byokGenerationModelOptionsProvider).valueOrNull ?? const [];
     final currentVersion = assetVersions.isNotEmpty ? assetVersions.last : null;
 
     return Padding(
@@ -101,7 +101,10 @@ class MessageBubble extends ConsumerWidget {
                 ],
                 if (!_isUser && message.workflowId != null) ...[
                   const SizedBox(height: 6),
-                  _WorkflowIdBadge(workflowId: message.workflowId!),
+                  _WorkflowIdBadge(
+                    workflowId: message.workflowId!,
+                    modelLabel: message.modelLabel,
+                  ),
                 ],
                 if (!message.isStreaming) ...[
                   const SizedBox(height: 4),
@@ -180,8 +183,9 @@ class _BubbleContentState extends State<_BubbleContent> {
 }
 
 class _WorkflowIdBadge extends StatelessWidget {
-  const _WorkflowIdBadge({required this.workflowId});
+  const _WorkflowIdBadge({required this.workflowId, this.modelLabel});
   final String workflowId;
+  final String? modelLabel;
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
@@ -191,7 +195,9 @@ class _WorkflowIdBadge extends StatelessWidget {
       children: [
         Flexible(
           child: SelectableText(
-            'WF $workflowId',
+            modelLabel == null || modelLabel!.isEmpty
+                ? 'WF $workflowId'
+                : 'WF $workflowId · $modelLabel',
             style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.4),
           ),
         ),

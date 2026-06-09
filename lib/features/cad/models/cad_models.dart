@@ -79,10 +79,29 @@ class WorkflowStatus {
     'success_final',
     'success_original_glb',
     'failed_final',
+    'final_latest_valid',
+    'final_validated_correction',
+    'fail_generation',
   };
 
   static const _nodeLabels = {
     'sketch_to_3d_generator': 'Generating your 3D model...',
+    'caption_prompt': 'Reading your reference image...',
+    'caption_llm': 'Understanding the reference image...',
+    'generation_prompt': 'Preparing the 3D generation prompt...',
+    'code_generation_llm': 'Writing the Blender scene...',
+    'run_blender': 'Building and exporting the 3D model...',
+    'blender_retry_gate': 'Checking the generated model...',
+    'build_repair_prompt': 'Preparing an automatic repair...',
+    'repair_llm': 'Repairing the Blender script...',
+    'capture_validation_screenshots': 'Capturing validation views...',
+    'validation_prompt': 'Preparing model validation...',
+    'validation_llm': 'Reviewing the generated model...',
+    'validation_result_parser': 'Finalizing the model...',
+    'validation_correction_blender': 'Applying validation fixes...',
+    'final_latest_valid': 'Finalizing the model...',
+    'final_validated_correction': 'Finalizing the corrected model...',
+    'fail_generation': 'Generation failed.',
     'regenerate_3d_part': 'Regenerating the selected part...',
     'add_3d_part': 'Adding a new part...',
     'articulate_3d_model': 'Articulating your 3D model...',
@@ -196,10 +215,13 @@ class CadResult {
     Map<String, dynamic> json,
   ) {
     for (final key in [
+      'final_validated_correction',
+      'final_latest_valid',
       'sketch_to_3d_generator',
       'regenerate_3d_part',
       'add_3d_part',
       'articulate_3d_model',
+      'fail_generation',
     ]) {
       final node = json[key];
       if (node is! List || node.isEmpty) continue;
@@ -215,7 +237,7 @@ class CadResult {
     final modelUrl = unwrapped['model_url'] as String?;
     if (modelUrl != null && modelUrl.isNotEmpty) return modelUrl;
 
-    for (final artifactKey in ['model', 'model_artifact']) {
+    for (final artifactKey in ['model', 'model_artifact', 'glb_artifact']) {
       final artifact = unwrapped[artifactKey];
       if (artifact is Map) {
         final url = artifact['url'] as String?;
@@ -229,7 +251,7 @@ class CadResult {
     Map<String, dynamic> payload,
   ) {
     final unwrapped = _unwrapResult(payload);
-    for (final artifactKey in ['model_artifact', 'model']) {
+    for (final artifactKey in ['model_artifact', 'model', 'glb_artifact']) {
       final artifact = _asStringMap(unwrapped[artifactKey]);
       if (artifact != null) return artifact;
     }
@@ -439,4 +461,25 @@ class CadCredits {
     balance: (json['balance'] as num).toInt(),
     available: (json['available'] as num).toInt(),
   );
+}
+
+class GenerationCreditEstimate {
+  const GenerationCreditEstimate({
+    required this.projectedMaxHold,
+    required this.authorizedBudget,
+  });
+
+  final int projectedMaxHold;
+  final int authorizedBudget;
+
+  factory GenerationCreditEstimate.fromJson(Map<String, dynamic> json) =>
+      GenerationCreditEstimate(
+        projectedMaxHold: _intFromJson(json['projected_max_hold']),
+        authorizedBudget: _intFromJson(json['authorized_budget']),
+      );
+}
+
+int _intFromJson(Object? value) {
+  if (value is num) return value.toInt();
+  return int.tryParse((value ?? '').toString()) ?? 0;
 }

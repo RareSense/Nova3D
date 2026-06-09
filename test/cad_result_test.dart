@@ -51,6 +51,24 @@ void main() {
     expect(result.codeArtifact?['url'], 'https://example.test/edited.py');
   });
 
+  test('extracts paid v2 final output', () {
+    final result = CadResult.fromJson({
+      'final_latest_valid': [
+        {
+          'status': 'completed',
+          'ok': true,
+          'glb_artifact': {'url': 'https://example.test/paid.glb'},
+          'code_artifact': {'url': 'https://example.test/paid.py'},
+        },
+      ],
+    });
+
+    expect(result.failed, isFalse);
+    expect(result.glbUrl, 'https://example.test/paid.glb');
+    expect(result.modelArtifact?['url'], 'https://example.test/paid.glb');
+    expect(result.codeArtifact?['url'], 'https://example.test/paid.py');
+  });
+
   test('extracts structured soft failure from nested tool result', () {
     final result = CadResult.fromJson({
       'sketch_to_3d_generator': [

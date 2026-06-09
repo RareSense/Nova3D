@@ -16,6 +16,7 @@ const String kCadBaseUrl = String.fromEnvironment(
 );
 
 const String kSketchTo3dWorkflow = 'sketch_to_3d';
+const String kSketchTo3dPaidWorkflow = 'sketch_to_3d_v2';
 const String kRegenerate3dPartWorkflow = 'regenerate_3d_part';
 const String kAdd3dPartWorkflow = 'add_3d_part';
 const String kArticulate3dModelWorkflow = 'articulate_3d_model';

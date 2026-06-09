@@ -266,7 +266,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       .map(
         (option) => {
           'id': option.id,
-          'label': option.label,
+          'label': option.displayLabel,
           'provider': option.provider.label,
         },
       )

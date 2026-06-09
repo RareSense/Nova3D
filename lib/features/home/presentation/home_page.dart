@@ -15,7 +15,9 @@ import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
+import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 import 'package:nova3d_frontend/features/home/presentation/widgets/suggestion_pills.dart';
+import 'package:nova3d_frontend/shared/widgets/generation_model_label.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
 
 const _genericReadinessError =
@@ -95,11 +97,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     setState(() => _creating = true);
     try {
-      final readiness = await ref.read(cadServiceProvider).checkReadiness();
+      final cad = ref.read(cadServiceProvider);
+      final readiness = await cad.checkReadinessForWorkflow(
+        modelOption.workflowName ?? kSketchTo3dWorkflow,
+      );
       if (!readiness.ready) {
         _showInlineMessage(readiness.userMessage);
         return;
       }
+      await _ensurePaidCredits(modelOption, cad);
 
       final conv = await ref
           .read(conversationsProvider.notifier)
@@ -116,10 +122,41 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  Future<void> _ensurePaidCredits(
+    GenerationModelOption modelOption,
+    CadService cad,
+  ) async {
+    if (!modelOption.isPaidCredit) return;
+    final estimate = await cad.estimateGenerationCredits(modelOption);
+    final wallet = await ref.read(billingProvider.notifier).refreshWallet();
+    final available =
+        wallet?.available ?? ref.read(billingProvider).wallet?.available;
+    final required = estimate.authorizedBudget;
+    if (available == null) {
+      throw CadException(
+        'Nova3D could not confirm your credit balance. Refresh credits or open /subscription, then try again.',
+      );
+    }
+    if (available < required) {
+      throw CadException(
+        'This model needs $required credits, but you have $available available. Buy more credits at /subscription and try again.',
+      );
+    }
+  }
+
   void _showInlineMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        action: message.contains('/subscription')
+            ? SnackBarAction(
+                label: 'Buy credits',
+                onPressed: () => context.go('/subscription'),
+              )
+            : null,
+      ),
     );
   }
 
@@ -529,14 +566,20 @@ class _ModelChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 200,
+    width: 276,
     height: 34,
     child: DropdownButtonFormField<String>(
       key: ValueKey(selected?.id ?? 'no-model'),
       initialValue: selected?.id,
       isExpanded: true,
       dropdownColor: kLilacBg,
-      style: kSilkscreen(11, color: kInk),
+      menuMaxHeight: 360,
+      itemHeight: 58,
+      style: GoogleFonts.inter(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        color: kInk,
+      ),
       icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: kInkSoft),
       decoration: InputDecoration(
         contentPadding: const EdgeInsets.symmetric(horizontal: 10),
@@ -552,15 +595,14 @@ class _ModelChip extends StatelessWidget {
         ),
       ),
       hint: Text('MODEL', style: kSilkscreen(10, color: kInkSoft)),
+      selectedItemBuilder: (context) => options
+          .map((o) => GenerationModelLabel(option: o, compact: true))
+          .toList(),
       items: options
           .map(
             (o) => DropdownMenuItem<String>(
               value: o.id,
-              child: Text(
-                o.label,
-                overflow: TextOverflow.ellipsis,
-                style: kSilkscreen(10, color: kInk),
-              ),
+              child: GenerationModelLabel(option: o),
             ),
           )
           .toList(),

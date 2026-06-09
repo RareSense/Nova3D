@@ -94,18 +94,21 @@ class BillingNotifier extends Notifier<BillingState> {
     }
   }
 
-  Future<void> refreshWallet() async {
-    if (state.refreshingWallet) return;
+  Future<BillingWallet?> refreshWallet() async {
+    if (state.refreshingWallet) return state.wallet;
     state = state.copyWith(refreshingWallet: true, clearError: true);
     try {
+      final wallet = await _service.getWallet();
       state = state.copyWith(
-        wallet: await _service.getWallet(),
+        wallet: wallet,
         walletLoaded: true,
         refreshingWallet: false,
       );
+      return wallet;
     } on BillingException catch (e) {
       await _handleException(e);
       state = state.copyWith(refreshingWallet: false);
+      return null;
     }
   }
 

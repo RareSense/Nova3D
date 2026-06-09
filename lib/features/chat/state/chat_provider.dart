@@ -15,6 +15,7 @@ import 'package:nova3d_frontend/features/chat/data/message_repository.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/user_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
+import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 
 final chatServiceProvider = Provider<ChatService>((ref) {
   return ChatService(ref.watch(authServiceProvider));
@@ -86,9 +87,7 @@ class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
       // Pre-seed local message cache from the snapshot data already embedded
       // in each conversation so that opening one is instant without an extra
       // API call. Fire-and-forget; non-fatal if it fails.
-      unawaited(
-        ref.read(messageLocalSourceProvider).seedFromSnapshots(synced),
-      );
+      unawaited(ref.read(messageLocalSourceProvider).seedFromSnapshots(synced));
       state = AsyncValue.data(synced);
     } catch (_) {
       // Local cache remains authoritative for rendering when remote history
@@ -310,6 +309,8 @@ class MessagesNotifier
         workflowId: workflowId,
         assistantId: msg.id,
         assistantCreatedAt: msg.createdAt,
+        modelOptionId: msg.modelOptionId,
+        modelLabel: msg.modelLabel,
       );
     }
   }
@@ -433,11 +434,13 @@ class MessagesNotifier
   }) async {
     final cad = ref.read(cadServiceProvider);
     try {
+      await _ensurePaidCreditBudget(request, cad);
       final startedWorkflowId = await cad.startGeneration(
         request,
         workflowId: workflowId,
         conversationId: arg,
       );
+      await _refreshWalletForPaid(request);
       _upsert(
         MessageModel(
           id: assistantId,
@@ -446,6 +449,8 @@ class MessagesNotifier
           createdAt: assistantCreatedAt,
           isStreaming: true,
           workflowId: startedWorkflowId,
+          modelOptionId: request.modelOption.id,
+          modelLabel: request.modelOption.persistedLabel,
         ),
       );
 
@@ -454,6 +459,8 @@ class MessagesNotifier
         cad: cad,
         assistantId: assistantId,
         assistantCreatedAt: assistantCreatedAt,
+        modelOptionId: request.modelOption.id,
+        modelLabel: request.modelOption.persistedLabel,
       );
 
       final failed = result.failed || result.glbUrl == null;
@@ -475,6 +482,7 @@ class MessagesNotifier
           operation: 'initial_generation',
           sourceModelUrl: result.glbUrl,
           modelOptionId: request.modelOption.id,
+          modelLabel: request.modelOption.persistedLabel,
           instructionPrompt: request.prompt.trim(),
           retryRequest: failed ? request : null,
         ),
@@ -489,6 +497,8 @@ class MessagesNotifier
           createdAt: assistantCreatedAt,
           isStreaming: false,
           workflowId: workflowId,
+          modelOptionId: request.modelOption.id,
+          modelLabel: request.modelOption.persistedLabel,
           retryRequest: request,
         ),
         immediateRemote: true,
@@ -502,11 +512,14 @@ class MessagesNotifier
           createdAt: assistantCreatedAt,
           isStreaming: false,
           workflowId: workflowId,
+          modelOptionId: request.modelOption.id,
+          modelLabel: request.modelOption.persistedLabel,
           retryRequest: request,
         ),
         immediateRemote: true,
       );
     } finally {
+      await _refreshWalletForPaid(request);
       _busy = false;
     }
   }
@@ -516,6 +529,8 @@ class MessagesNotifier
     required CadService cad,
     required String assistantId,
     required DateTime assistantCreatedAt,
+    String? modelOptionId,
+    String? modelLabel,
   }) {
     return cad.runWorkflow(
       workflowId,
@@ -527,6 +542,8 @@ class MessagesNotifier
           createdAt: assistantCreatedAt,
           isStreaming: true,
           workflowId: workflowId,
+          modelOptionId: modelOptionId,
+          modelLabel: modelLabel,
         ),
       ),
     );
@@ -536,6 +553,8 @@ class MessagesNotifier
     required String workflowId,
     required String assistantId,
     required DateTime assistantCreatedAt,
+    String? modelOptionId,
+    String? modelLabel,
   }) async {
     final cad = ref.read(cadServiceProvider);
     try {
@@ -544,6 +563,8 @@ class MessagesNotifier
         cad: cad,
         assistantId: assistantId,
         assistantCreatedAt: assistantCreatedAt,
+        modelOptionId: modelOptionId,
+        modelLabel: modelLabel,
       );
       final failed = result.failed || result.glbUrl == null;
       _upsert(
@@ -563,6 +584,8 @@ class MessagesNotifier
           joints: result.joints,
           operation: 'initial_generation',
           sourceModelUrl: result.glbUrl,
+          modelOptionId: modelOptionId,
+          modelLabel: modelLabel,
         ),
         immediateRemote: true,
       );
@@ -575,6 +598,8 @@ class MessagesNotifier
           createdAt: assistantCreatedAt,
           isStreaming: false,
           workflowId: workflowId,
+          modelOptionId: modelOptionId,
+          modelLabel: modelLabel,
         ),
         immediateRemote: true,
       );
@@ -582,6 +607,36 @@ class MessagesNotifier
       _busy = false;
     }
   }
+
+  Future<void> _ensurePaidCreditBudget(
+    GenerationRequest request,
+    CadService cad,
+  ) async {
+    final option = request.modelOption;
+    if (!option.isPaidCredit) return;
+
+    final estimate = await cad.estimateGenerationCredits(option);
+    final required = estimate.authorizedBudget;
+    final wallet = await ref.read(billingProvider.notifier).refreshWallet();
+    final available =
+        wallet?.available ?? ref.read(billingProvider).wallet?.available;
+    if (available == null) {
+      throw CadException(
+        'Nova3D could not confirm your credit balance. Refresh credits or open /subscription, then try again.',
+      );
+    }
+    if (available < required) {
+      throw CadException(_insufficientCreditsText(required, available));
+    }
+  }
+
+  Future<void> _refreshWalletForPaid(GenerationRequest request) async {
+    if (!request.modelOption.isPaidCredit) return;
+    await ref.read(billingProvider.notifier).refreshWallet();
+  }
+
+  String _insufficientCreditsText(int required, int available) =>
+      'This model needs $required credits, but you have $available available. Buy more credits at /subscription and try again.';
 
   Future<void> retry(String failedMessageId) async {
     if (_busy) return;

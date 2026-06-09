@@ -49,7 +49,7 @@ import {
   init as initScene, onResize, frameCameraToModel, toggleAutoRotate,
 } from '@nova/scene.js';
 import {
-  toggleWireframe, toggleXray, toggleBoundingBox, toggleNormals, setExposure,
+  toggleWireframe, toggleXray, toggleBoundingBox, toggleNormals, toggleCategoryColors, setExposure,
 } from '@nova/ui/displayPanel.js';
 import { setupFlyouts, setViewportMode, setupViewportMode, isFullUi } from '@nova/ui/flyouts.js';
 import { setupKeyboard } from '@nova/ui/keyboard.js';
@@ -129,6 +129,7 @@ function registerAllActions() {
   registerAction('display-xray',      () => toggleXray());
   registerAction('display-bbox',      () => toggleBoundingBox());
   registerAction('display-normals',   () => toggleNormals());
+  registerAction('display-category-colors', () => toggleCategoryColors());
   registerAction('exposure',          (el) => setExposure(el.value));
 
   registerAction('transform-reset',    () => resetTransform());

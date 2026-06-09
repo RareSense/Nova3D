@@ -29,3 +29,10 @@ final generationModelOptionsProvider =
       final keys = await ref.watch(apiKeyServiceProvider).loadValidKeys();
       return GenerationModelOption.forKeys(keys);
     });
+
+final byokGenerationModelOptionsProvider =
+    FutureProvider<List<GenerationModelOption>>((ref) async {
+      ref.watch(apiKeysProvider);
+      final keys = await ref.watch(apiKeyServiceProvider).loadValidKeys();
+      return GenerationModelOption.byokForKeys(keys);
+    });

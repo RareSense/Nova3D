@@ -108,16 +108,16 @@ function editModelOptionsFromStorage() {
   const options = [];
   if (storageBool('nova3d_api_key_valid_anthropic') && storageHasKey('anthropic')) {
     options.push(
-      { id: 'anthropic_claude_sonnet',       label: 'claude-sonnet-4-6', provider: 'Anthropic' },
-      { id: 'anthropic_claude_opus',         label: 'claude-opus-4-6',   provider: 'Anthropic' },
-      { id: 'anthropic_claude_opus_latest',  label: 'claude-opus-4-7',   provider: 'Anthropic' },
+      { id: 'anthropic_claude_sonnet',       label: 'Claude Sonnet 4.6 (Anthropic key)', provider: 'Anthropic' },
+      { id: 'anthropic_claude_opus',         label: 'Claude Opus 4.6 (Anthropic key)',   provider: 'Anthropic' },
+      { id: 'anthropic_claude_opus_latest',  label: 'Claude Opus 4.7 (Anthropic key)',   provider: 'Anthropic' },
     );
   }
   if (storageBool('nova3d_api_key_valid_openai') && storageHasKey('openai')) {
-    options.push({ id: 'openai_gpt55', label: 'gpt-5.5', provider: 'OpenAI' });
+    options.push({ id: 'openai_gpt55', label: 'GPT-5.5 (OpenAI key)', provider: 'OpenAI' });
   }
   if (storageBool('nova3d_api_key_valid_gemini') && storageHasKey('gemini')) {
-    options.push({ id: 'gemini_gemini', label: 'gemini-3.1-pro-preview', provider: 'Gemini' });
+    options.push({ id: 'gemini_gemini', label: 'Gemini 3.1 Pro Preview (Gemini key)', provider: 'Gemini' });
   }
   return options;
 }
@@ -186,7 +186,7 @@ export function renderEditModelSelector() {
     state.editModelOptions.forEach(option => {
       const opt = document.createElement('option');
       opt.value = option.id || '';
-      opt.textContent = option.provider ? `${option.label} · ${option.provider}` : option.label;
+      opt.textContent = option.label || option.provider || '';
       select.appendChild(opt);
     });
     const next = state.editModelOptions.some(option => option.id === previous)

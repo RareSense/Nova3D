@@ -31,7 +31,7 @@ export const state = {
   // ── Display ──────────────────────────────────────────────────────────────
   autoRotateEnabled: true,
   currentMode: 'orbit',                // 'orbit' | 'translate' | 'rotate' | 'scale'
-  displayState: { wireframe:false, flatShading:false, xray:false, boundingBox:false, normals:false },
+  displayState: { wireframe:false, flatShading:false, xray:false, boundingBox:false, normals:false, categoryColors:false },
   boxHelpers: [],
   normalHelpers: [],
 

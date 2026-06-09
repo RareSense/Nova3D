@@ -69,19 +69,26 @@ export function catMat(color, isGem) {
   return mat;
 }
 
-export function assignCategoryColors(model) {
+export function buildCategoryMaterialMap(model) {
   const sigToColor = new Map(); let nextIdx=0, total=0, gems=0;
+  const materials = new Map();
   model.traverse(child => {
     if (!child.isMesh || !child.geometry) return;
     total++;
-    if (gemRe.test(child.name||'')) { child.material = catMat(GEM_COLOR,true); gems++; return; }
+    if (gemRe.test(child.name||'')) { materials.set(child, catMat(GEM_COLOR,true)); gems++; return; }
     const sig = shapeFingerprint(child.geometry);
     let color;
     if (sigToColor.has(sig)) { color = sigToColor.get(sig); }
     else { color = PALETTE[nextIdx++ % PALETTE.length]; sigToColor.set(sig,color); }
-    child.material = catMat(color, false);
+    materials.set(child, catMat(color, false));
   });
-  return { totalMeshes:total, gemMeshes:gems, categories:sigToColor.size };
+  return { totalMeshes:total, gemMeshes:gems, categories:sigToColor.size, materials };
+}
+
+export function assignCategoryColors(model) {
+  const result = buildCategoryMaterialMap(model);
+  result.materials.forEach((material, mesh) => { mesh.material = material; });
+  return result;
 }
 
 // ── Highlight overlay material ───────────────────────────────────────────────

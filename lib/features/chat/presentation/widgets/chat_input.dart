@@ -10,6 +10,7 @@ import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/core/utils.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/shared/widgets/generation_model_label.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
 
 class ChatInput extends StatefulWidget {
@@ -132,7 +133,7 @@ class _ChatInputState extends State<ChatInput> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kInk, width: 1.5),
               boxShadow: const [
-                BoxShadow(color: kInk, offset: Offset(3, 3), blurRadius: 0)
+                BoxShadow(color: kInk, offset: Offset(3, 3), blurRadius: 0),
               ],
             ),
             child: Column(
@@ -166,8 +167,7 @@ class _ChatInputState extends State<ChatInput> {
                           maxLines: 6,
                           minLines: 1,
                           keyboardType: TextInputType.multiline,
-                          style: GoogleFonts.inter(
-                              color: kInk, fontSize: 14),
+                          style: GoogleFonts.inter(color: kInk, fontSize: 14),
                           decoration: InputDecoration(
                             hintText:
                                 'Describe the 3D model you want to create...',
@@ -179,7 +179,9 @@ class _ChatInputState extends State<ChatInput> {
                               vertical: 14,
                             ),
                             hintStyle: GoogleFonts.inter(
-                                color: kInkMuted, fontSize: 14),
+                              color: kInkMuted,
+                              fontSize: 14,
+                            ),
                             fillColor: Colors.transparent,
                             filled: false,
                           ),
@@ -235,33 +237,32 @@ class _SendButtonState extends State<_SendButton> {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTapDown:
-            widget.enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapUp:
-            widget.enabled ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel:
-            widget.enabled ? () => setState(() => _pressed = false) : null,
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          transform: Matrix4.translationValues(
-              _pressed ? 2 : 0, _pressed ? 2 : 0, 0),
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: widget.enabled ? kPink : kLineSoft,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: kInk, width: 1.5),
-            boxShadow: (_pressed || !widget.enabled)
-                ? []
-                : const [
-                    BoxShadow(
-                        color: kInk, offset: Offset(2, 2), blurRadius: 0)
-                  ],
-          ),
-          child: const Icon(Icons.send_rounded, size: 18, color: kInk),
-        ),
-      );
+    onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
+    onTapUp: widget.enabled ? (_) => setState(() => _pressed = false) : null,
+    onTapCancel: widget.enabled ? () => setState(() => _pressed = false) : null,
+    onTap: widget.onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 80),
+      transform: Matrix4.translationValues(
+        _pressed ? 2 : 0,
+        _pressed ? 2 : 0,
+        0,
+      ),
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: widget.enabled ? kPink : kLineSoft,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kInk, width: 1.5),
+        boxShadow: (_pressed || !widget.enabled)
+            ? []
+            : const [
+                BoxShadow(color: kInk, offset: Offset(2, 2), blurRadius: 0),
+              ],
+      ),
+      child: const Icon(Icons.send_rounded, size: 18, color: kInk),
+    ),
+  );
 }
 
 // ── Model dropdown ────────────────────────────────────────────────────────────
@@ -281,44 +282,49 @@ class _ChatModelDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 190,
-        height: 38,
-        child: DropdownButtonFormField<String>(
-          key: ValueKey(selected?.id ?? 'no-model'),
-          initialValue: selected?.id,
-          isExpanded: true,
-          dropdownColor: kLilacBg,
-          style: kSilkscreen(10, color: kInk),
-          icon: const Icon(Icons.keyboard_arrow_down,
-              size: 16, color: kInkSoft),
-          decoration: InputDecoration(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            filled: true,
-            fillColor: kLilacBg,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: kInk, width: 1.5),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: kInk, width: 1.5),
-            ),
-          ),
-          hint: Text('MODEL', style: kSilkscreen(10, color: kInkSoft)),
-          items: options
-              .map(
-                (o) => DropdownMenuItem<String>(
-                  value: o.id,
-                  child: Text(o.label,
-                      overflow: TextOverflow.ellipsis,
-                      style: kSilkscreen(10, color: kInk)),
-                ),
-              )
-              .toList(),
-          onChanged: disabled || options.isEmpty
-              ? null
-              : (id) =>
-                  onChanged(GenerationModelOption.findById(options, id)),
+    width: 248,
+    height: 38,
+    child: DropdownButtonFormField<String>(
+      key: ValueKey(selected?.id ?? 'no-model'),
+      initialValue: selected?.id,
+      isExpanded: true,
+      dropdownColor: kLilacBg,
+      menuMaxHeight: 360,
+      itemHeight: 58,
+      style: GoogleFonts.inter(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        color: kInk,
+      ),
+      icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: kInkSoft),
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        filled: true,
+        fillColor: kLilacBg,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: kInk, width: 1.5),
         ),
-      );
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: kInk, width: 1.5),
+        ),
+      ),
+      hint: Text('MODEL', style: kSilkscreen(10, color: kInkSoft)),
+      selectedItemBuilder: (context) => options
+          .map((o) => GenerationModelLabel(option: o, compact: true))
+          .toList(),
+      items: options
+          .map(
+            (o) => DropdownMenuItem<String>(
+              value: o.id,
+              child: GenerationModelLabel(option: o),
+            ),
+          )
+          .toList(),
+      onChanged: disabled || options.isEmpty
+          ? null
+          : (id) => onChanged(GenerationModelOption.findById(options, id)),
+    ),
+  );
 }

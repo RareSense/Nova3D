@@ -55,6 +55,9 @@ class CadService {
       final detail = data['detail'] ?? data['error'] ?? data['message'];
       if (detail != null) {
         final message = detail.toString();
+        if (e.response?.statusCode == 402) {
+          return _creditFailureMessage(message);
+        }
         if (e.response?.statusCode == 401) {
           return message.toLowerCase().contains('expired')
               ? 'Your session expired. Please sign in again.'
@@ -62,6 +65,9 @@ class CadService {
         }
         return message;
       }
+    }
+    if (e.response?.statusCode == 402) {
+      return _creditFailureMessage(null);
     }
     if (e.response?.statusCode == 401) {
       return 'GraphFlow rejected the current sign-in token. Please sign out and sign in again.';
@@ -75,13 +81,70 @@ class CadService {
     return 'Request failed (${e.response?.statusCode})';
   }
 
+  String _creditFailureMessage(String? detail) {
+    final text = detail ?? '';
+    final required = RegExp(
+      r'Required(?: authorization)?:\s*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(text)?.group(1);
+    final available = RegExp(
+      r'Available:\s*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(text)?.group(1);
+    if (required != null && available != null) {
+      return 'This model needs $required credits, but you have $available available. Buy more credits at /subscription and try again.';
+    }
+    return 'You do not have enough Nova3D credits for this model. Buy more credits at /subscription and try again.';
+  }
+
   Future<GenerationReadiness> checkReadiness() async {
     try {
+      return checkReadinessForWorkflow(kSketchTo3dWorkflow);
+    } on AuthException catch (e) {
+      throw CadException(e.message);
+    } on DioException catch (e) {
+      throw CadException(_errorMessage(e));
+    }
+  }
+
+  Future<GenerationReadiness> checkReadinessForWorkflow(
+    String workflowName,
+  ) async {
+    try {
       final resp = await _dio.get(
-        '/workflow/readiness/$kSketchTo3dWorkflow',
+        '/workflow/readiness/$workflowName',
         options: await _authOptions(),
       );
       return GenerationReadiness.fromJson(resp.data as Map<String, dynamic>);
+    } on AuthException catch (e) {
+      throw CadException(e.message);
+    } on DioException catch (e) {
+      throw CadException(_errorMessage(e));
+    }
+  }
+
+  Future<GenerationCreditEstimate> estimateGenerationCredits(
+    GenerationModelOption modelOption,
+  ) async {
+    if (!modelOption.isPaidCredit) {
+      return const GenerationCreditEstimate(
+        projectedMaxHold: 0,
+        authorizedBudget: 0,
+      );
+    }
+    try {
+      final resp = await _dio.post(
+        '/credits/estimate',
+        data: {
+          'workflow_name': modelOption.workflowName ?? kSketchTo3dPaidWorkflow,
+          'num_variations': 1,
+          'pricing_context': _paidPricingContext(modelOption),
+        },
+        options: await _authOptions(),
+      );
+      return GenerationCreditEstimate.fromJson(
+        resp.data as Map<String, dynamic>,
+      );
     } on AuthException catch (e) {
       throw CadException(e.message);
     } on DioException catch (e) {
@@ -94,37 +157,33 @@ class CadService {
     String? workflowId,
     String? conversationId,
   }) async {
-    final readiness = await checkReadiness();
+    final workflowName =
+        request.modelOption.workflowName ??
+        (request.modelOption.isPaidCredit
+            ? kSketchTo3dPaidWorkflow
+            : kSketchTo3dWorkflow);
+    final readiness = await checkReadinessForWorkflow(workflowName);
     if (!readiness.ready) throw CadException(readiness.userMessage);
     final requestedWorkflowId = workflowId ?? createWorkflowId();
 
     try {
-      final apiKey = await _apiKeyFor(request.modelOption);
       final response = await _dio.post(
-        '/run/state/$kSketchTo3dWorkflow',
+        '/run/state/$workflowName',
         queryParameters: {'request_id': requestedWorkflowId},
         data: {
-          'payload': {
-            'prompt': request.prompt.trim(),
-            'llm': request.modelOption.llm,
-            'provider': request.modelOption.payloadProvider,
-            // TODO(security): remove once backend retrieves keys server-side
-            // per user session instead of receiving them in the request body.
-            'api_key': apiKey,
-            'validate': false,
-            if (request.hasImage) ...{
-              // Send plain base64 so GraphFlow passes it through to the tool.
-              // data: URLs are normalized to CAS artifacts before tool execution.
-              'image_base64': request.imageBase64Payload,
-              'image_mime': request.imageMime,
-            },
-          },
-          'return_nodes': ['sketch_to_3d_generator'],
+          'payload': await _generationPayload(request),
+          'return_nodes': request.modelOption.isPaidCredit
+              ? [
+                  'final_validated_correction',
+                  'final_latest_valid',
+                  'fail_generation',
+                ]
+              : ['sketch_to_3d_generator'],
           if (conversationId != null)
             'conversation': _conversationLink(
               conversationId,
               relationType: 'initial_generation',
-              operation: kSketchTo3dWorkflow,
+              operation: workflowName,
             ),
         },
         options: await _authOptions(receiveTimeout: _startReceiveTimeout),
@@ -141,6 +200,46 @@ class CadService {
       throw CadException(_errorMessage(e));
     }
   }
+
+  Future<Map<String, dynamic>> _generationPayload(
+    GenerationRequest request,
+  ) async {
+    if (request.modelOption.isPaidCredit) {
+      return {
+        'prompt': request.prompt.trim(),
+        ..._paidPricingContext(request.modelOption),
+        // Paid generations intentionally omit provider API keys. The toolkit
+        // resolves provider credentials from the server environment.
+        if (request.hasImage) ...{
+          'has_reference_images': true,
+          'image_artifact': request.imageDataUrl,
+          'reference_image_artifact': request.imageDataUrl,
+        },
+      };
+    }
+
+    final apiKey = await _apiKeyFor(request.modelOption);
+    return {
+      'prompt': request.prompt.trim(),
+      'llm': request.modelOption.llm,
+      'provider': request.modelOption.payloadProvider,
+      // Existing BYOK behavior: provider keys are user-supplied and sent only
+      // on the BYOK workflow path.
+      'api_key': apiKey,
+      'validate': false,
+      if (request.hasImage) ...{
+        // Send plain base64 so GraphFlow passes it through to the legacy tool.
+        // data: URLs are normalized to CAS artifacts before tool execution.
+        'image_base64': request.imageBase64Payload,
+        'image_mime': request.imageMime,
+      },
+    };
+  }
+
+  Map<String, dynamic> _paidPricingContext(GenerationModelOption option) => {
+    'code_llm_profile': option.codeLlmProfile ?? 'nova3d_code_generation',
+    'code_llm_tier': option.codeLlmTier ?? option.llm,
+  };
 
   Future<String> startRegeneratePart({
     required Map<String, dynamic> codeArtifact,
@@ -306,10 +405,14 @@ class CadService {
   }
 
   Future<String> _apiKeyFor(GenerationModelOption option) async {
+    final keyProvider = option.keyProvider;
+    if (keyProvider == null) {
+      throw CadException('This model uses Nova3D credits, not provider keys.');
+    }
     final keys = await _apiKeys.loadValidKeys();
-    final apiKey = keys[option.keyProvider.id];
+    final apiKey = keys[keyProvider.id];
     if (apiKey == null || apiKey.isEmpty) {
-      throw CadException('Add a ${option.keyProvider.label} key in Settings.');
+      throw CadException('Add a ${keyProvider.label} key in Settings.');
     }
     return apiKey;
   }
