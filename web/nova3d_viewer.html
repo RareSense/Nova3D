@@ -21,8 +21,10 @@
   <!-- ── Viewport ── -->
   <div class="viewport" id="viewport">
     <div id="canvas-container"></div>
-    <button class="viewport-action" id="fullscreenToggle" type="button" title="Open full editor" aria-label="Open full editor"></button>
-    <button class="viewport-action preview-download-action" id="previewDownload" type="button" title="Download GLB" aria-label="Download GLB" data-action="download-glb">⬇</button>
+    <div class="preview-action-group">
+      <button class="viewport-action" id="fullscreenToggle" type="button" title="Open full editor" aria-label="Open full editor"></button>
+      <button class="viewport-action preview-download-action" id="previewDownload" type="button" title="Download GLB" aria-label="Download GLB" data-action="download-glb">⬇</button>
+    </div>
     <button class="viewport-action autorotate-btn" id="tbAutoRotate" data-action="autorotate-toggle" style="left:56px">⟳<span class="ar-tip">Auto-rotate</span></button>
 
     <!-- Top toolbar -->
