@@ -387,6 +387,27 @@
       if (nova3dCompactRAF) { cancelAnimationFrame(nova3dCompactRAF); nova3dCompactRAF = null; }
     }
 
+    // Shadow-DOM-aware iframe collector (Flutter renders platform views
+    // inside shadow roots).
+    function nova3dCollectIframes(root, out) {
+      if (!root) return out;
+      root.querySelectorAll && root.querySelectorAll('iframe').forEach(function (iframe) {
+        out.push(iframe);
+      });
+      root.querySelectorAll && root.querySelectorAll('*').forEach(function (el) {
+        if (el.shadowRoot) nova3dCollectIframes(el.shadowRoot, out);
+      });
+      return out;
+    }
+
+    function nova3dTeardownOverlay() {
+      nova3dStopCompactTracking();
+      var overlay = document.getElementById('nova3d-viewer-overlay');
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      nova3dFullscreenFrame = null;
+      document.body.style.overflow = nova3dPreviousBodyOverflow;
+    }
+
     // Keep the overlay aligned with the slot while in compact mode.
     // We use the SAVED rect (captured before the iframe was ever moved) as the
     // reliable source of truth, because Flutter hides the empty slot element
@@ -398,8 +419,18 @@
       function tick() {
         var ol = document.getElementById('nova3d-viewer-overlay');
         if (!ol) return;
-        var rect = null;
         var slot = frame.__nova3dSlot;
+        // Self-heal: if Flutter rebuilt the preview, the original slot node is
+        // detached and a replacement viewer iframe owns the card. The overlay
+        // copy is then obsolete — tear it down instead of floating at a stale
+        // rect on top of the new viewer.
+        if (slot && !slot.isConnected) {
+          var hasReplacement = nova3dCollectIframes(document, []).some(function (f) {
+            return f !== frame && f.isConnected && /nova3d_viewer\.html/.test(f.src || '');
+          });
+          if (hasReplacement) { nova3dTeardownOverlay(); return; }
+        }
+        var rect = null;
         if (slot) {
           var sr = slot.getBoundingClientRect();
           if (sr.width > 0 && sr.height > 0) {
@@ -574,17 +605,21 @@
       if (data.action === 'enter') {
         nova3dStopCompactTracking();
 
-        if (!frame.dataset.nova3dFullscreen) {
-          // ── First enter: snapshot the iframe's current viewport rect BEFORE
-          // moving it.  Flutter hides the empty slot after the iframe leaves,
-          // so getBoundingClientRect() on the slot returns 0×0.  We use this
-          // saved rect as the authoritative compact position.
-          var snapR = frame.getBoundingClientRect();
+        // ── Snapshot the compact rect on EVERY enter, BEFORE any move.
+        // First enter: the slot-attached iframe rect (Flutter hides the empty
+        // slot afterwards, so this is the last reliable measurement). Later
+        // enters: the tracked overlay rect — the best-known current card
+        // position. This way exit returns to where the card is NOW, not where
+        // it was on the very first maximize.
+        var snapR = frame.getBoundingClientRect();
+        if (snapR.width > 0 && snapR.height > 0) {
           frame.__nova3dCompactRect = {
             top: snapR.top, left: snapR.left,
             width: snapR.width, height: snapR.height,
           };
+        }
 
+        if (!frame.dataset.nova3dFullscreen) {
           frame.dataset.nova3dFullscreen = 'true';
           frame.__nova3dViewerId = String(data.viewerId || '');
           frame.__nova3dSlot = frame.parentNode;
