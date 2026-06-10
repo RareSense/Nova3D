@@ -132,7 +132,7 @@ export function init() {
   state.controls.enableDamping   = true;
   state.controls.dampingFactor   = 0.05;
   state.controls.autoRotate      = state.autoRotateEnabled;
-  state.controls.autoRotateSpeed = 1.0;
+  state.controls.autoRotateSpeed = 6.0;
   state.controls.target.set(0, 0, 0);
   state.controls.minDistance = 2;
   state.controls.maxDistance = 12;
@@ -156,10 +156,13 @@ export function init() {
   animate();
 }
 
-function animate() {
+let lastFrameTime = 0;
+function animate(now = 0) {
   requestAnimationFrame(animate);
+  const dt = lastFrameTime ? Math.min(0.05, (now - lastFrameTime) / 1000) : 1 / 60;
+  lastFrameTime = now;
   for (const fn of frameCallbacks) {
-    try { fn(); }
+    try { fn(dt, now); }
     catch (e) { console.warn('[nova3d] frame callback threw:', e); }
   }
   state.controls.update();

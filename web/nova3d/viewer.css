@@ -49,6 +49,14 @@ body.compact .mesh-panel {
   display:none !important;
 }
 body.compact .viewport-action { opacity:.85; }
+.preview-download-action {
+  left:56px;
+  display:none;
+  font-size:18px;
+  line-height:1;
+}
+.preview-download-action::before { display:none; }
+body.compact .preview-download-action { display:grid; }
 .autorotate-btn::before { display:none; }
 .autorotate-btn { font-size:18px; color:#f8fafc; opacity:.7; }
 .autorotate-btn.active { opacity:1; color:#60a5fa; }

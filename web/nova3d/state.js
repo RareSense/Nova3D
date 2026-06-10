@@ -31,9 +31,8 @@ export const state = {
   // ── Display ──────────────────────────────────────────────────────────────
   autoRotateEnabled: true,
   currentMode: 'orbit',                // 'orbit' | 'translate' | 'rotate' | 'scale'
-  displayState: { wireframe:false, flatShading:false, xray:false, boundingBox:false, normals:false, categoryColors:false },
+  displayState: { wireframe:false, flatShading:false, boundingBox:false, viewMode:'' },
   boxHelpers: [],
-  normalHelpers: [],
 
   // ── Sculpt ───────────────────────────────────────────────────────────────
   sculptMode: false,

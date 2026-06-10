@@ -102,7 +102,20 @@ class GenerationModelOption {
     for (final option in options) {
       if (option.id == id) return option;
     }
-    return options.isEmpty ? null : options.first;
+    return defaultFor(options);
+  }
+
+  static GenerationModelOption? defaultFor(
+    Iterable<GenerationModelOption> options,
+  ) {
+    GenerationModelOption? geminiByok;
+    GenerationModelOption? first;
+    for (final option in options) {
+      first ??= option;
+      if (option.id == 'credits_gemini_3_1_pro_google') return option;
+      if (option.id == 'gemini_gemini') geminiByok = option;
+    }
+    return geminiByok ?? first;
   }
 
   static const paidCreditOptions = [

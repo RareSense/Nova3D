@@ -1,6 +1,6 @@
-// Materials, render-profile, environment-map application, category color
-// system, metal/gem factories, and snapshot-serialization helpers for
-// materials. Reads `state.envMap` / `state.scene` / `state.modelGroup` so it
+// Materials, render-profile, environment-map application, metal/gem factories,
+// and snapshot-serialization helpers for materials. Reads `state.envMap` /
+// `state.scene` / `state.modelGroup` so it
 // can be loaded before scene init — fields are populated by the inline boot
 // script and PR 11 (scene.js).
 
@@ -8,20 +8,7 @@ import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { genNormalMap, genRoughnessMap } from '@nova/noise.js';
 
-// ── Category color system ────────────────────────────────────────────────────
-export const gemRe = /diamond|gem|stone|crystal|jewel|brill|ruby|emerald|sapphire|topaz|opal|garnet|amethyst|pearl|cz|cubic|solitaire|pave|prong_stone|accent_stone|center_stone|main_stone/i;
-export const GEM_COLOR = 0x4a90d9;
-export const PALETTE = [0x77dd77,0xef4444,0xf97316,0xeab308,0x84cc16,0x10b981,0x06b6d4,0x6366f1,0x8b5cf6,0xd946ef,0xec4899,0xf43f5e,0xb45309,0x166534,0x1e40af,0x6b21a8,0xfb923c,0xfbbf24,0x4ade80,0x22d3ee,0x60a5fa,0xa78bfa,0xf472b6,0xfca5a5,0x65a30d,0x0d9488,0x7c3aed,0xdb2777,0x9f1239,0x047857];
 export const DEFAULT_ENV_INTENSITY = 1.15;
-
-export function shapeFingerprint(geo) {
-  if (!geo.boundingBox) geo.computeBoundingBox();
-  const sz = new THREE.Vector3(); geo.boundingBox.getSize(sz);
-  const dims = [sz.x,sz.y,sz.z].sort((a,b)=>a-b).map(v=>v.toFixed(3));
-  const verts = geo.attributes.position ? geo.attributes.position.count : 0;
-  const idx   = geo.index ? geo.index.count : verts;
-  return `${verts}_${idx}_${dims.join('_')}`;
-}
 
 export function applyRenderProfileToMaterial(material) {
   const materials = Array.isArray(material) ? material : [material];
@@ -48,48 +35,6 @@ export function setEnvironmentMap(texture) {
   applyRenderProfileToObject(state.modelGroup);
 }
 
-export function vividCategoryColor(hex, isGem) {
-  const color = new THREE.Color(hex);
-  const hsl = {};
-  color.getHSL(hsl);
-  hsl.s = Math.min(1, hsl.s * 1.22 + 0.08);
-  hsl.l = Math.min(0.72, Math.max(isGem ? 0.58 : 0.52, hsl.l + 0.08));
-  return color.setHSL(hsl.h, hsl.s, hsl.l);
-}
-
-export function catMat(color, isGem) {
-  const vivid = vividCategoryColor(color, isGem);
-  const mat = new THREE.MeshStandardMaterial({
-    color:vivid, emissive:vivid.clone().multiplyScalar(isGem ? 0.12 : 0.08),
-    emissiveIntensity:isGem ? 0.45 : 0.35,
-    metalness:0, roughness:isGem?.5:.62, flatShading:true,
-    envMap: state.envMap, envMapIntensity:0.45, side:THREE.DoubleSide
-  });
-  applyRenderProfileToMaterial(mat);
-  return mat;
-}
-
-export function buildCategoryMaterialMap(model) {
-  const sigToColor = new Map(); let nextIdx=0, total=0, gems=0;
-  const materials = new Map();
-  model.traverse(child => {
-    if (!child.isMesh || !child.geometry) return;
-    total++;
-    if (gemRe.test(child.name||'')) { materials.set(child, catMat(GEM_COLOR,true)); gems++; return; }
-    const sig = shapeFingerprint(child.geometry);
-    let color;
-    if (sigToColor.has(sig)) { color = sigToColor.get(sig); }
-    else { color = PALETTE[nextIdx++ % PALETTE.length]; sigToColor.set(sig,color); }
-    materials.set(child, catMat(color, false));
-  });
-  return { totalMeshes:total, gemMeshes:gems, categories:sigToColor.size, materials };
-}
-
-export function assignCategoryColors(model) {
-  const result = buildCategoryMaterialMap(model);
-  result.materials.forEach((material, mesh) => { mesh.material = material; });
-  return result;
-}
 
 // ── Highlight overlay material ───────────────────────────────────────────────
 export const highlightMat = new THREE.MeshStandardMaterial({

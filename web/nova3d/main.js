@@ -49,11 +49,12 @@ import {
   init as initScene, onResize, frameCameraToModel, toggleAutoRotate,
 } from '@nova/scene.js';
 import {
-  toggleWireframe, toggleXray, toggleBoundingBox, toggleNormals, toggleCategoryColors, setExposure,
+  toggleWireframe, toggleXray, toggleBoundingBox, toggleNormals, toggleClay, setExposure,
 } from '@nova/ui/displayPanel.js';
 import { setupFlyouts, setViewportMode, setupViewportMode, isFullUi } from '@nova/ui/flyouts.js';
 import { setupKeyboard } from '@nova/ui/keyboard.js';
 import { setupSculpting } from '@nova/sculpt.js';
+import { setupExplodeControls, updateExplode } from '@nova/explode.js';
 import {
   setupEditBridge, renderEditModelSelector,
   requestRegeneratePart, requestAddPart, requestArticulation,
@@ -107,6 +108,7 @@ setSceneHooks({
 
 // Articulation's per-frame work runs as a scene frame callback.
 addFrameCallback(() => { tickJointDemo(); applyJointTransforms(); });
+addFrameCallback((dt) => updateExplode(dt));
 
 // State boot — anything that depends on DOM is deferred to DOMContentLoaded
 // below. Three.js objects are safe to construct at module load.
@@ -127,9 +129,9 @@ function registerAllActions() {
 
   registerAction('display-wireframe', () => toggleWireframe());
   registerAction('display-xray',      () => toggleXray());
+  registerAction('display-clay',      () => toggleClay());
   registerAction('display-bbox',      () => toggleBoundingBox());
   registerAction('display-normals',   () => toggleNormals());
-  registerAction('display-category-colors', () => toggleCategoryColors());
   registerAction('exposure',          (el) => setExposure(el.value));
 
   registerAction('transform-reset',    () => resetTransform());
@@ -169,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFlyouts();
   setupSculpting();
   setupViewportMode();
+  setupExplodeControls();
   setupEditBridge();
   syncHistoryUi();
   setupTransformPanel();

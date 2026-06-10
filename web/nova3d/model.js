@@ -14,7 +14,6 @@
  * @property {THREE.Mesh} mesh                     The live mesh in the scene.
  * @property {THREE.Material|THREE.Material[]} originalMaterial Active non-highlight material.
  * @property {THREE.Material|THREE.Material[]} sourceMaterial   Imported/user material.
- * @property {THREE.Material|THREE.Material[]} categoryMaterial Color-coded inspection material.
  * @property {string} name                         Display name (used by mesh list, AI edit selectors).
  * @property {THREE.BufferGeometry} geometry       A clone of the rest-state geometry (used by smooth/subdivide/decimate to derive next state).
  */
@@ -25,7 +24,6 @@ import { pushUndoSnapshot } from '@nova/history.js';
 import { saveEditorState } from '@nova/persistence.js';
 import { bindArticulatedJoints } from '@nova/articulation.js';
 import {
-  buildCategoryMaterialMap,
   applyRenderProfileToObject,
   highlightMat,
   makeDiamond,
@@ -33,6 +31,7 @@ import {
   GEM_PRESETS,
 } from '@nova/materials.js';
 import { syncHistoryUi } from '@nova/history.js';
+import { resetExplode } from '@nova/explode.js';
 
 // ── Cross-module callback hooks ──────────────────────────────────────────────
 let _refreshMeshUi      = () => {};
@@ -41,28 +40,19 @@ let _detachProxy        = () => {};
 let _frameCameraToModel = () => {};
 let _showDownloadError  = (msg) => console.error(msg);
 
-function activeMaterialSlot() {
-  return state.displayState.categoryColors ? 'categoryMaterial' : 'sourceMaterial';
-}
-
-function makeMeshEntry(mesh, material, name, geometry, categoryMaterial = null) {
+function makeMeshEntry(mesh, material, name, geometry) {
   const sourceMaterial = material;
-  const activeMaterial = state.displayState.categoryColors
-    ? (categoryMaterial || sourceMaterial)
-    : sourceMaterial;
-  mesh.material = activeMaterial;
   return {
     mesh,
-    originalMaterial: activeMaterial,
+    originalMaterial: sourceMaterial,
     sourceMaterial,
-    categoryMaterial: categoryMaterial || sourceMaterial,
     name,
     geometry,
   };
 }
 
 function setEntryMaterial(entry, material) {
-  entry[activeMaterialSlot()] = material;
+  entry.sourceMaterial = material;
   entry.originalMaterial = material;
   entry.mesh.material = material;
 }
@@ -78,7 +68,6 @@ function disposeMeshEntry(entry) {
     entry.mesh.material,
     entry.originalMaterial,
     entry.sourceMaterial,
-    entry.categoryMaterial,
   ]);
   materials.forEach(disposeMaterial);
 }
@@ -144,7 +133,6 @@ export function loadGLB(url, options = {}) {
       state.modelGroup.position.set(0,0,0); state.modelGroup.scale.setScalar(1); state.modelGroup.rotation.set(0,0,0);
       model.traverse(child => { if (child.isMesh && child.geometry) { child.castShadow = true; child.receiveShadow = true; } });
       applyRenderProfileToObject(model);
-      const categoryMaterials = buildCategoryMaterialMap(model).materials;
       state.modelGroup.add(model);
       model.traverse(child => {
         if (!child.isMesh || !child.geometry) return;
@@ -153,7 +141,6 @@ export function loadGLB(url, options = {}) {
           child.material,
           child.name || `Mesh_${state.loadedMeshes.length}`,
           child.geometry.clone(),
-          categoryMaterials.get(child),
         ));
       });
       _refreshMeshUi();
@@ -180,16 +167,15 @@ export function loadGLB(url, options = {}) {
 }
 
 export function clearModel() {
+  resetExplode();
   state.transformControls?.detach();
   state.loadedMeshes.forEach(disposeMeshEntry);
   state.loadedMeshes = []; state.selectedMeshIndices.clear();
   state.lastSelectionAction = null;
-  state.displayState.categoryColors = false;
-  document.getElementById('togCategoryColors')?.classList.remove('active-tool');
+  state.displayState.viewMode = '';
+  ['togXray', 'togNormals', 'togClay'].forEach(id => document.getElementById(id)?.classList.remove('active-tool'));
   while (state.modelGroup.children.length) state.modelGroup.remove(state.modelGroup.children[0]);
   state.boxHelpers.forEach(h => state.scene.remove(h));     state.boxHelpers = [];
-  state.normalHelpers.forEach(h => { h.parent ? h.parent.remove(h) : state.scene.remove(h); h.geometry?.dispose(); });
-  state.normalHelpers = [];
 }
 
 // ── GLB export ───────────────────────────────────────────────────────────────

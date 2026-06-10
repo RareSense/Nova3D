@@ -58,6 +58,10 @@ void main() {
           .map((option) => '${option.compactLabel}:${option.badgeLabel}'),
       orderedEquals(['GPT-5.5:Recommended', 'Gemini 3.1 Pro:Fastest']),
     );
+    expect(
+      GenerationModelOption.findById(options, null)?.id,
+      'credits_gemini_3_1_pro_google',
+    );
   });
 
   test('returns byok options only for edit workflows', () {
@@ -68,5 +72,6 @@ void main() {
     expect(options, hasLength(1));
     expect(options.single.id, 'gemini_gemini');
     expect(options.single.displayLabel, 'Gemini 3.1 Pro Preview (Gemini key)');
+    expect(GenerationModelOption.findById(options, null)?.id, 'gemini_gemini');
   });
 }

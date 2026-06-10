@@ -279,7 +279,6 @@ export function restoreSnapshot(snap, options = {}) {
         mesh,
         originalMaterial: mat,
         sourceMaterial: mat,
-        categoryMaterial: mat,
         name: mesh.name,
         geometry: geometry.clone(),
       });
@@ -289,7 +288,7 @@ export function restoreSnapshot(snap, options = {}) {
     nextMeshes.forEach(e => {
       e.geometry.dispose();
       e.mesh.geometry.dispose();
-      [e.mesh.material, e.originalMaterial, e.sourceMaterial, e.categoryMaterial].forEach(disposeMaterial);
+      [e.mesh.material, e.originalMaterial, e.sourceMaterial].forEach(disposeMaterial);
     });
     return false;
   }
@@ -297,12 +296,10 @@ export function restoreSnapshot(snap, options = {}) {
   _detachProxy();
   state.transformControls?.detach();
   state.boxHelpers.forEach(h => state.scene.remove(h));     state.boxHelpers = [];
-  state.normalHelpers.forEach(h => { h.parent ? h.parent.remove(h) : state.scene.remove(h); h.geometry?.dispose(); });
-  state.normalHelpers = [];
   state.loadedMeshes.forEach(e => {
     e.mesh.removeFromParent();
     e.mesh.geometry.dispose();
-    [e.mesh.material, e.originalMaterial, e.sourceMaterial, e.categoryMaterial].forEach(disposeMaterial);
+    [e.mesh.material, e.originalMaterial, e.sourceMaterial].forEach(disposeMaterial);
   });
   while (state.modelGroup.children.length) state.modelGroup.remove(state.modelGroup.children[0]);
   nextGroup.children.slice().forEach(mesh => state.modelGroup.add(mesh));

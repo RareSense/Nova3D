@@ -22,6 +22,7 @@
   <div class="viewport" id="viewport">
     <div id="canvas-container"></div>
     <button class="viewport-action" id="fullscreenToggle" type="button" title="Open full editor" aria-label="Open full editor"></button>
+    <button class="viewport-action preview-download-action" id="previewDownload" type="button" title="Download GLB" aria-label="Download GLB" data-action="download-glb">⬇</button>
     <button class="viewport-action autorotate-btn" id="tbAutoRotate" data-action="autorotate-toggle" style="left:56px">⟳<span class="ar-tip">Auto-rotate</span></button>
 
     <!-- Top toolbar -->
@@ -39,6 +40,7 @@
       <button class="et-btn" data-flyout="flyMesh"><span>⬡</span><span class="et-label">Mesh</span><div class="et-tip">Mesh</div></button>
       <button class="et-btn et-btn-soon" id="matSoonBtn" style="opacity:0.5"><span>◉</span><span class="et-label">Materials</span><div class="et-tip et-tip-soon">Will be back hotter 🔥</div></button>
       <button class="et-btn" data-flyout="flyDisplay"><span>👁</span><span class="et-label">Display</span><div class="et-tip">Display</div></button>
+      <button class="et-btn" id="tbExplode" type="button"><span>↔</span><span class="et-label">Explode</span><div class="et-tip">Explode model parts</div></button>
       <button class="et-btn" data-flyout="flyAiRemix"><span>✦</span><span class="et-label">Remix</span><div class="et-tip">Remix a part — reshape, refine, or totally reinvent selected geometry</div></button>
       <button class="et-btn" data-flyout="flyAiGrow"><span>✚</span><span class="et-label">Grow</span><div class="et-tip">Grow new parts — conjure fresh geometry right onto your model</div></button>
       <button class="et-btn" data-flyout="flyArticulate"><span>⚙</span><span class="et-label">Rig</span><div class="et-tip">Make articulated controls for the current model state</div></button>
@@ -137,9 +139,9 @@
       <h3>Display</h3>
       <button class="fo-btn" id="togWireframe" data-action="display-wireframe">Wireframe</button>
       <button class="fo-btn" id="togXray" data-action="display-xray">X-Ray</button>
-      <button class="fo-btn" id="togCategoryColors" data-action="display-category-colors">Color-coded Parts</button>
+      <button class="fo-btn" id="togClay" data-action="display-clay">Clay</button>
       <button class="fo-btn" id="togBBox" data-action="display-bbox">Bounding Box</button>
-      <button class="fo-btn" id="togNormals" data-action="display-normals">Show Normals</button>
+      <button class="fo-btn" id="togNormals" data-action="display-normals">Normals View</button>
       <div class="fo-sep"></div>
       <div class="fo-slider-row">
         <label>Exposure</label>

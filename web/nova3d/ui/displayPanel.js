@@ -1,13 +1,21 @@
-// Display-mode toggles (wireframe, x-ray, bounding box, normals) and exposure
-// slider. These mutate the loaded-mesh materials directly and rebuild scene
-// helpers (state.boxHelpers, state.normalHelpers) so they live next to the
-// scene module. The flat-shading toggle is currently unbound to any UI but
-// kept exported for symmetry.
+// Display-mode toggles (wireframe, x-ray, clay, normal-material view, bounding
+// box) and exposure slider. X-ray/clay/normals are mutually exclusive material
+// override modes, mirroring the sample preview UI while keeping selection and
+// editing on the existing mesh list contract.
 
 import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { pushUndoSnapshot } from '@nova/history.js';
-import { highlightMat } from '@nova/materials.js';
+import { applyRenderProfileToMaterial, highlightMat } from '@nova/materials.js';
+
+const xrayMaterial = new THREE.MeshStandardMaterial({
+  color:0x00ffff, transparent:true, opacity:0.18, depthWrite:false, side:THREE.DoubleSide
+});
+const normalViewMaterial = new THREE.MeshNormalMaterial({ side:THREE.DoubleSide });
+const clayMaterial = new THREE.MeshStandardMaterial({
+  color:0xc8b49a, metalness:0, roughness:0.92, flatShading:false, side:THREE.DoubleSide
+});
+applyRenderProfileToMaterial(clayMaterial);
 
 function selectedOrAll() {
   return state.selectedMeshIndices.size
@@ -25,18 +33,20 @@ function syncDisplayFlags(material) {
   eachMaterial(material, mat => {
     mat.wireframe = state.displayState.wireframe;
     mat.flatShading = state.displayState.flatShading;
-    mat.transparent = state.displayState.xray;
-    mat.opacity = state.displayState.xray ? .3 : 1;
-    mat.depthWrite = !state.displayState.xray;
     mat.needsUpdate = true;
   });
 }
 
+function materialForDisplay(entry) {
+  if (state.displayState.viewMode === 'xray') return xrayMaterial;
+  if (state.displayState.viewMode === 'normals') return normalViewMaterial;
+  if (state.displayState.viewMode === 'clay') return clayMaterial;
+  return entry.sourceMaterial || entry.originalMaterial;
+}
+
 export function applyMaterialDisplayMode() {
   state.loadedMeshes.forEach((entry, idx) => {
-    const material = state.displayState.categoryColors
-      ? (entry.categoryMaterial || entry.originalMaterial)
-      : (entry.sourceMaterial || entry.originalMaterial);
+    const material = materialForDisplay(entry);
     entry.originalMaterial = material;
     syncDisplayFlags(material);
     if (!state.selectedMeshIndices.has(idx) && entry.mesh.material !== highlightMat) {
@@ -45,21 +55,23 @@ export function applyMaterialDisplayMode() {
   });
 }
 
-export function toggleCategoryColors() {
-  state.displayState.categoryColors = !state.displayState.categoryColors;
+function updateViewModeButtons() {
+  document.getElementById('togXray')?.classList.toggle('active-tool', state.displayState.viewMode === 'xray');
+  document.getElementById('togNormals')?.classList.toggle('active-tool', state.displayState.viewMode === 'normals');
+  document.getElementById('togClay')?.classList.toggle('active-tool', state.displayState.viewMode === 'clay');
+}
+
+function setViewMode(mode) {
+  pushUndoSnapshot(mode || 'display-original');
+  state.displayState.viewMode = state.displayState.viewMode === mode ? '' : mode;
   applyMaterialDisplayMode();
-  document.getElementById('togCategoryColors')?.classList.toggle('active-tool', state.displayState.categoryColors);
+  updateViewModeButtons();
 }
 
 export function toggleWireframe() {
   pushUndoSnapshot('wireframe');
   state.displayState.wireframe = !state.displayState.wireframe;
-  selectedOrAll().forEach(i => {
-    eachMaterial(state.loadedMeshes[i].originalMaterial, mat => {
-      mat.wireframe = state.displayState.wireframe;
-      mat.needsUpdate = true;
-    });
-  });
+  applyMaterialDisplayMode();
   document.getElementById('togWireframe').classList.toggle('active-tool', state.displayState.wireframe);
 }
 
@@ -76,17 +88,11 @@ export function toggleFlatShading() {
 }
 
 export function toggleXray() {
-  pushUndoSnapshot('xray');
-  state.displayState.xray = !state.displayState.xray;
-  selectedOrAll().forEach(i => {
-    eachMaterial(state.loadedMeshes[i].originalMaterial, mat => {
-      mat.transparent = state.displayState.xray;
-      mat.opacity     = state.displayState.xray ? .3 : 1;
-      mat.depthWrite  = !state.displayState.xray;
-      mat.needsUpdate = true;
-    });
-  });
-  document.getElementById('togXray').classList.toggle('active-tool', state.displayState.xray);
+  setViewMode('xray');
+}
+
+export function toggleClay() {
+  setViewMode('clay');
 }
 
 export function toggleBoundingBox() {
@@ -102,26 +108,7 @@ export function toggleBoundingBox() {
 }
 
 export function toggleNormals() {
-  state.displayState.normals = !state.displayState.normals;
-  state.normalHelpers.forEach(h => { h.parent ? h.parent.remove(h) : state.scene.remove(h); h.geometry?.dispose(); });
-  state.normalHelpers = [];
-  if (state.displayState.normals) {
-    selectedOrAll().forEach(i => {
-      const mesh = state.loadedMeshes[i].mesh, pos = mesh.geometry.attributes.position, nrm = mesh.geometry.attributes.normal;
-      if (!nrm) return;
-      const pts = [], step = Math.max(1, Math.floor(pos.count / 500));
-      for (let v=0; v<pos.count; v+=step) {
-        const p = new THREE.Vector3(pos.getX(v), pos.getY(v), pos.getZ(v));
-        const n = new THREE.Vector3(nrm.getX(v), nrm.getY(v), nrm.getZ(v)).multiplyScalar(.05);
-        pts.push(p, p.clone().add(n));
-      }
-      const lg = new THREE.BufferGeometry().setFromPoints(pts);
-      const lm = new THREE.LineBasicMaterial({ color: 0x00ff88 });
-      const lines = new THREE.LineSegments(lg, lm);
-      mesh.add(lines); state.normalHelpers.push(lines);
-    });
-  }
-  document.getElementById('togNormals').classList.toggle('active-tool', state.displayState.normals);
+  setViewMode('normals');
 }
 
 export function setExposure(val) {
