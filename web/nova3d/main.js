@@ -27,7 +27,7 @@ import {
 } from '@nova/history.js';
 import {
   saveEditorState, flushEditorState, restoreEditorState,
-  setPersistenceSceneRefreshers,
+  setPersistenceSceneRefreshers, setPersistenceModelLoader,
 } from '@nova/persistence.js';
 import {
   setModelHooks, updateMeshStats,
@@ -90,6 +90,7 @@ setPersistenceSceneRefreshers({
   onResize:      () => onResize(),
   reframeCamera: (group) => frameCameraToModel(group),
 });
+setPersistenceModelLoader((url, options) => loadGLB(url, options));
 setModelHooks({
   refreshMeshUi:      () => { updateMeshList(); updateMeshStats(); },
   refreshHighlights:  () => updateHighlights(),
