@@ -122,7 +122,9 @@ export function loadGLB(url, options = {}) {
     url,
     gltf => {
       clearModel();
-      state.currentModelUrl = url;
+      // canonicalUrl: when loading from a local blob: cache, persist the real
+      // backend artifact URL instead of the ephemeral object URL.
+      state.currentModelUrl = options.canonicalUrl || url;
       if (options.sourceModelUrl) state.currentSourceModelUrl = options.sourceModelUrl;
       const model = gltf.scene;
       const box  = new THREE.Box3().setFromObject(model);
