@@ -22,9 +22,7 @@ class MessageLocalSource {
           .map(MessageModel.fromLocalJson)
           .toList();
     } catch (e, st) {
-      debugPrint(
-        '[MessageLocalSource] load($conversationId) failed: $e\n$st',
-      );
+      debugPrint('[MessageLocalSource] load($conversationId) failed: $e\n$st');
       throw AppError(
         'Failed to load messages from storage.',
         kind: AppErrorKind.persistence,
@@ -33,10 +31,7 @@ class MessageLocalSource {
     }
   }
 
-  Future<void> save(
-    String conversationId,
-    List<MessageModel> messages,
-  ) async {
+  Future<void> save(String conversationId, List<MessageModel> messages) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -44,9 +39,7 @@ class MessageLocalSource {
         json.encode(messages.map((m) => m.toLocalJson()).toList()),
       );
     } catch (e, st) {
-      debugPrint(
-        '[MessageLocalSource] save($conversationId) failed: $e\n$st',
-      );
+      debugPrint('[MessageLocalSource] save($conversationId) failed: $e\n$st');
       throw AppError(
         'Failed to persist messages.',
         kind: AppErrorKind.persistence,

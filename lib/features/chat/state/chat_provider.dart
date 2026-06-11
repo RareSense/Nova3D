@@ -14,6 +14,7 @@ import 'package:nova3d_frontend/features/chat/data/message_local_source.dart';
 import 'package:nova3d_frontend/features/chat/data/message_repository.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/user_model.dart';
+import 'package:nova3d_frontend/shared/models/user_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 
@@ -81,13 +82,6 @@ class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
       final synced = await ref
           .read(conversationRepositoryProvider)
           .syncLatest();
-      // Guard against a user switch that completed while the fetch was in
-      // flight — don't overwrite the new user's state with stale data.
-      if (ref.read(authProvider).valueOrNull?.id != userId) return;
-      // Pre-seed local message cache from the snapshot data already embedded
-      // in each conversation so that opening one is instant without an extra
-      // API call. Fire-and-forget; non-fatal if it fails.
-      unawaited(ref.read(messageLocalSourceProvider).seedFromSnapshots(synced));
       state = AsyncValue.data(synced);
     } catch (_) {
       // Local cache remains authoritative for rendering when remote history

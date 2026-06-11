@@ -668,30 +668,18 @@
       }
 
       if (data.action === 'exit') {
-        // ── Compact mode: shrink the overlay to the saved compact rect.
-        // The iframe is NEVER moved back into Flutter's DOM.
-        frame.dataset.nova3dFullscreenState = 'compact';
-        document.body.style.overflow = nova3dPreviousBodyOverflow;
-
-        // Resize the overlay synchronously so that when the viewer's
-        // setViewportMode(false) runs onResize() it measures the compact size.
-        nova3dApplyCompactOverlay(frame);
-
-        // Continue tracking in case the slot rect becomes available (Flutter
-        // scroll updates) — falls back to saved rect when slot is 0×0.
-        nova3dStartCompactTracking(frame);
-
-        // Send the compact notification.  postMessage is async, so by the
-        // time the viewer processes it the overlay already has compact size.
-        try {
-          frame.contentWindow.postMessage(
-            { type: 'nova3d-viewer-fullscreen-state', full: false }, '*');
-        } catch(_) {}
+        // Full teardown — overlay + iframe are removed from the DOM. Flutter
+        // (glb_viewer_web.dart) listens for the dispatched 'nova3d-viewer-
+        // disposed' message and rebuilds the iframe inside the chat preview
+        // slot. Edit history and camera survive the remount via the
+        // IndexedDB-backed viewerStateKey, matching the reload semantics of
+        // the chat preview's MODEL/CODE tab switch.
+        fullyTeardownNova3dFullscreen(frame);
       }
     });
 
-    // Full teardown — called only by the ESC key or page unload, not by the
-    // normal minimize button.  The iframe is discarded along with the overlay.
+    // Full teardown — called by the minimize button, the ESC key, and page
+    // unload. The iframe is discarded along with the overlay.
     function exitNova3dViewerFullscreen(frame) {
       if (!frame || !frame.dataset.nova3dFullscreen) return;
       nova3dStopCompactTracking();
@@ -704,18 +692,25 @@
       if (nova3dFullscreenFrame === frame) nova3dFullscreenFrame = null;
     }
 
+    // Tear the overlay down and notify any host (Flutter's GlbViewer) that
+    // wants to rebuild its embedded iframe afterwards. Shared by the viewer's
+    // minimize button (action='exit' postMessage) and the ESC keydown.
+    function fullyTeardownNova3dFullscreen(frame) {
+      if (!frame) return;
+      var viewerId = String(frame.__nova3dViewerId || '');
+      exitNova3dViewerFullscreen(frame);
+      try {
+        window.postMessage({
+          type: 'nova3d-viewer-disposed',
+          viewerId: viewerId
+        }, '*');
+      } catch (_) {}
+    }
+
     window.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape' || !nova3dFullscreenFrame) return;
       if (nova3dFullscreenFrame.dataset.nova3dFullscreenState !== 'full') return;
-      var frame = nova3dFullscreenFrame;
-      frame.dataset.nova3dFullscreenState = 'compact';
-      document.body.style.overflow = nova3dPreviousBodyOverflow;
-      nova3dApplyCompactOverlay(frame);
-      nova3dStartCompactTracking(frame);
-      try {
-        frame.contentWindow.postMessage(
-          { type: 'nova3d-viewer-fullscreen-state', full: false }, '*');
-      } catch(_) {}
+      fullyTeardownNova3dFullscreen(nova3dFullscreenFrame);
     });
   </script>
   <script>

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
@@ -72,19 +73,38 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
 class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   static int _counter = 0;
 
-  late final String _viewType;
-  late final String _viewerId;
-  late final web.HTMLIFrameElement _iframe;
+  // These are reassigned by [_provisionViewer] when the host (web/index.html)
+  // tears the iframe down on fullscreen exit and we rebuild it in place.
+  late String _viewType;
+  late String _viewerId;
+  late web.HTMLIFrameElement _iframe;
+  int _instanceGen = 0;
 
   String? _resolvedSrc;
   String? _loadedSourceModelUrl;
   bool _loadError = false;
 
+  StreamSubscription<web.MessageEvent>? _windowMessageSub;
+
   @override
   void initState() {
     super.initState();
+    _provisionViewer();
+    // Listen for the disposal message dispatched by web/index.html when the
+    // fullscreen overlay is torn down (either via the viewer's minimize
+    // button or the ESC key). When the disposed viewer is ours, we rebuild
+    // the iframe so the chat-preview slot gets a fresh viewer — matching the
+    // remount semantics of toggling between the MODEL and CODE tabs.
+    _windowMessageSub = web.window.onMessage.listen(_onWindowMessage);
+  }
+
+  // Builds a fresh iframe, viewType, and viewerId, and re-registers both the
+  // platform-view factory and the AI edit handler. Called once from initState
+  // and again from [_rebuildAfterDisposal] when the host has torn the iframe
+  // out from under us.
+  void _provisionViewer() {
     _viewerId = 'nova3d-viewer-${++_counter}';
-    _viewType = _viewerId;
+    _viewType = '$_viewerId-g$_instanceGen';
     _iframe = web.HTMLIFrameElement()
       ..style.width = '100%'
       ..style.height = '100%'
@@ -101,6 +121,29 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
 
     _resolveAndLoad(widget.src);
     _registerEditHandler(_viewerId.toJS, _handleEditRequest.toJS);
+  }
+
+  void _onWindowMessage(web.MessageEvent event) {
+    final raw = event.data?.dartify();
+    if (raw is! Map) return;
+    if (raw['type'] != 'nova3d-viewer-disposed') return;
+    if (raw['viewerId'] != _viewerId) return;
+    _rebuildAfterDisposal();
+  }
+
+  // The host has already removed our iframe from the DOM. Release any blob
+  // URL we held, tear down the now-stale edit-handler registration, then
+  // provision a fresh viewer and trigger a rebuild so HtmlElementView mounts
+  // the new viewType.
+  void _rebuildAfterDisposal() {
+    if (!mounted) return;
+    _unregisterEditHandler(_viewerId.toJS);
+    GlbAssetCache.revoke(_resolvedSrc ?? '');
+    _resolvedSrc = null;
+    _loadedSourceModelUrl = null;
+    _loadError = false;
+    _instanceGen++;
+    setState(_provisionViewer);
   }
 
   @override
@@ -136,6 +179,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
 
   @override
   void dispose() {
+    _windowMessageSub?.cancel();
+    _windowMessageSub = null;
     _unregisterEditHandler(_viewerId.toJS);
     GlbAssetCache.revoke(_resolvedSrc ?? '');
     super.dispose();
@@ -692,7 +737,11 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
                 ],
               ),
             )
-          : HtmlElementView(viewType: _viewType),
+          // Key is bound to _viewType so that after _rebuildAfterDisposal
+          // bumps _instanceGen, Flutter unmounts the stale platform view
+          // (whose iframe was already removed by the host) and remounts a
+          // fresh one rather than reusing the existing element in place.
+          : HtmlElementView(key: ValueKey(_viewType), viewType: _viewType),
     );
   }
 }
