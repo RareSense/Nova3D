@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 
@@ -8,8 +9,12 @@ void main() {
       AiProvider.gemini.id: 'gemini-key',
       AiProvider.anthropic.id: 'anthropic-key',
       AiProvider.openai.id: 'openai-key',
+      AiProvider.openrouter.id: 'openrouter-key',
       'legacy_provider': 'legacy-key',
     });
+    final byok = options
+        .where((option) => option.requiresProviderKey)
+        .toList(growable: false);
 
     expect(options, isNotEmpty);
     expect(
@@ -32,26 +37,34 @@ void main() {
       unorderedEquals([
         'anthropic',
         'anthropic',
-        'anthropic',
         'openai',
+        'openrouter',
+        'openrouter',
+        'openrouter',
+        'openrouter',
         'gemini',
       ]),
     );
     expect(
       {
-        for (final option in options.where(
-          (option) => option.requiresProviderKey,
-        ))
-          option.llm: option.label,
+        for (final option in byok)
+          option.id: '${option.llm}:${option.codeLlmTier}',
       },
       equals({
-        'claude-sonnet': 'Claude Sonnet 4.6',
-        'claude-opus': 'Claude Opus 4.6',
-        'claude-opus-latest': 'Claude Opus 4.7',
-        'gpt55': 'GPT-5.5',
-        'gemini': 'Gemini 3.1 Pro Preview',
+        'anthropic_claude_sonnet': 'claude-sonnet:claude_sonnet_4_6_anthropic',
+        'anthropic_claude_opus_4_8': 'claude-opus:claude_opus_4_8_anthropic',
+        'openai_gpt55': 'gpt55:gpt_5_5_openai',
+        'openrouter_gpt55': 'gpt55:gpt_5_5_openrouter',
+        'openrouter_gemini': 'gemini:gemini_3_1_pro_openrouter',
+        'openrouter_claude_sonnet':
+            'claude-sonnet:claude_sonnet_4_6_openrouter',
+        'openrouter_claude_opus': 'claude-opus:claude_opus_4_8_openrouter',
+        'gemini_gemini': 'gemini:gemini_3_1_pro_google',
       }),
     );
+    expect(byok.map((option) => option.workflowName).toSet(), {
+      kSketchTo3dByokWorkflow,
+    });
     expect(
       GenerationModelOption.paidCreditOptions
           .where((option) => option.badgeLabel != null)
@@ -64,7 +77,7 @@ void main() {
     );
   });
 
-  test('returns byok options only for edit workflows', () {
+  test('returns byok options for available provider keys', () {
     final options = GenerationModelOption.byokForKeys({
       AiProvider.gemini.id: 'gemini-key',
     });

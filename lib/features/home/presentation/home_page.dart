@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,12 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
-import 'package:nova3d_frontend/core/utils.dart';
 import 'package:nova3d_frontend/features/api_keys/state/api_key_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
+import 'package:nova3d_frontend/features/cad/models/generation_image.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
+import 'package:nova3d_frontend/features/cad/utils/generation_prompt_limits.dart';
+import 'package:nova3d_frontend/features/cad/utils/reference_image_processor.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 import 'package:nova3d_frontend/features/home/presentation/widgets/suggestion_pills.dart';
@@ -36,8 +36,7 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   final _ctrl = TextEditingController();
   bool _creating = false;
-  String? _imageDataUrl;
-  String? _imageName;
+  final List<GenerationImage> _images = [];
   String? _selectedModelId;
 
   @override
@@ -46,36 +45,51 @@ class _HomePageState extends ConsumerState<HomePage> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
+    final remainingSlots = kMaxReferenceImageCount - _images.length;
+    if (remainingSlots <= 0) {
+      _showInlineMessage(
+        'You can attach up to $kMaxReferenceImageCount images.',
+      );
+      return;
+    }
     final result = await FilePicker.pickFiles(
       type: FileType.image,
       withData: true,
+      allowMultiple: true,
     );
-    final file = result?.files.single;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
-    if (bytes.length > kMaxReferenceImageBytes) {
-      _showInlineMessage('Images must be 8 MB or smaller.');
-      return;
+    final files = result?.files ?? const <PlatformFile>[];
+    if (files.isEmpty) return;
+    try {
+      final processed = await processReferenceImageFiles(
+        files,
+        remainingSlots: remainingSlots,
+      );
+      if (!mounted || processed.isEmpty) return;
+      setState(() => _images.addAll(processed));
+      if (files.length > remainingSlots) {
+        _showInlineMessage(
+          'Only the first $remainingSlots selected image(s) were attached.',
+        );
+      }
+    } on ReferenceImageProcessingException catch (e) {
+      _showInlineMessage(e.message);
     }
-
-    final extension = (file.extension ?? 'png').toLowerCase();
-    setState(() {
-      _imageName = file.name;
-      _imageDataUrl =
-          'data:${mimeTypeForExtension(extension)};base64,${base64Encode(bytes)}';
-    });
   }
 
-  void _clearImage() {
-    setState(() {
-      _imageName = null;
-      _imageDataUrl = null;
-    });
+  void _clearImage(int index) {
+    if (index < 0 || index >= _images.length) return;
+    setState(() => _images.removeAt(index));
   }
 
   Future<void> _startConversation(String text) async {
     if (_creating) return;
+    if (!isGenerationPromptWithinWordLimit(text)) {
+      _showInlineMessage(
+        'Prompt must be $kMaxGenerationPromptWords words or fewer.',
+      );
+      return;
+    }
     final keys = await ref.read(apiKeyServiceProvider).loadValidKeys();
     final options = GenerationModelOption.forKeys(keys);
     final modelOption = GenerationModelOption.findById(
@@ -90,17 +104,19 @@ class _HomePageState extends ConsumerState<HomePage> {
     final request = GenerationRequest(
       prompt: text.trim(),
       modelOption: modelOption,
-      imageDataUrl: _imageDataUrl,
-      imageName: _imageName,
+      images: List.unmodifiable(_images),
     );
     if (!request.hasText && !request.hasImage) return;
 
     setState(() => _creating = true);
     try {
       final cad = ref.read(cadServiceProvider);
-      final readiness = await cad.checkReadinessForWorkflow(
-        modelOption.workflowName ?? kSketchTo3dWorkflow,
-      );
+      final workflowName =
+          modelOption.workflowName ??
+          (modelOption.isPaidCredit
+              ? kSketchTo3dPaidWorkflow
+              : kSketchTo3dByokWorkflow);
+      final readiness = await cad.checkReadinessForWorkflow(workflowName);
       if (!readiness.ready) {
         _showInlineMessage(readiness.userMessage);
         return;
@@ -171,7 +187,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         ),
         title: Text('Add a provider key', style: kVt323(28, color: kInk)),
         content: Text(
-          'Add and validate at least one Gemini, Anthropic, or OpenAI key in Settings before generating. Make sure the provider account has at least \$10 in available credit.',
+          'Add and validate at least one OpenRouter, OpenAI, Anthropic, or Gemini key in Settings before generating. Make sure the provider account has enough balance available.',
           style: GoogleFonts.inter(color: kInkSoft, fontSize: 14),
         ),
         actions: [
@@ -268,11 +284,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               _PromptCard(
                 ctrl: _ctrl,
                 creating: _creating,
-                imageName: _imageName,
+                images: _images,
                 modelOptions: modelOptions,
                 selectedModelId: _selectedModelId,
                 readiness: readiness,
-                onPickImage: _pickImage,
+                onPickImage: _pickImages,
                 onClearImage: _clearImage,
                 onModelChanged: (id) => setState(() => _selectedModelId = id),
                 onModelSynced: (id) =>
@@ -318,7 +334,7 @@ class _PromptCard extends StatelessWidget {
   const _PromptCard({
     required this.ctrl,
     required this.creating,
-    required this.imageName,
+    required this.images,
     required this.modelOptions,
     required this.selectedModelId,
     required this.readiness,
@@ -331,12 +347,12 @@ class _PromptCard extends StatelessWidget {
 
   final TextEditingController ctrl;
   final bool creating;
-  final String? imageName;
+  final List<GenerationImage> images;
   final AsyncValue<List<GenerationModelOption>> modelOptions;
   final String? selectedModelId;
   final AsyncValue<dynamic> readiness;
   final VoidCallback onPickImage;
-  final VoidCallback onClearImage;
+  final ValueChanged<int> onClearImage;
   final ValueChanged<String?> onModelChanged;
   final ValueChanged<String> onModelSynced;
   final VoidCallback onGenerate;
@@ -383,6 +399,7 @@ class _PromptCard extends StatelessWidget {
               children: [
                 TextField(
                   controller: ctrl,
+                  inputFormatters: const [GenerationPromptWordLimitFormatter()],
                   maxLines: 4,
                   minLines: 2,
                   style: GoogleFonts.inter(
@@ -441,9 +458,7 @@ class _PromptCard extends StatelessWidget {
                     );
 
                     final uploadBtn = _SmallButton(
-                      label: imageName == null
-                          ? 'Upload image'
-                          : 'Change image',
+                      label: images.isEmpty ? 'Upload images' : 'Add images',
                       onTap: creating ? null : onPickImage,
                     );
 
@@ -462,10 +477,10 @@ class _PromptCard extends StatelessWidget {
                           uploadBtn,
                           const SizedBox(height: 8),
                           modelWidget,
-                          if (imageName != null) ...[
+                          if (images.isNotEmpty) ...[
                             const SizedBox(height: 8),
-                            ImageAttachmentChip(
-                              name: imageName!,
+                            _ImageAttachmentWrap(
+                              images: images,
                               onClear: onClearImage,
                             ),
                           ],
@@ -481,10 +496,10 @@ class _PromptCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         modelWidget,
                         const SizedBox(width: 8),
-                        if (imageName != null)
+                        if (images.isNotEmpty)
                           Expanded(
-                            child: ImageAttachmentChip(
-                              name: imageName!,
+                            child: _ImageAttachmentWrap(
+                              images: images,
                               onClear: onClearImage,
                             ),
                           )
@@ -503,6 +518,26 @@ class _PromptCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ImageAttachmentWrap extends StatelessWidget {
+  const _ImageAttachmentWrap({required this.images, required this.onClear});
+
+  final List<GenerationImage> images;
+  final ValueChanged<int> onClear;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final entry in images.asMap().entries)
+        ImageAttachmentChip(
+          name: entry.value.name,
+          onClear: () => onClear(entry.key),
+        ),
+    ],
+  );
 }
 
 // ── Small chunky button ────────────────────────────────────────────────────────

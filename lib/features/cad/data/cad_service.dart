@@ -99,7 +99,7 @@ class CadService {
 
   Future<GenerationReadiness> checkReadiness() async {
     try {
-      return checkReadinessForWorkflow(kSketchTo3dWorkflow);
+      return checkReadinessForWorkflow(kSketchTo3dPaidWorkflow);
     } on AuthException catch (e) {
       throw CadException(e.message);
     } on DioException catch (e) {
@@ -157,11 +157,7 @@ class CadService {
     String? workflowId,
     String? conversationId,
   }) async {
-    final workflowName =
-        request.modelOption.workflowName ??
-        (request.modelOption.isPaidCredit
-            ? kSketchTo3dPaidWorkflow
-            : kSketchTo3dWorkflow);
+    final workflowName = _initialGenerationWorkflow(request.modelOption);
     final readiness = await checkReadinessForWorkflow(workflowName);
     if (!readiness.ready) throw CadException(readiness.userMessage);
     final requestedWorkflowId = workflowId ?? createWorkflowId();
@@ -171,14 +167,8 @@ class CadService {
         '/run/state/$workflowName',
         queryParameters: {'request_id': requestedWorkflowId},
         data: {
-          'payload': await _generationPayload(request),
-          'return_nodes': request.modelOption.isPaidCredit
-              ? [
-                  'final_validated_correction',
-                  'final_latest_valid',
-                  'fail_generation',
-                ]
-              : ['sketch_to_3d_generator'],
+          'payload': await _generationPayload(request, workflowName),
+          'return_nodes': _generationReturnNodes(workflowName),
           if (conversationId != null)
             'conversation': _conversationLink(
               conversationId,
@@ -201,8 +191,29 @@ class CadService {
     }
   }
 
+  String _initialGenerationWorkflow(GenerationModelOption option) =>
+      option.workflowName ??
+      (option.isPaidCredit ? kSketchTo3dPaidWorkflow : kSketchTo3dByokWorkflow);
+
+  List<String> _generationReturnNodes(String workflowName) {
+    if (workflowName == kSketchTo3dByokWorkflow) {
+      return [
+        'final_validated_correction',
+        'final_latest_valid',
+        'fail_generation',
+        'require_byok_api_key',
+      ];
+    }
+    return [
+      'final_validated_correction',
+      'final_latest_valid',
+      'fail_generation',
+    ];
+  }
+
   Future<Map<String, dynamic>> _generationPayload(
     GenerationRequest request,
+    String workflowName,
   ) async {
     if (request.modelOption.isPaidCredit) {
       return {
@@ -212,26 +223,28 @@ class CadService {
         // resolves provider credentials from the server environment.
         if (request.hasImage) ...{
           'has_reference_images': true,
-          'image_artifact': request.imageDataUrl,
-          'reference_image_artifact': request.imageDataUrl,
+          'image_artifact': request.imageDataUrls,
         },
       };
     }
 
+    if (workflowName != kSketchTo3dByokWorkflow) {
+      throw CadException(
+        'This provider-key model is not configured for BYOK v2 generation.',
+      );
+    }
     final apiKey = await _apiKeyFor(request.modelOption);
     return {
       'prompt': request.prompt.trim(),
-      'llm': request.modelOption.llm,
-      'provider': request.modelOption.payloadProvider,
-      // Existing BYOK behavior: provider keys are user-supplied and sent only
-      // on the BYOK workflow path.
-      'api_key': apiKey,
-      'validate': false,
+      'code_llm_profile':
+          request.modelOption.codeLlmProfile ?? 'nova3d_code_generation',
+      'code_llm_tier':
+          request.modelOption.codeLlmTier ?? request.modelOption.llm,
+      'code_llm_provider': request.modelOption.payloadProvider,
+      'code_llm_api_key': apiKey,
       if (request.hasImage) ...{
-        // Send plain base64 so GraphFlow passes it through to the legacy tool.
-        // data: URLs are normalized to CAS artifacts before tool execution.
-        'image_base64': request.imageBase64Payload,
-        'image_mime': request.imageMime,
+        'has_reference_images': true,
+        'image_artifact': request.imageDataUrls,
       },
     };
   }

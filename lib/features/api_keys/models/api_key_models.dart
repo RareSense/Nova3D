@@ -1,7 +1,8 @@
 enum AiProvider {
   gemini('gemini', 'Gemini'),
   anthropic('anthropic', 'Anthropic'),
-  openai('openai', 'OpenAI');
+  openai('openai', 'OpenAI'),
+  openrouter('openrouter', 'OpenRouter');
 
   const AiProvider(this.id, this.label);
   final String id;

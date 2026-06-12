@@ -274,7 +274,7 @@ class _PendingView extends StatelessWidget {
             role: MessageRole.user,
             text: draft.prompt,
             createdAt: DateTime.now(),
-            imageDataUrl: draft.imageDataUrl,
+            imageDataUrls: draft.imageDataUrls,
           ),
         ),
       ),

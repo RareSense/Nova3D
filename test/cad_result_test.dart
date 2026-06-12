@@ -69,6 +69,26 @@ void main() {
     expect(result.codeArtifact?['url'], 'https://example.test/paid.py');
   });
 
+  test('extracts byok v2 key-gate failure', () {
+    final result = CadResult.fromJson({
+      'require_byok_api_key': [
+        {
+          'user_message':
+              'code_llm_api_key is required for sketch_to_3d_byok_v2.',
+          'error_category': 'missing_api_key',
+          'failure_origin': 'api_key_or_provider_account',
+        },
+      ],
+    });
+
+    expect(result.failed, isTrue);
+    expect(
+      result.errorMessage,
+      'code_llm_api_key is required for sketch_to_3d_byok_v2.',
+    );
+    expect(result.errorCategory, 'missing_api_key');
+  });
+
   test('extracts structured soft failure from nested tool result', () {
     final result = CadResult.fromJson({
       'sketch_to_3d_generator': [

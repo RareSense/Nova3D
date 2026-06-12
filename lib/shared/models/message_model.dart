@@ -22,6 +22,7 @@ class MessageModel {
   final String? instructionPrompt;
   // Shown as a thumbnail in the user bubble.
   final String? imageDataUrl;
+  final List<String> imageDataUrls;
   // Non-null on failed assistant messages — enables the retry button.
   final GenerationRequest? retryRequest;
 
@@ -44,8 +45,16 @@ class MessageModel {
     this.modelLabel,
     this.instructionPrompt,
     this.imageDataUrl,
+    this.imageDataUrls = const [],
     this.retryRequest,
   });
+
+  List<String> get allImageDataUrls {
+    if (imageDataUrls.isNotEmpty) return imageDataUrls;
+    final dataUrl = imageDataUrl;
+    if (dataUrl == null || dataUrl.isEmpty) return const [];
+    return [dataUrl];
+  }
 
   MessageModel copyWith({
     String? text,
@@ -63,6 +72,7 @@ class MessageModel {
     String? modelLabel,
     String? instructionPrompt,
     String? imageDataUrl,
+    List<String>? imageDataUrls,
     GenerationRequest? retryRequest,
     bool clearRetryRequest = false,
   }) => MessageModel(
@@ -84,6 +94,7 @@ class MessageModel {
     modelLabel: modelLabel ?? this.modelLabel,
     instructionPrompt: instructionPrompt ?? this.instructionPrompt,
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
+    imageDataUrls: imageDataUrls ?? this.imageDataUrls,
     retryRequest: clearRetryRequest
         ? null
         : (retryRequest ?? this.retryRequest),
@@ -93,26 +104,30 @@ class MessageModel {
 
   Map<String, dynamic> toLocalJson() => toContentJson();
 
-  Map<String, dynamic> toContentJson() => {
-    'id': id,
-    'role': role == MessageRole.user ? 'user' : 'assistant',
-    'text': text,
-    'created_at': createdAt.toIso8601String(),
-    'is_streaming': isStreaming,
-    if (modelUrl != null) 'model_url': modelUrl,
-    if (workflowId != null) 'workflow_id': workflowId,
-    if (modelArtifact != null) 'model_artifact': modelArtifact,
-    if (codeArtifact != null) 'code_artifact': codeArtifact,
-    if (jointsArtifact != null) 'joints_artifact': jointsArtifact,
-    if (joints.isNotEmpty) 'joints': joints,
-    if (messageType != null) 'message_type': messageType,
-    if (operation != null) 'operation': operation,
-    if (sourceModelUrl != null) 'source_model_url': sourceModelUrl,
-    if (modelOptionId != null) 'model_option_id': modelOptionId,
-    if (modelLabel != null) 'model_label': modelLabel,
-    if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
-    if (imageDataUrl != null) 'image_data_url': imageDataUrl,
-  };
+  Map<String, dynamic> toContentJson() {
+    final images = allImageDataUrls;
+    return {
+      'id': id,
+      'role': role == MessageRole.user ? 'user' : 'assistant',
+      'text': text,
+      'created_at': createdAt.toIso8601String(),
+      'is_streaming': isStreaming,
+      if (modelUrl != null) 'model_url': modelUrl,
+      if (workflowId != null) 'workflow_id': workflowId,
+      if (modelArtifact != null) 'model_artifact': modelArtifact,
+      if (codeArtifact != null) 'code_artifact': codeArtifact,
+      if (jointsArtifact != null) 'joints_artifact': jointsArtifact,
+      if (joints.isNotEmpty) 'joints': joints,
+      if (messageType != null) 'message_type': messageType,
+      if (operation != null) 'operation': operation,
+      if (sourceModelUrl != null) 'source_model_url': sourceModelUrl,
+      if (modelOptionId != null) 'model_option_id': modelOptionId,
+      if (modelLabel != null) 'model_label': modelLabel,
+      if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
+      if (images.isNotEmpty) 'image_data_url': images.first,
+      if (images.isNotEmpty) 'image_data_urls': images,
+    };
+  }
 
   factory MessageModel.fromLocalJson(Map<String, dynamic> json) => MessageModel(
     id: json['id'] as String,
@@ -133,6 +148,7 @@ class MessageModel {
     modelLabel: json['model_label'] as String?,
     instructionPrompt: json['instruction_prompt'] as String?,
     imageDataUrl: json['image_data_url'] as String?,
+    imageDataUrls: _asStringList(json['image_data_urls']),
   );
 
   // ── Remote API response ───────────────────────────────────────────────────
@@ -175,6 +191,11 @@ class MessageModel {
           (entry) => entry.map((key, value) => MapEntry(key.toString(), value)),
         )
         .toList(growable: false);
+  }
+
+  static List<String> _asStringList(Object? value) {
+    if (value is! List) return const [];
+    return value.whereType<String>().toList(growable: false);
   }
 
   bool get isAssetVersionEvent =>

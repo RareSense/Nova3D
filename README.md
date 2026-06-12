@@ -91,7 +91,7 @@ flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5555
 
 1.  Open `http://127.0.0.1:5555`
 2.  Sign in (Google/Email).
-3.  **Settings** → Add your API Key (OpenAI, Anthropic, or Gemini).
+3.  **Settings** → Add your API Key (OpenRouter, OpenAI, Anthropic, or Gemini).
 4.  Enter a prompt and generate.
 
 ---
@@ -148,7 +148,7 @@ Unlike pure CSG/OpenSCAD systems which struggle with organic shapes, Nova3D leve
 
 *   **Auth Loops:** Always use `http://127.0.0.1:5555`. Using `localhost:5555` will cause Google Sign-In to fail due to strict OAuth origin policies.
 
-*   **API Key not working / generations failing silently:** Make sure your key is entered under **Settings → API Key** and that you've selected the matching provider (Gemini, OpenAI, or Anthropic). A key for the wrong provider will cause requests to fail immediately. **Avoid Gemini free-tier keys** — Nova3D's pipeline is token-intensive and free-tier Gemini quota is low enough that it may not function at all, even for a single generation. Use a paid-tier Gemini key, or switch to OpenAI or Anthropic.
+*   **API Key not working / generations failing silently:** Make sure your key is entered under **Settings → API Key** and that you've selected the matching provider (OpenRouter, OpenAI, Anthropic, or Gemini). A key for the wrong provider will cause requests to fail immediately. **Avoid Gemini free-tier keys** — Nova3D's pipeline is token-intensive and free-tier Gemini quota is low enough that it may not function at all, even for a single generation. Use a paid-tier Gemini key, or switch to OpenRouter, OpenAI, or Anthropic.
 
 *   **Nothing happens after clicking Generate (no error shown):** This usually means the client can't reach the backend. If you're running the default setup, make sure you haven't accidentally overridden `API_BASE_URL` to a local address. The default build points to `nova3d.xyz` — no local backend is needed.
 

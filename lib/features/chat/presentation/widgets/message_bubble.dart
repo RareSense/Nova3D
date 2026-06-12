@@ -54,9 +54,16 @@ class MessageBubble extends ConsumerWidget {
                   GenerationProgressCard(statusText: message.text)
                 else if (message.text.isNotEmpty)
                   _BubbleContent(message: message, isUser: _isUser),
-                if (message.imageDataUrl != null) ...[
+                if (message.allImageDataUrls.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  _ImageThumbnail(dataUrl: message.imageDataUrl!),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final dataUrl in message.allImageDataUrls)
+                        _ImageThumbnail(dataUrl: dataUrl),
+                    ],
+                  ),
                 ],
                 if (!message.isStreaming && message.modelUrl != null) ...[
                   const SizedBox(height: 8),
@@ -309,7 +316,8 @@ class _ImageThumbnail extends StatelessWidget {
       borderRadius: BorderRadius.circular(8.5),
       child: Image.network(
         dataUrl,
-        height: 160,
+        width: 150,
+        height: 120,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
       ),

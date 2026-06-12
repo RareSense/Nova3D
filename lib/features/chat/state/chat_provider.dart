@@ -14,7 +14,6 @@ import 'package:nova3d_frontend/features/chat/data/message_local_source.dart';
 import 'package:nova3d_frontend/features/chat/data/message_repository.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/user_model.dart';
-import 'package:nova3d_frontend/shared/models/user_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 
@@ -324,7 +323,7 @@ class MessagesNotifier
           role: MessageRole.user,
           text: request.prompt,
           createdAt: now,
-          imageDataUrl: request.imageDataUrl,
+          imageDataUrls: request.imageDataUrls,
         ),
         MessageModel(
           id: 'cad-${now.millisecondsSinceEpoch}',
@@ -395,7 +394,7 @@ class MessagesNotifier
           role: MessageRole.user,
           text: request.prompt,
           createdAt: now,
-          imageDataUrl: request.imageDataUrl,
+          imageDataUrls: request.imageDataUrls,
         ),
         MessageModel(
           id: assistantId,

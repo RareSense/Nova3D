@@ -26,7 +26,7 @@ enum WorkflowState {
       this == terminated;
 }
 
-// ── GraphFlow readiness (from GET /workflow/readiness/sketch_to_3d) ───────────
+// ── GraphFlow readiness ──────────────────────────────────────────────────────
 
 class GenerationReadiness {
   const GenerationReadiness({
@@ -82,9 +82,11 @@ class WorkflowStatus {
     'final_latest_valid',
     'final_validated_correction',
     'fail_generation',
+    'require_byok_api_key',
   };
 
   static const _nodeLabels = {
+    'require_byok_api_key': 'Checking provider key...',
     'sketch_to_3d_generator': 'Generating your 3D model...',
     'caption_prompt': 'Reading your reference image...',
     'caption_llm': 'Understanding the reference image...',
@@ -222,6 +224,7 @@ class CadResult {
       'add_3d_part',
       'articulate_3d_model',
       'fail_generation',
+      'require_byok_api_key',
     ]) {
       final node = json[key];
       if (node is! List || node.isEmpty) continue;

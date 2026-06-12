@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:nova3d_frontend/features/api_keys/data/api_key_local_source.dart';
 import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
+
 class ApiKeyValidationResult {
   const ApiKeyValidationResult({required this.isValid, required this.message});
   final bool isValid;
@@ -14,8 +15,7 @@ class ApiKeyService {
 
   // ── Storage delegation ────────────────────────────────────────────────────
 
-  Future<Map<AiProvider, ProviderKeyState>> loadStates() =>
-      _local.loadStates();
+  Future<Map<AiProvider, ProviderKeyState>> loadStates() => _local.loadStates();
 
   Future<Map<String, String>> loadValidKeys() => _local.loadValidKeys();
 
@@ -54,9 +54,12 @@ class ApiKeyService {
           return await _validateAnthropic(apiKey);
         case AiProvider.openai:
           return await _validateOpenAi(apiKey);
+        case AiProvider.openrouter:
+          return await _validateOpenRouter(apiKey);
       }
     } catch (e) {
-      final hint = e is DioException &&
+      final hint =
+          e is DioException &&
               (e.type == DioExceptionType.connectionError ||
                   e.type == DioExceptionType.unknown)
           ? 'Check your internet connection and try again.'
@@ -146,9 +149,7 @@ class ApiKeyService {
     try {
       await dio.get(
         'https://api.openai.com/v1/models',
-        options: Options(
-          headers: {'Authorization': 'Bearer $apiKey'},
-        ),
+        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
       );
       return ApiKeyValidationResult(
         isValid: true,
@@ -167,6 +168,40 @@ class ApiKeyService {
     }
   }
 
+  Future<ApiKeyValidationResult> _validateOpenRouter(String apiKey) async {
+    final dio = Dio();
+    try {
+      final resp = await dio.get(
+        'https://openrouter.ai/api/v1/key',
+        options: Options(headers: {'Authorization': 'Bearer $apiKey'}),
+      );
+      final data = resp.data is Map ? resp.data as Map : const {};
+      final keyData = data['data'] is Map ? data['data'] as Map : const {};
+      final remaining = keyData['limit_remaining'];
+      if (remaining is num && remaining <= 0) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message:
+              'OpenRouter accepted this key, but it has no remaining spend limit or balance.',
+        );
+      }
+      return ApiKeyValidationResult(
+        isValid: true,
+        message:
+            'OpenRouter key saved. Keep enough provider balance available for generation.',
+      );
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        return const ApiKeyValidationResult(
+          isValid: false,
+          message: 'OpenRouter rejected this key.',
+        );
+      }
+      rethrow;
+    }
+  }
+
   String? _formatError(AiProvider provider, String apiKey) {
     if (apiKey.length < 16) return 'Key is too short.';
     switch (provider) {
@@ -179,9 +214,15 @@ class ApiKeyService {
             ? null
             : 'Anthropic keys usually start with sk-ant-.';
       case AiProvider.openai:
-        return apiKey.startsWith('sk-') && !apiKey.startsWith('sk-ant-')
+        return apiKey.startsWith('sk-') &&
+                !apiKey.startsWith('sk-ant-') &&
+                !apiKey.startsWith('sk-or-')
             ? null
             : 'OpenAI keys usually start with sk-.';
+      case AiProvider.openrouter:
+        return apiKey.startsWith('sk-or-')
+            ? null
+            : 'OpenRouter keys usually start with sk-or-.';
     }
   }
 }

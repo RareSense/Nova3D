@@ -14,6 +14,7 @@ class ImageAttachmentChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     height: 36,
+    constraints: const BoxConstraints(maxWidth: 220),
     padding: const EdgeInsets.only(left: 10, right: 2),
     decoration: BoxDecoration(
       color: kBgTertiary,
@@ -21,10 +22,11 @@ class ImageAttachmentChip extends StatelessWidget {
       border: Border.all(color: kBorderColor),
     ),
     child: Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         const Icon(Icons.image_outlined, size: 16, color: kAccentBlue),
         const SizedBox(width: 8),
-        Expanded(
+        Flexible(
           child: Text(
             name,
             maxLines: 1,

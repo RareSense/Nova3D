@@ -15,12 +15,15 @@ const String kCadBaseUrl = String.fromEnvironment(
   defaultValue: 'https://nova3d.xyz/api',
 );
 
-const String kSketchTo3dWorkflow = 'sketch_to_3d';
 const String kSketchTo3dPaidWorkflow = 'sketch_to_3d_v2';
+const String kSketchTo3dByokWorkflow = 'sketch_to_3d_byok_v2';
 const String kRegenerate3dPartWorkflow = 'regenerate_3d_part';
 const String kAdd3dPartWorkflow = 'add_3d_part';
 const String kArticulate3dModelWorkflow = 'articulate_3d_model';
 const int kMaxReferenceImageBytes = 8 * 1024 * 1024;
+const int kMaxReferenceImageCount = 3;
+const int kMaxReferenceImageDimension = 512;
+const int kMaxGenerationPromptWords = 40;
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 

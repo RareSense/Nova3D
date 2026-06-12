@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,9 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
-import 'package:nova3d_frontend/core/utils.dart';
+import 'package:nova3d_frontend/features/cad/models/generation_image.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/features/cad/utils/generation_prompt_limits.dart';
+import 'package:nova3d_frontend/features/cad/utils/reference_image_processor.dart';
 import 'package:nova3d_frontend/shared/widgets/generation_model_label.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
 
@@ -37,8 +38,7 @@ class _ChatInputState extends State<ChatInput> {
   final _ctrl = TextEditingController();
   final _focusNode = FocusNode();
   bool _hasText = false;
-  String? _imageDataUrl;
-  String? _imageName;
+  final List<GenerationImage> _images = [];
 
   @override
   void initState() {
@@ -59,52 +59,67 @@ class _ChatInputState extends State<ChatInput> {
   bool get _canSubmit =>
       !widget.disabled &&
       widget.selectedModel != null &&
-      (_ctrl.text.trim().isNotEmpty ||
-          (_imageDataUrl != null && _imageDataUrl!.isNotEmpty));
+      (_ctrl.text.trim().isNotEmpty || _images.isNotEmpty);
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
+    final remainingSlots = kMaxReferenceImageCount - _images.length;
+    if (remainingSlots <= 0) {
+      _showSnack('You can attach up to $kMaxReferenceImageCount images.');
+      return;
+    }
     final result = await FilePicker.pickFiles(
       type: FileType.image,
       withData: true,
+      allowMultiple: true,
     );
-    final file = result?.files.single;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
-    if (bytes.length > kMaxReferenceImageBytes) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Images must be 8 MB or smaller.'),
-          behavior: SnackBarBehavior.floating,
-        ),
+    final files = result?.files ?? const <PlatformFile>[];
+    if (files.isEmpty) return;
+    try {
+      final processed = await processReferenceImageFiles(
+        files,
+        remainingSlots: remainingSlots,
       );
-      return;
+      if (!mounted || processed.isEmpty) return;
+      setState(() => _images.addAll(processed));
+      if (files.length > remainingSlots) {
+        _showSnack(
+          'Only the first $remainingSlots selected image(s) were attached.',
+        );
+      }
+    } on ReferenceImageProcessingException catch (e) {
+      _showSnack(e.message);
     }
-
-    final extension = (file.extension ?? 'png').toLowerCase();
-    setState(() {
-      _imageName = file.name;
-      _imageDataUrl =
-          'data:${mimeTypeForExtension(extension)};base64,${base64Encode(bytes)}';
-    });
   }
 
-  void _clearImage() {
-    setState(() {
-      _imageName = null;
-      _imageDataUrl = null;
-    });
+  void _clearImage(int index) {
+    if (index < 0 || index >= _images.length) return;
+    setState(() => _images.removeAt(index));
+  }
+
+  void _clearImages() {
+    if (_images.isEmpty) return;
+    setState(_images.clear);
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _submit() async {
     final text = _ctrl.text.trim();
     final modelOption = widget.selectedModel;
     if (modelOption == null) return;
+    if (!isGenerationPromptWithinWordLimit(text)) {
+      _showSnack('Prompt must be $kMaxGenerationPromptWords words or fewer.');
+      return;
+    }
     final request = GenerationRequest(
       prompt: text,
       modelOption: modelOption,
-      imageDataUrl: _imageDataUrl,
-      imageName: _imageName,
+      images: List.unmodifiable(_images),
     );
     if (!request.hasText && !request.hasImage) return;
     if (widget.disabled) return;
@@ -112,7 +127,7 @@ class _ChatInputState extends State<ChatInput> {
     final accepted = await widget.onSend(request);
     if (accepted) {
       _ctrl.clear();
-      _clearImage();
+      _clearImages();
     }
   }
 
@@ -143,10 +158,8 @@ class _ChatInputState extends State<ChatInput> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     IconButton(
-                      tooltip: _imageName == null
-                          ? 'Upload image'
-                          : 'Change image',
-                      onPressed: widget.disabled ? null : _pickImage,
+                      tooltip: _images.isEmpty ? 'Upload images' : 'Add images',
+                      onPressed: widget.disabled ? null : _pickImages,
                       icon: const Icon(Icons.image_outlined),
                       color: kInkSoft,
                     ),
@@ -164,6 +177,9 @@ class _ChatInputState extends State<ChatInput> {
                           controller: _ctrl,
                           focusNode: _focusNode,
                           enabled: !widget.disabled,
+                          inputFormatters: const [
+                            GenerationPromptWordLimitFormatter(),
+                          ],
                           maxLines: 6,
                           minLines: 1,
                           keyboardType: TextInputType.multiline,
@@ -204,12 +220,21 @@ class _ChatInputState extends State<ChatInput> {
                     ),
                   ],
                 ),
-                if (_imageName != null)
+                if (_images.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                    child: ImageAttachmentChip(
-                      name: _imageName!,
-                      onClear: widget.disabled ? null : _clearImage,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final entry in _images.asMap().entries)
+                          ImageAttachmentChip(
+                            name: entry.value.name,
+                            onClear: widget.disabled
+                                ? null
+                                : () => _clearImage(entry.key),
+                          ),
+                      ],
                     ),
                   ),
               ],

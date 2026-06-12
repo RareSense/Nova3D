@@ -500,7 +500,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       _postEditResult({
         'requestId': requestId,
         'status': 'failed',
-        'message': 'Add a Gemini, Anthropic, or OpenAI key in Settings.',
+        'message':
+            'Add an OpenRouter, OpenAI, Anthropic, or Gemini key in Settings.',
       });
       return;
     }

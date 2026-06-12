@@ -23,7 +23,7 @@ class ApiKeysSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Use your own OpenAI, Anthropic, or Gemini key instead of Nova3D credits. These are third-party provider keys, not Nova3D n3d_ API tokens.',
+          'Use your own OpenRouter, OpenAI, Anthropic, or Gemini key instead of Nova3D credits. These are third-party provider keys, not Nova3D n3d_ API tokens.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         if (state.message != null) ...[

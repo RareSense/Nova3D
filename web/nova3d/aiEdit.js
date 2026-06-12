@@ -109,12 +109,19 @@ function editModelOptionsFromStorage() {
   if (storageBool('nova3d_api_key_valid_anthropic') && storageHasKey('anthropic')) {
     options.push(
       { id: 'anthropic_claude_sonnet',       label: 'Claude Sonnet 4.6 (Anthropic key)', provider: 'Anthropic' },
-      { id: 'anthropic_claude_opus',         label: 'Claude Opus 4.6 (Anthropic key)',   provider: 'Anthropic' },
-      { id: 'anthropic_claude_opus_latest',  label: 'Claude Opus 4.7 (Anthropic key)',   provider: 'Anthropic' },
+      { id: 'anthropic_claude_opus_4_8',     label: 'Claude Opus 4.8 (Anthropic key)',   provider: 'Anthropic' },
     );
   }
   if (storageBool('nova3d_api_key_valid_openai') && storageHasKey('openai')) {
     options.push({ id: 'openai_gpt55', label: 'GPT-5.5 (OpenAI key)', provider: 'OpenAI' });
+  }
+  if (storageBool('nova3d_api_key_valid_openrouter') && storageHasKey('openrouter')) {
+    options.push(
+      { id: 'openrouter_gpt55',                label: 'GPT-5.5 (OpenRouter key)',                  provider: 'OpenRouter' },
+      { id: 'openrouter_gemini',               label: 'Gemini 3.1 Pro Preview (OpenRouter key)',    provider: 'OpenRouter' },
+      { id: 'openrouter_claude_sonnet',        label: 'Claude Sonnet 4.6 (OpenRouter key)',         provider: 'OpenRouter' },
+      { id: 'openrouter_claude_opus',          label: 'Claude Opus 4.8 (OpenRouter key)',           provider: 'OpenRouter' },
+    );
   }
   if (storageBool('nova3d_api_key_valid_gemini') && storageHasKey('gemini')) {
     options.push({ id: 'gemini_gemini', label: 'Gemini 3.1 Pro Preview (Gemini key)', provider: 'Gemini' });
@@ -242,7 +249,7 @@ function requestAiEdit(operation, description, partType = '') {
   }
   const modelOptionId = selectedEditModelId();
   if (!modelOptionId) {
-    showSectionStatus(operation, 'Add a Gemini, Anthropic, or OpenAI key in Settings before using AI edits.', true);
+    showSectionStatus(operation, 'Add an OpenRouter, OpenAI, Anthropic, or Gemini key in Settings before using AI edits.', true);
     flashEditButton(operation, 'Needs API key');
     return;
   }
