@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:web/web.dart' as web;
 
@@ -48,7 +49,10 @@ class _OAuthCallbackPageState extends ConsumerState<OAuthCallbackPage> {
 
     try {
       await ref.read(authProvider.notifier).handleOAuthCallback(token);
-      if (mounted) context.go('/');
+      final mcpContext = McpBrowserContext.read();
+      if (mounted) {
+        context.go(mcpContext != null ? '/mcp/complete' : '/');
+      }
     } catch (e, st) {
       debugPrint('[OAuthCallback] auth failed: $e\n$st');
       if (mounted) context.go('/signin?error=auth_failed');
@@ -57,17 +61,16 @@ class _OAuthCallbackPageState extends ConsumerState<OAuthCallbackPage> {
 
   @override
   Widget build(BuildContext context) => const Scaffold(
-        backgroundColor: kBgDark,
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: kAccentBlue),
-              SizedBox(height: 16),
-              Text('Finishing sign-in…',
-                  style: TextStyle(color: kTextSecondary)),
-            ],
-          ),
-        ),
-      );
+    backgroundColor: kBgDark,
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(color: kAccentBlue),
+          SizedBox(height: 16),
+          Text('Finishing sign-in…', style: TextStyle(color: kTextSecondary)),
+        ],
+      ),
+    ),
+  );
 }
