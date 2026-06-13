@@ -75,11 +75,14 @@ class BillingService {
     }
   }
 
-  Future<String> createCheckout(String tierId) async {
+  Future<String> createCheckout(
+    String tierId, {
+    BillingCheckoutSource source = BillingCheckoutSource.web,
+  }) async {
     try {
       final response = await _dio.post(
         '/billing/checkout',
-        data: {'tier_id': tierId},
+        data: {'tier_id': tierId, 'source': source.value},
         options: await _authOptions(),
       );
       final data = response.data;
@@ -182,4 +185,13 @@ class BillingService {
     }
     return null;
   }
+}
+
+enum BillingCheckoutSource { web, mcp }
+
+extension on BillingCheckoutSource {
+  String get value => switch (this) {
+    BillingCheckoutSource.web => 'web',
+    BillingCheckoutSource.mcp => 'mcp',
+  };
 }

@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/subscription/data/billing_service.dart';
 import 'package:nova3d_frontend/features/subscription/models/billing_models.dart';
+export 'package:nova3d_frontend/features/subscription/data/billing_service.dart'
+    show BillingCheckoutSource;
 
 final billingServiceProvider = Provider<BillingService>((ref) {
   return BillingService(ref.watch(authServiceProvider));
@@ -139,11 +141,14 @@ class BillingNotifier extends Notifier<BillingState> {
     }
   }
 
-  Future<String?> createCheckout(BillingTier tier) async {
+  Future<String?> createCheckout(
+    BillingTier tier, {
+    BillingCheckoutSource source = BillingCheckoutSource.web,
+  }) async {
     if (state.checkoutTierId != null) return null;
     state = state.copyWith(checkoutTierId: tier.tierId, clearError: true);
     try {
-      final url = await _service.createCheckout(tier.tierId);
+      final url = await _service.createCheckout(tier.tierId, source: source);
       state = state.copyWith(clearCheckoutTierId: true);
       return url;
     } on BillingException catch (e) {

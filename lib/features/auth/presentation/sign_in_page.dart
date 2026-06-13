@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/shared/widgets/grid_background.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_logo.dart';
@@ -18,7 +19,15 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   bool _loading = false;
   String? _error;
 
+  @override
+  void initState() {
+    super.initState();
+    // Normal web sign-in should never inherit an abandoned MCP handoff context.
+    McpBrowserContext.clear();
+  }
+
   Future<void> _googleSignIn() async {
+    McpBrowserContext.clear();
     setState(() {
       _loading = true;
       _error = null;
