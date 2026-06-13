@@ -7,6 +7,10 @@ import 'package:nova3d_frontend/features/auth/presentation/oauth_callback_page.d
 import 'package:nova3d_frontend/features/auth/presentation/sign_in_page.dart';
 import 'package:nova3d_frontend/features/auth/presentation/sign_up_page.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_complete_page.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_connect_page.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_no_credits_page.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_purchase_success_page.dart';
 import 'package:nova3d_frontend/shared/models/user_model.dart';
 import 'package:nova3d_frontend/features/account_api_keys/presentation/account_api_keys_page.dart';
 import 'package:nova3d_frontend/features/chat/presentation/chat_page.dart';
@@ -58,6 +62,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/forgot-password',
         '/oauth-callback',
         '/success',
+        '/mcp/connect',
+        '/mcp/complete',
+        '/mcp/no-credits',
+        '/mcp/purchase-success',
       };
       const authEntryPaths = {
         '/signin',
@@ -95,6 +103,26 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/success',
         pageBuilder: (_, state) =>
             _fadePage(state.pageKey, const PaymentSuccessPage()),
+      ),
+      GoRoute(
+        path: '/mcp/connect',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const McpConnectPage()),
+      ),
+      GoRoute(
+        path: '/mcp/complete',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const McpCompletePage()),
+      ),
+      GoRoute(
+        path: '/mcp/no-credits',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const McpNoCreditsPage()),
+      ),
+      GoRoute(
+        path: '/mcp/purchase-success',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const McpPurchaseSuccessPage()),
       ),
 
       // ── Authenticated shell ──────────────────────────────────────────────
