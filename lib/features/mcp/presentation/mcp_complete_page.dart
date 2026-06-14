@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/mcp/models/mcp_models.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_completion_flow.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_shared.dart';
 import 'package:nova3d_frontend/features/mcp/state/mcp_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,6 +21,7 @@ class McpCompletePage extends ConsumerStatefulWidget {
 class _McpCompletePageState extends ConsumerState<McpCompletePage> {
   bool _initialized = false;
   bool _preparingLoopback = false;
+  bool _routeToCreditsAfterHandoff = false;
   String? _handoffUrl;
   Timer? _pollTimer;
 
@@ -47,18 +49,22 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
     final status = await ref.read(mcpProvider.notifier).refreshStatus();
     if (!mounted || status == null) return;
 
-    if (!status.authenticated ||
-        status.nextAction == 'sign_in' ||
-        status.nextAction == 'session_expired') {
-      context.go('/mcp/connect');
-      return;
-    }
-    if (status.needsPurchase) {
-      context.go('/mcp/no-credits');
-      return;
-    }
-
     final contextData = McpBrowserContext.readOrCapture(Uri.base);
+    switch (McpCompletionFlow.bootstrapAction(
+      status: status,
+      hasValidContext: contextData?.isValid == true,
+    )) {
+      case McpBootstrapAction.goToConnect:
+        context.go('/mcp/connect');
+        return;
+      case McpBootstrapAction.goToNoCredits:
+        context.go('/mcp/no-credits');
+        return;
+      case McpBootstrapAction.idle:
+        return;
+      case McpBootstrapAction.prepareHandoff:
+        break;
+    }
     if (contextData == null || !contextData.isValid) return;
 
     setState(() => _preparingLoopback = true);
@@ -68,14 +74,18 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
     if (!mounted) return;
     setState(() {
       _preparingLoopback = false;
+      _routeToCreditsAfterHandoff = status.needsPurchase;
       _handoffUrl = sessionCode == null
           ? null
           : contextData.loopbackUrlForCode(sessionCode);
     });
+    if (_handoffUrl != null) {
+      await _openLoopback(showFailureFeedback: false);
+    }
     _startPolling();
   }
 
-  Future<void> _openLoopback() async {
+  Future<void> _openLoopback({bool showFailureFeedback = true}) async {
     final handoffUrl = _handoffUrl;
     if (handoffUrl == null) return;
     final uri = Uri.tryParse(handoffUrl);
@@ -85,7 +95,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
       mode: LaunchMode.platformDefault,
       webOnlyWindowName: '_blank',
     );
-    if (!launched && mounted) {
+    if (!launched && mounted && showFailureFeedback) {
       ref.read(mcpProvider.notifier).clearError();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -101,20 +111,23 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
       if (!mounted) return;
       final status = await ref.read(mcpProvider.notifier).refreshStatus();
       if (!mounted || status == null) return;
-      if (status.needsPurchase) {
-        _pollTimer?.cancel();
-        context.go('/mcp/no-credits');
-        return;
-      }
-      if (!status.authenticated ||
-          status.nextAction == 'sign_in' ||
-          status.nextAction == 'session_expired') {
-        _pollTimer?.cancel();
-        context.go('/mcp/connect');
-        return;
-      }
-      if (status.mcpSession?.established == true || status.generationReady) {
-        _pollTimer?.cancel();
+      switch (McpCompletionFlow.pollAction(
+        status: status,
+        routeToCreditsAfterHandoff: _routeToCreditsAfterHandoff,
+      )) {
+        case McpPollAction.goToConnect:
+          _pollTimer?.cancel();
+          context.go('/mcp/connect');
+          return;
+        case McpPollAction.goToNoCredits:
+          _pollTimer?.cancel();
+          context.go('/mcp/no-credits');
+          return;
+        case McpPollAction.stopPolling:
+          _pollTimer?.cancel();
+          return;
+        case McpPollAction.continuePolling:
+          return;
       }
     });
   }
@@ -176,6 +189,13 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           if (mcp.error != null) ...[
             const SizedBox(height: 18),
             McpMessageBanner(message: mcp.error!, isError: true),
+          ] else if (_routeToCreditsAfterHandoff &&
+              status?.mcpSession?.established != true) ...[
+            const SizedBox(height: 18),
+            const McpMessageBanner(
+              message:
+                  'Finishing the local MCP connection first. Nova3D will open credits once the editor handoff completes.',
+            ),
           ] else if (status?.generationReady == true) ...[
             const SizedBox(height: 18),
             const McpMessageBanner(
@@ -201,14 +221,18 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
               label: canContinue
                   ? 'Continue in your editor'
                   : 'Refresh Nova3D status',
-              onTap: canContinue ? _openLoopback : _bootstrap,
+              onTap: canContinue ? () => _openLoopback() : _bootstrap,
             ),
             const SizedBox(height: 12),
             McpSecondaryButton(
-              label: status?.needsPurchase == true
+              label:
+                  status?.needsPurchase == true &&
+                      status?.mcpSession?.established == true
                   ? 'Buy credits'
                   : 'Check status again',
-              onTap: status?.needsPurchase == true
+              onTap:
+                  status?.needsPurchase == true &&
+                      status?.mcpSession?.established == true
                   ? () => context.go('/mcp/no-credits')
                   : _bootstrap,
             ),
