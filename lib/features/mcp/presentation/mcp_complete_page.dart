@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/mcp/models/mcp_models.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_completion_copy.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_completion_flow.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_shared.dart';
 import 'package:nova3d_frontend/features/mcp/state/mcp_provider.dart';
@@ -138,10 +139,16 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
     final mcp = ref.watch(mcpProvider);
     final status = mcp.status;
     final contextData = McpBrowserContext.read();
+    final clientName = contextData?.clientName;
     final identity =
         status?.identity ?? _identityFromAuth(auth.valueOrNull?.email);
     final canContinue =
         _handoffUrl != null && !mcp.loadingStatus && !_preparingLoopback;
+    final showBlockingSpinner = McpCompletionCopy.showBlockingSpinner(
+      loadingStatus: mcp.loadingStatus,
+      preparingLoopback: _preparingLoopback,
+      hasHandoffUrl: _handoffUrl != null,
+    );
 
     return McpScaffold(
       child: Column(
@@ -151,9 +158,9 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
             badge: 'mcp setup',
             title: status?.generationReady == true
                 ? 'Nova3D is ready'
-                : 'Finish editor connection',
+                : 'Finish local MCP connection',
             subtitle:
-                'Your Nova3D browser sign-in is complete. Continue the local editor handoff so your MCP session can be established without copying a token.',
+                'Your Nova3D browser sign-in is complete. Continue the local MCP handoff so your session can be established without copying a token.',
           ),
           const SizedBox(height: 24),
           McpInfoPanel(
@@ -181,8 +188,8 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
                     : 'Preparing one-time handoff',
               ),
               McpStatusRow(
-                label: 'Editor',
-                value: contextData?.clientName ?? 'Connected local editor',
+                label: 'MCP client',
+                value: McpCompletionCopy.targetName(clientName),
               ),
             ],
           ),
@@ -192,15 +199,14 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           ] else if (_routeToCreditsAfterHandoff &&
               status?.mcpSession?.established != true) ...[
             const SizedBox(height: 18),
-            const McpMessageBanner(
-              message:
-                  'Finishing the local MCP connection first. Nova3D will open credits once the editor handoff completes.',
+            McpMessageBanner(
+              message: McpCompletionCopy.handoffPendingMessage(clientName),
             ),
           ] else if (status?.generationReady == true) ...[
             const SizedBox(height: 18),
-            const McpMessageBanner(
+            McpMessageBanner(
               message:
-                  'Nova3D confirmed your account is funded and ready. Continue in your editor to complete the local MCP session handoff.',
+                  'Nova3D confirmed your account is funded and ready. Continue in ${McpCompletionCopy.targetName(clientName)} to complete the local MCP session handoff.',
             ),
           ] else if (status?.nextAction == 'service_unavailable') ...[
             const SizedBox(height: 18),
@@ -209,9 +215,14 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
                   'Nova3D setup is temporarily unavailable. Keep this tab open and check again in a moment.',
               isError: true,
             ),
+          ] else if (mcp.loadingStatus && _handoffUrl != null) ...[
+            const SizedBox(height: 18),
+            McpMessageBanner(
+              message: McpCompletionCopy.checkingStatusMessage(clientName),
+            ),
           ],
           const SizedBox(height: 24),
-          if (mcp.loadingStatus || _preparingLoopback)
+          if (showBlockingSpinner)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: CircularProgressIndicator(),
@@ -219,7 +230,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           else ...[
             McpPrimaryButton(
               label: canContinue
-                  ? 'Continue in your editor'
+                  ? McpCompletionCopy.continueLabel(clientName)
                   : 'Refresh Nova3D status',
               onTap: canContinue ? () => _openLoopback() : _bootstrap,
             ),
@@ -239,7 +250,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           ],
           const SizedBox(height: 16),
           Text(
-            'If the local editor callback does not complete immediately, keep this tab open and retry the editor handoff from your MCP setup surface.',
+            'If the local callback does not complete immediately, keep this tab open and retry the handoff from your MCP setup surface.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
