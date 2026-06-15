@@ -184,7 +184,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
                     : status?.nextAction == 'service_unavailable'
                     ? 'Nova3D setup service unavailable'
                     : _handoffUrl != null
-                    ? 'Waiting for local editor callback'
+                    ? 'Waiting for local MCP client callback'
                     : 'Preparing one-time handoff',
               ),
               McpStatusRow(
