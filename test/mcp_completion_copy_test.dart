@@ -35,6 +35,35 @@ void main() {
     });
   });
 
+  group('McpCompletionCopy.completion copy', () {
+    test('uses neutral fallback in completion messaging', () {
+      expect(
+        McpCompletionCopy.completionTitle(ready: false),
+        'Complete your Nova3D connection',
+      );
+      expect(
+        McpCompletionCopy.completionSubtitle(null),
+        'Nova3D sign-in is complete. Finish the secure local handoff to continue in your MCP client.',
+      );
+      expect(
+        McpCompletionCopy.completionInstruction(null),
+        'Next, Nova3D may briefly open a local confirmation page on this device. After it confirms connection, return to your MCP client.',
+      );
+    });
+
+    test('uses detected client in completion messaging', () {
+      expect(McpCompletionCopy.completionTitle(ready: true), 'Nova3D is ready');
+      expect(
+        McpCompletionCopy.completionSubtitle('codex'),
+        'Nova3D sign-in is complete. Finish the secure local handoff to continue in Codex.',
+      );
+      expect(
+        McpCompletionCopy.completionInstruction('claude code'),
+        'Next, Nova3D may briefly open a local confirmation page on this device. After it confirms connection, return to Claude Code.',
+      );
+    });
+  });
+
   group('McpCompletionCopy.handoff copy', () {
     test('uses neutral fallback in handoff messaging', () {
       expect(

@@ -4,6 +4,16 @@ class McpCompletionCopy {
   static String continueLabel(String? clientName) =>
       'Continue in ${targetName(clientName)}';
 
+  static String completionTitle({required bool ready}) =>
+      ready ? 'Nova3D is ready' : 'Complete your Nova3D connection';
+
+  static String completionSubtitle(String? clientName) =>
+      'Nova3D sign-in is complete. Finish the secure local handoff to continue in ${targetName(clientName)}.';
+
+  static String completionInstruction(String? clientName) =>
+      'Next, Nova3D may briefly open a local confirmation page on this device. '
+      'After it confirms connection, return to ${targetName(clientName)}.';
+
   static String targetName(String? clientName) {
     final normalized = normalizedClientName(clientName);
     return normalized ?? 'your MCP client';

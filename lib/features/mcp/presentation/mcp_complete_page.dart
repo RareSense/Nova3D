@@ -143,6 +143,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
     final identity =
         status?.identity ?? _identityFromAuth(auth.valueOrNull?.email);
     final canContinue = _handoffUrl != null && !_preparingLoopback;
+    final ready = status?.generationReady == true;
     final showBlockingSpinner = McpCompletionCopy.showBlockingSpinner(
       loadingStatus: mcp.loadingStatus,
       preparingLoopback: _preparingLoopback,
@@ -155,11 +156,8 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
         children: [
           McpHeader(
             badge: 'mcp setup',
-            title: status?.generationReady == true
-                ? 'Nova3D is ready'
-                : 'Finish local MCP connection',
-            subtitle:
-                'Your Nova3D browser sign-in is complete. Continue the local MCP handoff so your session can be established without copying a token.',
+            title: McpCompletionCopy.completionTitle(ready: ready),
+            subtitle: McpCompletionCopy.completionSubtitle(clientName),
           ),
           const SizedBox(height: 24),
           McpInfoPanel(
@@ -194,8 +192,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           ),
           const SizedBox(height: 18),
           McpMessageBanner(
-            message:
-                '${McpCompletionCopy.handoffExpectationMessage(clientName)} ${McpCompletionCopy.handoffReturnMessage(clientName)}',
+            message: McpCompletionCopy.completionInstruction(clientName),
           ),
           if (mcp.error != null) ...[
             const SizedBox(height: 18),
