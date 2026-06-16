@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_shared.dart';
@@ -17,6 +18,8 @@ class McpNoCreditsPage extends ConsumerStatefulWidget {
 }
 
 class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
+  String? _selectedTierId;
+
   @override
   void initState() {
     super.initState();
@@ -59,9 +62,9 @@ class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
     final mcp = ref.watch(mcpProvider);
     final billing = ref.watch(billingProvider);
     final tiers = billing.tiers;
-    final selectedTier = tiers.isEmpty
-        ? null
-        : tiers.firstWhere((tier) => tier.isPopular, orElse: () => tiers.first);
+    final selectedTier =
+        tiers.where((tier) => tier.tierId == _selectedTierId).firstOrNull ??
+        _defaultTier(tiers);
     final email = mcp.status?.identity?.email.isNotEmpty == true
         ? mcp.status!.identity!.email
         : (auth.valueOrNull?.email.isNotEmpty == true
@@ -69,7 +72,8 @@ class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
               : 'Signed-in Nova3D account');
     final available =
         mcp.status?.credits?.available ?? billing.wallet?.available ?? 0;
-    final clientName = McpBrowserContext.read()?.clientName ?? 'your editor';
+    final clientName =
+        (McpBrowserContext.read()?.clientName ?? 'your MCP client').trim();
 
     return McpScaffold(
       child: Column(
@@ -77,9 +81,9 @@ class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
         children: [
           McpHeader(
             badge: 'credits required',
-            title: 'Account connected, credits needed',
+            title: 'You\'re connected. Add credits to start generating.',
             subtitle:
-                'Nova3D is linked to $clientName, but generation is not ready until this account has credits.',
+                'Choose a credit pack for this account, then return to $clientName to unlock generation.',
           ),
           const SizedBox(height: 24),
           McpInfoPanel(
@@ -103,13 +107,56 @@ class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
           const SizedBox(height: 18),
           const McpMessageBanner(
             message:
-                'Your sign-in is complete. Buy credits for this account, then return to your editor and Nova3D MCP will re-check readiness.',
+                'Pick a credit pack for this account. If you\'re trying Nova3D for the first time, the starter pack is the easiest way to begin.',
           ),
           const SizedBox(height: 24),
+          if (tiers.isNotEmpty) ...[
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 560;
+                if (wide) {
+                  return Row(
+                    children: [
+                      for (var i = 0; i < tiers.length; i++) ...[
+                        Expanded(
+                          child: _CreditPackCard(
+                            tier: tiers[i],
+                            selected: selectedTier?.tierId == tiers[i].tierId,
+                            loading: billing.checkoutTierId == tiers[i].tierId,
+                            badge: _badgeForTier(tiers[i]),
+                            onTap: () => setState(
+                              () => _selectedTierId = tiers[i].tierId,
+                            ),
+                          ),
+                        ),
+                        if (i != tiers.length - 1) const SizedBox(width: 12),
+                      ],
+                    ],
+                  );
+                }
+                return Column(
+                  children: [
+                    for (var i = 0; i < tiers.length; i++) ...[
+                      _CreditPackCard(
+                        tier: tiers[i],
+                        selected: selectedTier?.tierId == tiers[i].tierId,
+                        loading: billing.checkoutTierId == tiers[i].tierId,
+                        badge: _badgeForTier(tiers[i]),
+                        onTap: () =>
+                            setState(() => _selectedTierId = tiers[i].tierId),
+                      ),
+                      if (i != tiers.length - 1) const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
           McpPrimaryButton(
             label: selectedTier == null
                 ? 'Refresh credit packages'
-                : 'Buy ${selectedTier.credits} credits',
+                : 'Buy ${selectedTier.credits} credits for ${selectedTier.displayPrice}',
             onTap: billing.checkoutTierId != null
                 ? null
                 : selectedTier == null
@@ -137,5 +184,130 @@ class _McpNoCreditsPageState extends ConsumerState<McpNoCreditsPage> {
         ],
       ),
     );
+  }
+
+  BillingTier? _defaultTier(List<BillingTier> tiers) {
+    if (tiers.isEmpty) return null;
+    return tiers.firstWhere(
+      (tier) => tier.credits == 100,
+      orElse: () => tiers.first,
+    );
+  }
+
+  String? _badgeForTier(BillingTier tier) {
+    if (tier.credits == 100) return 'Starter';
+    if (tier.credits == 500) return 'Most Popular';
+    if (tier.credits == 1500) return 'Best Value';
+    return null;
+  }
+}
+
+class _CreditPackCard extends StatelessWidget {
+  const _CreditPackCard({
+    required this.tier,
+    required this.selected,
+    required this.loading,
+    required this.onTap,
+    this.badge,
+  });
+
+  final BillingTier tier;
+  final bool selected;
+  final bool loading;
+  final VoidCallback onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: loading ? null : onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          padding: const EdgeInsets.all(18),
+          decoration: kChunkyCard(
+            bg: selected ? kButterBg : kSurface,
+            radius: 12,
+            shadow: selected,
+            borderColor: selected ? kInk : kLineSoft,
+            shadowColor: selected ? kButter : kInk,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (badge != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected ? kPinkBg : kMintBg,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: kInk, width: 1.1),
+                  ),
+                  child: Text(badge!, style: kSilkscreen(9, color: kInk)),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(tier.title, style: kVt323(30)),
+              const SizedBox(height: 4),
+              Text(
+                tier.displayPrice,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: kInk,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _descriptionForTier(tier),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: kInkSoft, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off,
+                    size: 18,
+                    color: selected ? kInk : kInkMuted,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    selected ? 'Selected' : 'Select this pack',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: selected ? kInk : kInkSoft,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (loading) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      height: 14,
+                      width: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _descriptionForTier(BillingTier tier) {
+    return switch (tier.credits) {
+      100 => 'Low-commitment starter pack for first-time experiments.',
+      500 => 'Balanced option for most workflows and repeat generations.',
+      1500 => 'Best value if you already know you\'ll use Nova3D heavily.',
+      _ => tier.purchaseModeLabel,
+    };
   }
 }
