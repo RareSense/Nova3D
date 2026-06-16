@@ -192,6 +192,11 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
               ),
             ],
           ),
+          const SizedBox(height: 18),
+          McpMessageBanner(
+            message:
+                '${McpCompletionCopy.handoffExpectationMessage(clientName)} ${McpCompletionCopy.handoffReturnMessage(clientName)}',
+          ),
           if (mcp.error != null) ...[
             const SizedBox(height: 18),
             McpMessageBanner(message: mcp.error!, isError: true),

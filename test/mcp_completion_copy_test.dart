@@ -35,6 +35,37 @@ void main() {
     });
   });
 
+  group('McpCompletionCopy.handoff copy', () {
+    test('uses neutral fallback in handoff messaging', () {
+      expect(
+        McpCompletionCopy.handoffExpectationMessage(null),
+        'Nova3D may briefly open a local confirmation page on this device to finish connecting to your MCP client.',
+      );
+      expect(
+        McpCompletionCopy.handoffReturnMessage(null),
+        'After the local page confirms connection, return to your MCP client.',
+      );
+    });
+
+    test('uses detected client in handoff messaging', () {
+      expect(
+        McpCompletionCopy.handoffExpectationMessage('codex'),
+        'Nova3D may briefly open a local confirmation page on this device to finish connecting to Codex.',
+      );
+      expect(
+        McpCompletionCopy.handoffReturnMessage('claude code'),
+        'After the local page confirms connection, return to Claude Code.',
+      );
+    });
+
+    test('uses client-aware missing-context message', () {
+      expect(
+        McpCompletionCopy.missingContextMessage('cursor'),
+        'This browser page is missing the MCP handoff details for Cursor. Restart setup from the Nova3D MCP command in Cursor.',
+      );
+    });
+  });
+
   group('McpCompletionCopy.showBlockingSpinner', () {
     test('blocks only during setup before handoff URL is ready', () {
       expect(

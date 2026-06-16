@@ -16,6 +16,21 @@ class McpCompletionCopy {
   static String checkingStatusMessage(String? clientName) =>
       'Checking whether ${targetName(clientName)} received the local callback...';
 
+  static String handoffExpectationMessage(String? clientName) =>
+      'Nova3D may briefly open a local confirmation page on this device to '
+      'finish connecting to ${targetName(clientName)}.';
+
+  static String handoffReturnMessage(String? clientName) =>
+      'After the local page confirms connection, return to ${targetName(clientName)}.';
+
+  static String connectSubtitle(String? clientName) =>
+      'Sign in to link Nova3D with ${targetName(clientName)}. Nova3D will use '
+      'your normal account wallet, and paid generation will only start once credits are ready.';
+
+  static String missingContextMessage(String? clientName) =>
+      'This browser page is missing the MCP handoff details for ${targetName(clientName)}. '
+      'Restart setup from the Nova3D MCP command in ${targetName(clientName)}.';
+
   static bool showBlockingSpinner({
     required bool loadingStatus,
     required bool preparingLoopback,

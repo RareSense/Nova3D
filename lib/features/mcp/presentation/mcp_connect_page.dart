@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
+import 'package:nova3d_frontend/features/mcp/presentation/mcp_completion_copy.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_shared.dart';
 import 'package:web/web.dart' as web;
 
@@ -54,7 +55,7 @@ class _McpConnectPageState extends ConsumerState<McpConnectPage> {
       });
     }
 
-    final clientName = contextData?.clientName ?? 'your editor';
+    final clientName = contextData?.clientName;
     final missingContext = contextData == null || !contextData.isValid;
 
     return McpScaffold(
@@ -64,8 +65,7 @@ class _McpConnectPageState extends ConsumerState<McpConnectPage> {
           McpHeader(
             badge: 'mcp setup',
             title: 'Connect Nova3D',
-            subtitle:
-                'Sign in to link Nova3D with $clientName. Nova3D will use your normal account wallet, and paid generation will only start once credits are ready.',
+            subtitle: McpCompletionCopy.connectSubtitle(clientName),
           ),
           const SizedBox(height: 24),
           McpInfoPanel(
@@ -76,7 +76,7 @@ class _McpConnectPageState extends ConsumerState<McpConnectPage> {
               ),
               McpStatusRow(
                 label: 'Step 2',
-                value: 'Confirm editor connection and local MCP session setup',
+                value: 'Finish the local MCP handoff on this device',
               ),
               const McpStatusRow(
                 label: 'Step 3',
@@ -84,11 +84,15 @@ class _McpConnectPageState extends ConsumerState<McpConnectPage> {
               ),
             ],
           ),
+          const SizedBox(height: 18),
+          McpMessageBanner(
+            message:
+                '${McpCompletionCopy.handoffExpectationMessage(clientName)} ${McpCompletionCopy.handoffReturnMessage(clientName)}',
+          ),
           if (missingContext) ...[
             const SizedBox(height: 18),
-            const McpMessageBanner(
-              message:
-                  'This browser page is missing the MCP handoff details from your editor. Restart setup from the Nova3D MCP command in your editor.',
+            McpMessageBanner(
+              message: McpCompletionCopy.missingContextMessage(clientName),
               isError: true,
             ),
           ],
