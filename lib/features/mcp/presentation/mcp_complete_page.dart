@@ -142,8 +142,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
     final clientName = contextData?.clientName;
     final identity =
         status?.identity ?? _identityFromAuth(auth.valueOrNull?.email);
-    final canContinue =
-        _handoffUrl != null && !mcp.loadingStatus && !_preparingLoopback;
+    final canContinue = _handoffUrl != null && !_preparingLoopback;
     final showBlockingSpinner = McpCompletionCopy.showBlockingSpinner(
       loadingStatus: mcp.loadingStatus,
       preparingLoopback: _preparingLoopback,
