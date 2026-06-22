@@ -10,6 +10,7 @@ import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/shared/services/glb_asset_cache.dart';
+import 'package:nova3d_frontend/shared/services/uv_maps_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web/web.dart' as web;
 
@@ -373,6 +374,14 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       );
       return;
     }
+    if (request.requestType == 'uv_maps') {
+      _runUvMaps(
+        requestId: request.requestId,
+        codeArtifact: request.codeArtifact ?? widget.codeArtifact,
+        atlasMode: request.atlasMode.isEmpty ? 'budget' : request.atlasMode,
+      );
+      return;
+    }
     _runEditWorkflow(
       requestId: request.requestId,
       operation: request.operation,
@@ -416,6 +425,83 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       _postVersionResolveResult({
         'requestId': requestId,
         'modelUrl': fallbackModelUrl,
+      });
+    }
+  }
+
+  // UV maps: derive atlases from the CURRENT version's code, package the
+  // checker GLB + atlas SVGs into a zip, and trigger a browser download. Never
+  // produces an asset version. Self-contained (mirrors _runEditWorkflow) so the
+  // editor path has no coupling to the Flutter tab's provider.
+  Future<void> _runUvMaps({
+    required String requestId,
+    required Map<String, dynamic>? codeArtifact,
+    required String atlasMode,
+  }) async {
+    final hasCode = codeArtifact != null &&
+        ((codeArtifact['uri'] is String &&
+                (codeArtifact['uri'] as String).isNotEmpty) ||
+            (codeArtifact['url'] is String &&
+                (codeArtifact['url'] as String).isNotEmpty));
+    if (!hasCode) {
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'failed',
+        'message': 'This model has no editable code yet. Generate it again first.',
+      });
+      return;
+    }
+    final cad = ref.read(cadServiceProvider);
+    try {
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'running',
+        'message': 'Starting UV unwrap...',
+      });
+      final workflowId = await cad.startUvMaps(
+        codeArtifact: codeArtifact,
+        atlasMode: atlasMode,
+        conversationId: widget.conversationId,
+      );
+      final result = await cad.runUvMapsWorkflow(
+        workflowId,
+        onProgress: (status) => _postUvResult({
+          'requestId': requestId,
+          'status': 'running',
+          'message': status.progressLabel,
+        }),
+      );
+      if (result.failed || !result.hasMaps) {
+        _postUvResult({
+          'requestId': requestId,
+          'status': 'failed',
+          'message': result.errorMessage ?? 'UV maps could not be generated.',
+        });
+        return;
+      }
+      if (!mounted) return;
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'running',
+        'message': 'Packaging UV maps...',
+      });
+      await downloadUvMapsZip(result, fileName: 'nova3d_uv_maps.zip');
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'completed',
+        'message': 'UV maps downloaded.',
+      });
+    } on CadException catch (e) {
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'failed',
+        'message': e.message,
+      });
+    } catch (_) {
+      _postUvResult({
+        'requestId': requestId,
+        'status': 'failed',
+        'message': 'UV map generation failed. Try again.',
       });
     }
   }
@@ -653,6 +739,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
             (request['modelUrl'] as String?) ??
             '',
         instructionPrompt: (request['instructionPrompt'] as String?) ?? '',
+        atlasMode: (request['atlasMode'] as String?) ?? '',
         codeArtifact: _asStringMap(request['codeArtifact']),
         modelArtifact: _asStringMap(request['modelArtifact']),
         selectedMeshes: _asStringList(request['selectedMeshes']),
@@ -686,6 +773,13 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   void _postVersionResolveResult(Map<String, dynamic> payload) {
     _iframe.contentWindow?.postMessage(
       {'type': 'nova3d-version-resolve-result', ...payload}.jsify(),
+      '*'.toJS,
+    );
+  }
+
+  void _postUvResult(Map<String, dynamic> payload) {
+    _iframe.contentWindow?.postMessage(
+      {'type': 'nova3d-uv-result', ...payload}.jsify(),
       '*'.toJS,
     );
   }
@@ -758,6 +852,7 @@ class _EditRequest {
     this.sourceWorkflowId = '',
     this.sourceModelUrl = '',
     this.instructionPrompt = '',
+    this.atlasMode = '',
     this.codeArtifact,
     this.modelArtifact,
     this.selectedMeshes = const [],
@@ -773,6 +868,7 @@ class _EditRequest {
   final String sourceWorkflowId;
   final String sourceModelUrl;
   final String instructionPrompt;
+  final String atlasMode;
   final Map<String, dynamic>? codeArtifact;
   final Map<String, dynamic>? modelArtifact;
   final List<String> selectedMeshes;

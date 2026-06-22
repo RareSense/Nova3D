@@ -60,6 +60,7 @@ import {
   requestRegeneratePart, requestAddPart, requestArticulation,
   showEditStatus,
 } from '@nova/aiEdit.js';
+import { setupUvBridge, requestUvMaps } from '@nova/uvMaps.js';
 
 // ── Cross-module callback wires ──────────────────────────────────────────────
 // These hooks let modules that would otherwise form an import cycle stay
@@ -151,6 +152,8 @@ function registerAllActions() {
   registerAction('ai-remix',      () => requestRegeneratePart());
   registerAction('ai-grow',       () => requestAddPart());
   registerAction('ai-articulate', () => requestArticulation());
+
+  registerAction('uv-maps',       () => requestUvMaps());
 }
 
 function renderSelectionIcons() {
@@ -174,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupViewportMode();
   setupExplodeControls();
   setupEditBridge();
+  setupUvBridge();
   syncHistoryUi();
   setupTransformPanel();
   buildBgSwatches();

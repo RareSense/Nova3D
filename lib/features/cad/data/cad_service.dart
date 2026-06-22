@@ -6,6 +6,7 @@ import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/features/cad/models/uv_maps_result.dart';
 
 class CadException implements Exception {
   CadException(this.message);
@@ -414,6 +415,106 @@ class CadService {
     } on DioException catch (e) {
       if (_mayHaveStarted(e)) return requestedWorkflowId;
       throw CadException(_errorMessage(e));
+    }
+  }
+
+  // ── UV maps ────────────────────────────────────────────────────────────────
+  // Derives game-ready UV atlases from a version's source CODE (never a GLB).
+  // Independent of the edit workflows: no model option / provider key, and it
+  // never produces an asset version — the result is a download attached to the
+  // current version's code_artifact.
+
+  Future<String> startUvMaps({
+    required Map<String, dynamic> codeArtifact,
+    String atlasMode = 'budget',
+    String? workflowId,
+    String? conversationId,
+  }) async {
+    final requestedWorkflowId = workflowId ?? createWorkflowId();
+    try {
+      final response = await _dio.post(
+        '/run/state/$kGenerateUvMapsWorkflow',
+        queryParameters: {'request_id': requestedWorkflowId},
+        data: {
+          'payload': {
+            'code_artifact': codeArtifact,
+            'atlas_mode': atlasMode,
+          },
+          'return_nodes': ['uv_unwrap'],
+          if (conversationId != null)
+            'conversation': _conversationLink(
+              conversationId,
+              relationType: kGenerateUvMapsWorkflow,
+              operation: kGenerateUvMapsWorkflow,
+            ),
+        },
+        options: await _authOptions(receiveTimeout: _startReceiveTimeout),
+      );
+      final returnedWorkflowId = response.data['workflow_id'] as String?;
+      if (returnedWorkflowId == null || returnedWorkflowId.isEmpty) {
+        throw CadException('UV map workflow did not return a workflow id.');
+      }
+      return returnedWorkflowId;
+    } on DioException catch (e) {
+      if (_mayHaveStarted(e)) return requestedWorkflowId;
+      throw CadException(_errorMessage(e));
+    }
+  }
+
+  // Mirrors runWorkflow's gentle poll, but parses the uv_unwrap node output.
+  // Kept separate so the generation/edit path stays byte-for-byte unchanged.
+  Future<UvMapsResult> runUvMapsWorkflow(
+    String workflowId, {
+    void Function(WorkflowStatus status)? onProgress,
+  }) async {
+    while (true) {
+      await Future.delayed(const Duration(seconds: 3));
+      final WorkflowStatus status;
+      try {
+        status = await getStatus(workflowId);
+      } on CadException catch (e) {
+        if (_isRecoverableWorkflowLookupError(e)) {
+          onProgress?.call(
+            WorkflowStatus(
+              workflowId: workflowId,
+              state: WorkflowState.pending,
+              currentNode: 'uv_unwrap',
+            ),
+          );
+          continue;
+        }
+        rethrow;
+      }
+      onProgress?.call(status);
+      if (status.isTerminal) {
+        if (status.state == WorkflowState.budgetExhausted) {
+          throw CadException(
+            'Your generation budget was exhausted before UV maps completed.',
+          );
+        }
+        break;
+      }
+    }
+
+    while (true) {
+      try {
+        final resp = await _dio.get(
+          '/result/$workflowId',
+          options: await _authOptions(receiveTimeout: _resultReceiveTimeout),
+        );
+        return UvMapsResult.fromResultJson(resp.data as Map<String, dynamic>);
+      } on DioException catch (e) {
+        final ex = CadException(_errorMessage(e));
+        if (!_isRecoverableWorkflowLookupError(ex)) throw ex;
+        onProgress?.call(
+          WorkflowStatus(
+            workflowId: workflowId,
+            state: WorkflowState.running,
+            currentNode: 'uv_unwrap',
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 3));
+      }
     }
   }
 

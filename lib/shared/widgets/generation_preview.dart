@@ -4,6 +4,7 @@ import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/shared/widgets/code_preview.dart';
 import 'package:nova3d_frontend/shared/widgets/glb_viewer.dart';
+import 'package:nova3d_frontend/shared/widgets/uv_maps_view.dart';
 
 /// Wraps [GlbViewer] with a header toolbar that toggles between the model
 /// preview and a code preview of the generation's Python code artifact.
@@ -58,7 +59,7 @@ class GenerationPreview extends StatefulWidget {
   State<GenerationPreview> createState() => _GenerationPreviewState();
 }
 
-enum _PreviewTab { model, code }
+enum _PreviewTab { model, code, uv }
 
 class _GenerationPreviewState extends State<GenerationPreview> {
   _PreviewTab _tab = _PreviewTab.model;
@@ -128,16 +129,22 @@ class _GenerationPreviewState extends State<GenerationPreview> {
                     child: CodePreview(codeArtifact: widget.codeArtifact!),
                   ),
                 ),
-                // GlbViewer: only in the tree when the model tab is active.
-                // HtmlElementView (the iframe) renders in a separate HTML
-                // layer that ignores every Flutter visibility mechanism
-                // (Offstage, IndexedStack, Opacity, Visibility, 0×0 collapse)
-                // — especially after the browser Fullscreen API has been used.
-                // Removing it from the widget tree is the only reliable fix.
-                // viewerStateKey ties GlbViewer to IndexedDB, so camera
-                // position and edit history survive the remount.
+                // GlbViewer / UV view: platform views (HtmlElementView) render
+                // in a separate HTML layer that ignores every Flutter
+                // visibility mechanism (Offstage, IndexedStack, Opacity), so
+                // they must be removed from the tree when not active. Their
+                // state survives via IndexedDB (viewer) and the session-scoped
+                // uvMapsProvider (UV), so remounting restores them.
                 if (_tab == _PreviewTab.model)
                   Positioned.fill(child: _buildGlbViewer()),
+                if (_tab == _PreviewTab.uv)
+                  Positioned.fill(
+                    child: UvMapsView(
+                      codeArtifact: widget.codeArtifact,
+                      sourceWorkflowId: widget.sourceWorkflowId,
+                      conversationId: widget.conversationId,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -212,9 +219,23 @@ class _HeaderToolbar extends StatelessWidget {
             ),
             hint: 'PY',
           ),
+          const SizedBox(width: 6),
+          _Tab(
+            label: 'UV',
+            active: active == _PreviewTab.uv,
+            onTap: () => onSelect(_PreviewTab.uv),
+            icon: const Text(
+              '▦',
+              style: TextStyle(fontSize: 11, color: kLilac, height: 1),
+            ),
+          ),
           const Spacer(),
           Text(
-            active == _PreviewTab.model ? modelMeta : codeMeta,
+            switch (active) {
+              _PreviewTab.model => modelMeta,
+              _PreviewTab.code => codeMeta,
+              _PreviewTab.uv => 'UV ATLAS',
+            },
             style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.5),
           ),
           if (onOpenSidePanel != null && active == _PreviewTab.code) ...[

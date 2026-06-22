@@ -581,6 +581,36 @@
         return;
       }
 
+      if (data.type === 'nova3d-uv-request') {
+        var uvFrame = findNova3dFrame(event.source);
+        if (!uvFrame) return;
+        function postUvBridgeResult(payload) {
+          try {
+            uvFrame.contentWindow && uvFrame.contentWindow.postMessage(Object.assign({
+              type: 'nova3d-uv-result',
+              requestId: String(data.requestId || '')
+            }, payload), '*');
+          } catch (_) {}
+        }
+        var uvHandler = window.__nova3dEditHandlers && window.__nova3dEditHandlers[String(data.viewerId || '')];
+        if (typeof uvHandler === 'function') {
+          try {
+            uvHandler(JSON.stringify({
+              type: 'uv_maps',
+              requestId: String(data.requestId || ''),
+              codeArtifact: data.codeArtifact || null,
+              sourceWorkflowId: String(data.sourceWorkflowId || ''),
+              atlasMode: String(data.atlasMode || 'budget')
+            }));
+          } catch (_) {
+            postUvBridgeResult({ status: 'failed', message: 'Nova3D could not start UV map generation.' });
+          }
+        } else {
+          postUvBridgeResult({ status: 'failed', message: 'Nova3D UV bridge is not ready. Reopen this model preview.' });
+        }
+        return;
+      }
+
       if (data.type !== 'nova3d-viewer-fullscreen') return;
       var frame = findNova3dFrame(event.source);
       if (!frame) return;

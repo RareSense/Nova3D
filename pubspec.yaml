@@ -39,6 +39,9 @@ dependencies:
 
   file_picker: ^11.0.2
 
+  # Client-side ZIP packaging for UV-map downloads (pure Dart, web-safe)
+  archive: ^3.6.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
