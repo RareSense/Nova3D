@@ -378,7 +378,6 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       _runUvMaps(
         requestId: request.requestId,
         codeArtifact: request.codeArtifact ?? widget.codeArtifact,
-        atlasMode: request.atlasMode.isEmpty ? 'budget' : request.atlasMode,
       );
       return;
     }
@@ -436,7 +435,6 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   Future<void> _runUvMaps({
     required String requestId,
     required Map<String, dynamic>? codeArtifact,
-    required String atlasMode,
   }) async {
     final hasCode = codeArtifact != null &&
         ((codeArtifact['uri'] is String &&
@@ -458,24 +456,24 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         'status': 'running',
         'message': 'Starting UV unwrap...',
       });
-      final workflowId = await cad.startUvMaps(
+      final sets = await cad.runUvMapsBundle(
         codeArtifact: codeArtifact,
-        atlasMode: atlasMode,
         conversationId: widget.conversationId,
-      );
-      final result = await cad.runUvMapsWorkflow(
-        workflowId,
-        onProgress: (status) => _postUvResult({
+        onProgress: (message) => _postUvResult({
           'requestId': requestId,
           'status': 'running',
-          'message': status.progressLabel,
+          'message': message,
         }),
       );
-      if (result.failed || !result.hasMaps) {
+      final good = sets.where((s) => s.result.hasMaps).toList();
+      if (good.isEmpty) {
+        final err = sets
+            .map((s) => s.result.errorMessage)
+            .firstWhere((e) => e != null, orElse: () => null);
         _postUvResult({
           'requestId': requestId,
           'status': 'failed',
-          'message': result.errorMessage ?? 'UV maps could not be generated.',
+          'message': err ?? 'UV maps could not be generated.',
         });
         return;
       }
@@ -485,7 +483,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         'status': 'running',
         'message': 'Packaging UV maps...',
       });
-      await downloadUvMapsZip(result, fileName: 'nova3d_uv_maps.zip');
+      await downloadUvMapsZip(good, fileName: 'nova3d_uv_maps.zip');
       _postUvResult({
         'requestId': requestId,
         'status': 'completed',

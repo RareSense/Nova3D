@@ -32,6 +32,10 @@
   <title>Nova3D</title>
   <link rel="manifest" href="manifest.json">
 
+  <!-- model-viewer: lightweight 3D preview used by the UV-maps tab to show the
+       checker-textured GLB. Loaded async so it never blocks app startup. -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+
   <!-- Preload the splash fonts so they're ready before paint. These are the
        same TTFs bundled into the Flutter asset bundle (assets/fonts/) so
        there's a single source of truth and no extra network traffic. -->

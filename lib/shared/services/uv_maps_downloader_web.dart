@@ -11,24 +11,32 @@ import 'package:web/web.dart' as web;
 /// CORS allowance covers these requests. The download itself uses a base64
 /// `data:` URL + hidden anchor — the same mechanism the code download uses.
 Future<void> downloadUvMapsZip(
-  UvMapsResult result, {
+  List<UvMapsSet> sets, {
   String fileName = 'uv_maps.zip',
 }) async {
   final dio = Dio();
   final archive = Archive();
 
-  final checkerUrl = result.checkerGlbUrl;
-  if (checkerUrl != null && checkerUrl.isNotEmpty) {
-    final bytes = await _fetchBytes(dio, checkerUrl);
-    if (bytes != null) {
-      archive.addFile(ArchiveFile('model_checker.glb', bytes.length, bytes));
-    }
-  }
+  for (final set in sets) {
+    final result = set.result;
+    final folder = set.slug;
 
-  for (final atlas in result.atlases) {
-    final bytes = await _fetchBytes(dio, atlas.svgUrl);
-    if (bytes == null) continue;
-    archive.addFile(ArchiveFile(atlas.zipPath(), bytes.length, bytes));
+    final checkerUrl = result.checkerGlbUrl;
+    if (checkerUrl != null && checkerUrl.isNotEmpty) {
+      final bytes = await _fetchBytes(dio, checkerUrl);
+      if (bytes != null) {
+        archive.addFile(
+          ArchiveFile('$folder/model_checker.glb', bytes.length, bytes),
+        );
+      }
+    }
+    for (final atlas in result.atlases) {
+      final bytes = await _fetchBytes(dio, atlas.svgUrl);
+      if (bytes == null) continue;
+      archive.addFile(
+        ArchiveFile('$folder/${atlas.zipPath()}', bytes.length, bytes),
+      );
+    }
   }
 
   if (archive.files.isEmpty) {

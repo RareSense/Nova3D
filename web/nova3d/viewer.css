@@ -366,8 +366,12 @@ body.flyout-open .articulation-control-panel.active { display:none; }
   border:1px solid rgba(255,255,255,.06);
   box-shadow:0 4px 20px rgba(0,0,0,.5);
 }
-body.full-ui .undo-bar { display:flex; }
+body.full-ui .undo-bar { display:flex; flex-wrap:wrap; max-width:calc(100vw - 24px); justify-content:center; }
 body.compact .undo-bar { display:none !important; }
+/* Bottom-bar buttons size to their own content and never shrink. The
+   responsive `.vp-btn { flex:1 1 0; min-width:0 }` rule targets the top
+   toolbar; without this it makes the labelled "Download UV" button overflow. */
+.undo-bar .vp-btn { flex:0 0 auto; min-width:auto; }
 
 /* ── Stats bar ── */
 .stats {

@@ -427,6 +427,7 @@ class CadService {
   Future<String> startUvMaps({
     required Map<String, dynamic> codeArtifact,
     String atlasMode = 'budget',
+    int? maxAtlases,
     String? workflowId,
     String? conversationId,
   }) async {
@@ -439,6 +440,7 @@ class CadService {
           'payload': {
             'code_artifact': codeArtifact,
             'atlas_mode': atlasMode,
+            'max_atlases': ?maxAtlases,
           },
           'return_nodes': ['uv_unwrap'],
           if (conversationId != null)
@@ -516,6 +518,41 @@ class CadService {
         await Future.delayed(const Duration(seconds: 3));
       }
     }
+  }
+
+  // Produce BOTH packings the UV tab shows in one action: a single combined
+  // sheet (everything, max_atlases=1) plus the per-hierarchy-group sheets. Run
+  // in parallel so the wall time is one unwrap, not two. Shared by the tab and
+  // the full-screen editor button so the behavior is identical.
+  Future<List<UvMapsSet>> runUvMapsBundle({
+    required Map<String, dynamic> codeArtifact,
+    void Function(String message)? onProgress,
+    String? conversationId,
+  }) async {
+    final base = createWorkflowId();
+
+    Future<UvMapsResult> run(String mode, int? maxAtlases, String suffix, String phase) async {
+      final wf = await startUvMaps(
+        codeArtifact: codeArtifact,
+        atlasMode: mode,
+        maxAtlases: maxAtlases,
+        workflowId: '$base-$suffix',
+        conversationId: conversationId,
+      );
+      return runUvMapsWorkflow(
+        wf,
+        onProgress: (s) => onProgress?.call('$phase — ${s.progressLabel}'),
+      );
+    }
+
+    final results = await Future.wait([
+      run('budget', 1, 'combined', 'Combined atlas'),
+      run('group', null, 'groups', 'Per-group atlases'),
+    ]);
+    return [
+      UvMapsSet(label: 'Combined', result: results[0]),
+      UvMapsSet(label: 'Per-group', result: results[1]),
+    ];
   }
 
   Future<String> _apiKeyFor(GenerationModelOption option) async {

@@ -26,6 +26,29 @@ class UvMapAtlas {
   }
 }
 
+/// One labelled packing in a UV bundle (e.g. "Combined" or "Per-group").
+class UvMapsSet {
+  const UvMapsSet({required this.label, required this.result});
+
+  final String label;
+  final UvMapsResult result;
+
+  /// Filesystem-safe folder name for this set inside the download zip.
+  String get slug {
+    final s = label.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    return s.replaceAll(RegExp(r'^_+|_+$'), '').isEmpty ? 'set' : s;
+  }
+
+  Map<String, dynamic> toJson() => {'label': label, 'result': result.toJson()};
+
+  factory UvMapsSet.fromJson(Map<String, dynamic> j) => UvMapsSet(
+    label: (j['label'] as String?) ?? 'Set',
+    result: UvMapsResult.fromJson(
+      (j['result'] as Map?)?.cast<String, dynamic>() ?? const {},
+    ),
+  );
+}
+
 class UvMapsResult {
   const UvMapsResult({
     required this.ok,
@@ -51,6 +74,45 @@ class UvMapsResult {
 
   bool get hasMaps =>
       !failed && (checkerGlbUrl != null || atlases.isNotEmpty);
+
+  // ── Local persistence (so generated maps survive a page refresh) ──────────
+  // Azure SAS URLs are long-lived (AZURE_SAS_MINUTES), so the URLs are stored
+  // directly. Only successful results are ever persisted.
+  Map<String, dynamic> toJson() => {
+    'status': status,
+    'checker': checkerGlbUrl,
+    'atlasCount': atlasCount,
+    'meshCount': meshCount,
+    'tris': trisExportedTotal,
+    'atlases': atlases
+        .map((a) => {
+              'group': a.group,
+              'subfolder': a.subfolder,
+              'svgUrl': a.svgUrl,
+              'svgUri': a.svgUri,
+            })
+        .toList(),
+  };
+
+  factory UvMapsResult.fromJson(Map<String, dynamic> j) => UvMapsResult(
+    ok: true,
+    status: (j['status'] as String?) ?? 'completed',
+    checkerGlbUrl: j['checker'] as String?,
+    atlasCount: (j['atlasCount'] as num?)?.toInt() ?? 0,
+    meshCount: (j['meshCount'] as num?)?.toInt(),
+    trisExportedTotal: (j['tris'] as num?)?.toInt(),
+    atlases: (j['atlases'] as List?)
+            ?.whereType<Map>()
+            .map((e) => UvMapAtlas(
+                  group: (e['group'] as String?) ?? 'group',
+                  subfolder: (e['subfolder'] as String?) ?? 'atlases',
+                  svgUrl: (e['svgUrl'] as String?) ?? '',
+                  svgUri: e['svgUri'] as String?,
+                ))
+            .where((a) => a.svgUrl.isNotEmpty)
+            .toList() ??
+        const [],
+  );
 
   /// Parse the `/result/{id}` body for a `generate_uv_maps` run.
   factory UvMapsResult.fromResultJson(Map<String, dynamic> json) {
