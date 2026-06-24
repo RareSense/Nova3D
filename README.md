@@ -2,162 +2,85 @@
 
 # Nova3D
 
-**A tool that generates 3D objects with separate, editable parts - instead of a single merged blob**
+**Code-native 3D generation — assets are executable programs, not opaque meshes.**
 
-[website](https://nova3d.xyz) · [discord](https://discord.gg/QEH8mzcwdR) · [twitter/X](https://x.com/nova3d_ai) · [github issues](https://github.com/RareSense/Nova3D/issues)
+[website](https://nova3d.xyz) · [app](https://app.nova3d.xyz) · [discord](https://discord.gg/QEH8mzcwdR) · [twitter/X](https://x.com/nova3d_ai) · [issues](https://github.com/RareSense/Nova3D/issues)
 
 <br/>
 
-<img src="assets/gifs/nova3d/0504.gif" width="32%" />&nbsp;<img src="assets/gifs/nova3d/0504(1).gif" width="32%" />&nbsp;<img src="assets/gifs/nova3d/0504(2).gif" width="32%" />
+<img src="app/assets/gifs/nova3d/0504.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/0504(1).gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/0504(2).gif" width="32%" />
 
 </div>
 
 ## What is Nova3D?
 
-Nova3D generates 3D assets as **executable construction procedures**. The pipeline writes Blender-native Python scripts, returning a structured GLB with named, separately addressable parts.
+Nova3D generates 3D assets as **executable construction procedures**. Instead of emitting a single fused mesh, the pipeline writes Blender-native Python that compiles to a structured GLB with **named, separately addressable parts**, a real assembly hierarchy, joint pivots, and PBR materials.
 
-This is architecturally different from diffusion-based generators (Meshy, Tripo, Rodin), which extract a single merged mesh with no part boundaries, and from OpenSCAD-based systems (CADAM), which guarantee manifold solids but have a hard ceiling on organic shapes, hierarchy, materials, and structural editability. 
+The asset's source of truth is the program; the mesh is just its compiled output. Because anything coded is programmable, every generated object is born **inspectable, addressable, editable, and animatable** — properties a baked mesh cannot natively expose.
 
-Nova3D uses Blender's scene graph as the native representation - the most expressive geometry substrate available - making it a strict superset of both approaches.
+This is architecturally different from diffusion-based generators (Meshy, Tripo, Rodin), which extract a single merged mesh with no part boundaries, and from CSG/OpenSCAD systems, which guarantee solids but cap out on organic shapes, hierarchy, and materials. Nova3D uses Blender's scene graph as the native representation — a strict superset of both.
 
-This repo is the client. It connects to our (currently) closed-source hosted service. 
+## Why code-native?
 
----
-
-## Prerequisites
-
-The client is built with Flutter/Dart. If you don't have Flutter 3.24+ installed, set it up first:
-
-<details>
-<summary>💻 macOS</summary>
-
-Install Flutter via [Homebrew](https://brew.sh):
-
-```bash
-brew install --cask flutter
-flutter doctor
-```
-
-</details>
-
-<details>
-<summary>🪟 Windows</summary>
-
-Install Flutter via [Chocolatey](https://chocolatey.org) (run PowerShell as Administrator):
-
-```powershell
-choco install flutter
-```
-
-Then close and reopen your terminal, and verify:
-
-```powershell
-flutter doctor
-```
-
-> Don't have Chocolatey? [Install it here](https://chocolatey.org/install), or follow the [manual Flutter install guide](https://docs.flutter.dev/install/manual).
-
-</details>
-
-<details>
-<summary>🐧 Linux</summary>
-
-Install Flutter via Snap:
-
-```bash
-sudo snap install flutter --classic
-flutter sdk-path   # confirm install path
-flutter doctor
-```
-
-</details>
-
-Once `flutter doctor` shows no blocking issues, continue with Quick Start below.
-
-## Quick Start
-
-Get it running locally in under 2 minutes. Requires [Flutter 3.24+](https://flutter.dev).
-
-```bash
-# 1. Clone and Install
-git clone https://github.com/RareSense/Nova3D.git
-cd Nova3D
-flutter pub get
-
-# 2. Run Local UI
-# Note: Port 5555 is required for OAuth redirect authorization
-flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5555
-```
-
-1.  Open `http://127.0.0.1:5555`
-2.  Sign in (Google/Email).
-3.  **Settings** → Add your API Key (OpenRouter, OpenAI, Anthropic, or Gemini).
-4.  Enter a prompt and generate.
-
----
+- **Named parts** — `Gear_12T_Small_Tooth_07`, not `geometry_0`.
+- **Real hierarchy** — a parent/child assembly tree exported to glTF nodes.
+- **Pivots & articulation** — joints at real hinges/axles; rigging is an additive code pass.
+- **Verifiable constraints** — "4 wheels", "20-tooth gear", "0.6 m wheelbase" are measurable from the output.
+- **Local edits** — change one part without regenerating the whole asset.
+- **Compact source** — a small editable program instead of a multi-megabyte opaque mesh.
 
 ## Demo
 
 [![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=rLzkfTzDdwY)
-☝️Prompt: Make a washing machine with detailed internal mechanics
+
+☝️ Prompt: *Make a washing machine with detailed internal mechanics*
 
 ## Comparison
 
 [![Nova3D vs TRELLIS vs Hunyuan3D](https://i.imgur.com/QAAgIQ8.png)](https://www.youtube.com/watch?v=iL_NX_hBq9k)
-☝️Side-by-side comparison with TRELLIS and Hunyuan3D
 
-Nova3D is optimized for **structured asset generation**, but the advantage is not limited to multipart editing. In this comparison, Nova3D also shows stronger **single-asset fidelity**: cleaner silhouette control, sharper feature delineation, more coherent surface transitions, and better preservation of distinct functional substructures.
-
-The important point is that **explicit part structure is an added capability, not a quality tradeoff**. Even when judged purely as a single 3D object, Nova3D aims for higher geometric clarity and stronger downstream readiness; preserving named, separately editable components comes on top of that.
+☝️ Side-by-side with TRELLIS and Hunyuan3D. Nova3D is optimized for **structured asset generation**, but the advantage is not limited to multipart editing — it also shows stronger single-asset fidelity: cleaner silhouette control, sharper feature delineation, and more coherent surface transitions. **Explicit part structure is an added capability, not a quality tradeoff.**
 
 [![Nova3D vs PartPacker vs Tripo Segmentation](https://i.imgur.com/wWjVuRr.png)](https://www.youtube.com/watch?v=msGZs4EMnvs)
-☝️Part-aware comparison with NVIDIA PartPacker and Tripo
 
-Nova3D emphasizes **semantic separation with usable structure**. The goal is to preserve discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality**.
+☝️ Part-aware comparison with NVIDIA PartPacker and Tripo. Nova3D preserves discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality** — assets stay actionable after generation (inspect, regenerate, restyle, articulate, export) without collapsing back into one undifferentiated mesh.
 
-In practice, that means Nova3D is designed for assets that need to remain actionable after generation: users can inspect, regenerate, restyle, articulate, or export components without collapsing the model back into a single undifferentiated mesh.
+## Technical philosophy
 
----
+**1. Script-native, not mesh-native.** Most AI 3D generators do image-to-3D diffusion. Nova3D is prompt-to-code / image-to-code, targeting Blender's API — which yields a logical named hierarchy, surgical edits (change the handle without regenerating the cup), and proper PBR materials instead of baked vertex colors.
 
-## Technical Philosophy
+**2. Model-agnostic.** Nova3D is a generation harness. Swap providers (OpenRouter, OpenAI, Anthropic, Gemini) via the settings menu; the pipeline handles validation and execution regardless of which LLM writes the code.
 
-### 1. Script-Native vs. Mesh-Native
-Most AI 3D generators use "Image-to-3D" diffusion. Nova3D is "Prompt-to-Code" or "Image-to-Code." And by targeting Blender's API, the following is achieved:
-*   **Logical Hierarchy:** Parts are named and parented correctly.
-*   **Surgical Edits:** Change the "handle" without regenerating the "cup."
-*   **Material Support:** Proper PBR texture mapping rather than "baked" vertex colors.
+**3. Precision + organic flow.** Unlike pure CSG/OpenSCAD systems that struggle with organic shapes, Nova3D leverages Blender's full modifier suite (subdivision, sculpting, booleans) for high-fidelity models.
 
-### 2. Model Agnostic
-Nova3D is a generation harness. You can swap between Claude 3.5, GPT-4o, or Gemini 1.5 Pro via the settings menu. The pipeline handles validation and execution regardless of which LLM is writing the code.
+## Repository structure
 
-### 3. Precision + Organic Flow
-Unlike pure CSG/OpenSCAD systems which struggle with organic shapes, Nova3D leverages Blender's full suite of modifiers (subdivision, sculpting, booleans) to create high-fidelity models.
+This repository is the home for Nova3D's open clients and integrations. The hosted generation backend is (currently) closed-source.
 
----
+```
+Nova3D/
+├── app/              # Flutter/Dart web client  ·  see app/README.md
+├── mcp/              # Nova3D MCP server (coming soon)
+├── blender-plugin/   # Blender plugin (coming soon)
+├── claude-skills/    # Claude skills (coming soon)
+├── docs/             # architecture & the "3D as code" thesis (coming soon)
+└── examples/         # gallery of generated assets + their source programs (coming soon)
+```
 
-## Features
+> Surfaces are being moved in one at a time. Today the **client app** lives in [`app/`](app/).
 
-*   **Integrated Viewport:** Built-in Three.js editor with transform tools, snapping, and material editing.
-*   **Local Caching:** Models are cached in-browser; view your history even after remote URLs expire.
-*   **Reference Images:** Attach a photo to guide the spatial logic of the generated script.
-*   **Production Build:** `flutter build web --release` for static hosting.
+## Getting started
 
----
+The web client lives in [`app/`](app/) and connects to the hosted Nova3D service — no local backend required. See **[`app/README.md`](app/README.md)** for prerequisites, setup, features, and troubleshooting.
 
-## Troubleshooting
+## Research
 
-*   **Auth Loops:** Always use `http://127.0.0.1:5555`. Using `localhost:5555` will cause Google Sign-In to fail due to strict OAuth origin policies.
+Nova3D is also a research program on representing 3D as code — a spec-grounded benchmark for structured, editable, constraint-consistent assets. Technical report coming soon.
 
-*   **API Key not working / generations failing silently:** Make sure your key is entered under **Settings → API Key** and that you've selected the matching provider (OpenRouter, OpenAI, Anthropic, or Gemini). A key for the wrong provider will cause requests to fail immediately. **Avoid Gemini free-tier keys** — Nova3D's pipeline is token-intensive and free-tier Gemini quota is low enough that it may not function at all, even for a single generation. Use a paid-tier Gemini key, or switch to OpenRouter, OpenAI, or Anthropic.
+## License
 
-*   **Nothing happens after clicking Generate (no error shown):** This usually means the client can't reach the backend. If you're running the default setup, make sure you haven't accidentally overridden `API_BASE_URL` to a local address. The default build points to `nova3d.xyz` — no local backend is needed.
-
-*   **Self-Hosting Backend:** By default, this client communicates with the `nova3d.xyz` hosted API (currently closed-source). If you are building your own backend, point the client at it by passing `--dart-define=API_BASE_URL=https://your-api.com` at build or run time. **Do not set this to a `localhost` address unless you have a fully configured local backend running** — doing so will result in 400 errors on every generation attempt. If you're unsure, leave this flag out entirely and use the hosted service.
-
----
+[MIT](LICENSE) © RareSense. The clients and integrations in this repository are open-source; the hosted generation backend is proprietary.
 
 <p align="center">
-  <small>
-    Built on the same engine powering <b><a href="https://formanova.ai">FormaNova</a></b> for specialized jewelry CAD.
-  </small>
+  <small>Built on the same engine powering <b><a href="https://formanova.ai">FormaNova</a></b> for specialized jewelry CAD.</small>
 </p>
