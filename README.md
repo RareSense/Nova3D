@@ -61,17 +61,29 @@ This is architecturally different from diffusion-based generators (Meshy, Tripo,
 
 Every visually distinct component is its own named, editable mesh, grouped into named sub-assemblies — and prompt-stated counts and dimensions hold up when measured back from the result.
 
-### Every part separates
+### Built as parts, not segmented after the fact
 
 <div align="center"><img src="docs/media/segmentation_explode.gif" width="78%" alt="Four assets exploded into their parts" /></div>
 
-*Exploded — Nova3D (left, wireframe) separates into many named parts; PartCrafter and the segmentation baseline CubePart into a handful. Market stall, washing machine, pan-tilt webcam, robot arm.*
+*Nova3D never builds a fused mesh in the first place — every component is generated as its own named, watertight part, so any piece can be selected, recolored, replaced, or rigged on its own. The others can only approximate this afterward: PartCrafter returns a handful of unnamed chunks, and CubePart must be handed the part names, then slices a finished mesh into capped, approximate regions. The difference isn't cosmetic — it's whether the asset stays addressable after generation. (Market stall, washing machine, pan-tilt webcam, robot arm.)*
+
+## Assembly hierarchy
+
+<div align="center"><img src="docs/media/hierarchy_robot_arm.png" width="100%" alt="Robot arm exported as a labeled assembly tree" /></div>
+
+*Parts don't just have names — they're wired into a labeled assembly tree with a joint pivot at every articulation point. This robot arm exports as a depth-7 kinematic chain: rotating any pivot moves its whole subtree. The program writes that tree itself; mesh generators export a flat list with nothing to grab or rig.*
 
 ## Articulation
 
 <div align="center"><img src="docs/media/articulation_drone.gif" width="55%" alt="Quadcopter drone articulating, geometry frozen" /></div>
 
 *Rigging is an additive code pass: joints are added at real pivots referencing parts the program already named — the existing geometry never moves.*
+
+## UV-ready from the source
+
+<div align="center"><img src="docs/media/uv_from_code.png" width="100%" alt="Auto-generated clean, packed UV atlas for a generated asset" /></div>
+
+*Each part gets its own UV chart, auto-packed into one clean, non-overlapping atlas grouped by sub-assembly.*
 
 ## Technical philosophy
 
