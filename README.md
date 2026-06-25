@@ -21,6 +21,27 @@ The asset's source of truth is the program; the mesh is just its compiled output
 This is architecturally different from diffusion-based generators (Meshy, Tripo, Rodin), which extract a single merged mesh with no part boundaries, and from CSG/OpenSCAD systems, which guarantee solids but cap out on organic shapes, hierarchy, and materials. Nova3D uses Blender's scene graph as the native representation — a strict superset of both.
 
 
+## Getting started
+
+The web client lives in [`app/`](app/) and connects to the hosted Nova3D service — no local backend required. See **[`app/README.md`](app/README.md)** for prerequisites, setup, features, and troubleshooting.
+
+
+## Repository structure
+
+This repository is the home for Nova3D's open clients and integrations. The hosted generation backend is (currently) closed-source.
+
+```
+Nova3D/
+├── app/              # Flutter/Dart web client  ·  see app/README.md
+├── mcp/              # Nova3D MCP server (coming soon)
+├── blender-plugin/   # Blender plugin (coming soon)
+├── claude-skills/    # Claude skills (coming soon)
+├── docs/             # architecture & the "3D as code" thesis (coming soon)
+└── examples/         # gallery of generated assets + their source programs (coming soon)
+```
+
+> Surfaces are being moved in one at a time. Today the **client app** lives in [`app/`](app/).
+
 ## Demo
 
 [![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=rLzkfTzDdwY)
@@ -85,25 +106,6 @@ Every visually distinct component is its own named, editable mesh, grouped into 
 
 **3. Precision + organic flow.** Unlike pure CSG/OpenSCAD systems that struggle with organic shapes, Nova3D leverages Blender's full modifier suite (subdivision, sculpting, booleans) for high-fidelity models.
 
-## Repository structure
-
-This repository is the home for Nova3D's open clients and integrations. The hosted generation backend is (currently) closed-source.
-
-```
-Nova3D/
-├── app/              # Flutter/Dart web client  ·  see app/README.md
-├── mcp/              # Nova3D MCP server (coming soon)
-├── blender-plugin/   # Blender plugin (coming soon)
-├── claude-skills/    # Claude skills (coming soon)
-├── docs/             # architecture & the "3D as code" thesis (coming soon)
-└── examples/         # gallery of generated assets + their source programs (coming soon)
-```
-
-> Surfaces are being moved in one at a time. Today the **client app** lives in [`app/`](app/).
-
-## Getting started
-
-The web client lives in [`app/`](app/) and connects to the hosted Nova3D service — no local backend required. See **[`app/README.md`](app/README.md)** for prerequisites, setup, features, and troubleshooting.
 
 ## License
 
