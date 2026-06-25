@@ -20,14 +20,6 @@ The asset's source of truth is the program; the mesh is just its compiled output
 
 This is architecturally different from diffusion-based generators (Meshy, Tripo, Rodin), which extract a single merged mesh with no part boundaries, and from CSG/OpenSCAD systems, which guarantee solids but cap out on organic shapes, hierarchy, and materials. Nova3D uses Blender's scene graph as the native representation — a strict superset of both.
 
-## Why code-native?
-
-- **Named parts** — `Gear_12T_Small_Tooth_07`, not `geometry_0`.
-- **Real hierarchy** — a parent/child assembly tree exported to glTF nodes.
-- **Pivots & articulation** — joints at real hinges/axles; rigging is an additive code pass.
-- **Verifiable constraints** — "4 wheels", "20-tooth gear", "0.6 m wheelbase" are measurable from the output.
-- **Local edits** — change one part without regenerating the whole asset.
-- **Compact source** — a small editable program instead of a multi-megabyte opaque mesh.
 
 ## Demo
 
@@ -53,7 +45,7 @@ This is architecturally different from diffusion-based generators (Meshy, Tripo,
 
 <div align="center"><img src="docs/media/comparison_wireframe.png" width="100%" alt="Wireframe: Nova3D vs Meshy, TRELLIS.2, TripoSG" /></div>
 
-*Wireframe (mesh topology). Nova3D builds clean low-poly parts — internal structure is visible; the diffusion models output dense isosurface meshes.*
+*Wireframe (mesh topology). Nova3D builds clean parts — internal structure is visible; the diffusion models output dense isosurface meshes.*
 
 ## Anatomy of a generation
 
@@ -65,7 +57,7 @@ Every visually distinct component is its own named, editable mesh, grouped into 
 
 <div align="center"><img src="docs/media/segmentation_explode.gif" width="78%" alt="Four assets exploded into their parts" /></div>
 
-*Nova3D never builds a fused mesh in the first place — every component is generated as its own named, watertight part, so any piece can be selected, recolored, replaced, or rigged on its own. The others can only approximate this afterward: PartCrafter returns a handful of unnamed chunks, and CubePart must be handed the part names, then slices a finished mesh into capped, approximate regions. The difference isn't cosmetic — it's whether the asset stays addressable after generation. (Market stall, washing machine, pan-tilt webcam, robot arm.)*
+*Nova3D never builds a fused mesh in the first place — every component is generated as its own named, watertight part, so any piece can be selected, retextured, replaced, or rigged on its own. The others can only approximate this afterward: PartCrafter returns a handful of unnamed chunks, and CubePart must be handed the part names, then slices a finished mesh into capped, approximate regions. *
 
 ## Assembly hierarchy
 
