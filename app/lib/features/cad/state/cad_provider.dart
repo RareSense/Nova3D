@@ -23,12 +23,15 @@ final generationReadinessProvider = FutureProvider<GenerationReadiness>((ref) {
   return ref.watch(cadServiceProvider).checkReadiness();
 });
 
+// Initial generation is credits-only. BYOK is offered solely for edit
+// operations (regenerate / add part / articulate) via
+// [byokGenerationModelOptionsProvider]. Because the paid-credit catalog is
+// static and independent of stored provider keys, this provider does not watch
+// API-key state.
 final generationModelOptionsProvider =
-    FutureProvider<List<GenerationModelOption>>((ref) async {
-      ref.watch(apiKeysProvider);
-      final keys = await ref.watch(apiKeyServiceProvider).loadValidKeys();
-      return GenerationModelOption.forKeys(keys);
-    });
+    FutureProvider<List<GenerationModelOption>>(
+      (ref) => GenerationModelOption.paidCreditOptions,
+    );
 
 final byokGenerationModelOptionsProvider =
     FutureProvider<List<GenerationModelOption>>((ref) async {

@@ -71,18 +71,6 @@ class GenerationModelOption {
 
   String get persistedLabel => label;
 
-  static const all = [
-    ...paidCreditOptions,
-    ..._anthropicOptions,
-    _openAiOption,
-    ..._openRouterOptions,
-    _geminiOption,
-  ];
-
-  static List<GenerationModelOption> forKeys(Map<String, String> keys) {
-    return [...paidCreditOptions, ...byokForKeys(keys)];
-  }
-
   static List<GenerationModelOption> byokForKeys(Map<String, String> keys) {
     final options = <GenerationModelOption>[];
     if ((keys[AiProvider.anthropic.id] ?? '').isNotEmpty) {

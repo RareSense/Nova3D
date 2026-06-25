@@ -4,14 +4,19 @@ import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 
 void main() {
-  test('returns paid options plus supported byok providers', () {
-    final options = GenerationModelOption.forKeys({
-      AiProvider.gemini.id: 'gemini-key',
-      AiProvider.anthropic.id: 'anthropic-key',
-      AiProvider.openai.id: 'openai-key',
-      AiProvider.openrouter.id: 'openrouter-key',
-      'legacy_provider': 'legacy-key',
-    });
+  test('paid credit catalog plus supported byok providers', () {
+    // Initial generation is credits-only; BYOK options are surfaced separately
+    // for edit operations. This composes both catalogs to assert their shapes.
+    final options = [
+      ...GenerationModelOption.paidCreditOptions,
+      ...GenerationModelOption.byokForKeys({
+        AiProvider.gemini.id: 'gemini-key',
+        AiProvider.anthropic.id: 'anthropic-key',
+        AiProvider.openai.id: 'openai-key',
+        AiProvider.openrouter.id: 'openrouter-key',
+        'legacy_provider': 'legacy-key',
+      }),
+    ];
     final byok = options
         .where((option) => option.requiresProviderKey)
         .toList(growable: false);

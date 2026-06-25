@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
-import 'package:nova3d_frontend/features/api_keys/state/api_key_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_image.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
@@ -90,8 +89,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
       return;
     }
-    final keys = await ref.read(apiKeyServiceProvider).loadValidKeys();
-    final options = GenerationModelOption.forKeys(keys);
+    final options = GenerationModelOption.paidCreditOptions;
     final modelOption = GenerationModelOption.findById(
       options,
       _selectedModelId,
@@ -111,11 +109,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     setState(() => _creating = true);
     try {
       final cad = ref.read(cadServiceProvider);
-      final workflowName =
-          modelOption.workflowName ??
-          (modelOption.isPaidCredit
-              ? kSketchTo3dPaidWorkflow
-              : kSketchTo3dByokWorkflow);
+      final workflowName = modelOption.workflowName ?? kSketchTo3dPaidWorkflow;
       final readiness = await cad.checkReadinessForWorkflow(workflowName);
       if (!readiness.ready) {
         _showInlineMessage(readiness.userMessage);
