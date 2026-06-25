@@ -105,10 +105,6 @@ Nova3D/
 
 The web client lives in [`app/`](app/) and connects to the hosted Nova3D service — no local backend required. See **[`app/README.md`](app/README.md)** for prerequisites, setup, features, and troubleshooting.
 
-## Research
-
-Nova3D is also a research program on representing 3D as code — a spec-grounded benchmark for structured, editable, constraint-consistent assets. Technical report coming soon.
-
 ## License
 
 [MIT](LICENSE) © RareSense. The clients and integrations in this repository are open-source; the hosted generation backend is proprietary.
