@@ -49,6 +49,16 @@ START_HTTP_TIMEOUT = 120.0
 # Hard ceiling so a wedged workflow can never poll forever (backend caps at 7200).
 MAX_GENERATION_SECONDS = 7200
 
+# A freshly accepted (202) workflow can briefly 404 on /status until Temporal
+# registers it. We tolerate that only this long; if it never becomes visible the
+# start truly failed.
+START_VISIBLE_GRACE_SECONDS = 90
+# Once a workflow HAS been seen running, this many consecutive "not found"
+# responses means it terminated/aborted on the backend without a result (e.g. a
+# hard fail node whose error escaped the workflow). We then stop and report a
+# failure instead of polling indefinitely. 4 × 3s ≈ 12s of confirmation.
+MISSING_AFTER_ALIVE_LIMIT = 4
+
 
 # ── Paid-credit model options ────────────────────────────────────────────────
 # (id, label, code_llm_tier, credits, badge). `credits` is a display hint only —

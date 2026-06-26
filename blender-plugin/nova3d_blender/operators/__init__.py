@@ -10,6 +10,7 @@ classes = (
     account.NOVA3D_OT_buy_credits,
     account.NOVA3D_OT_refresh_credits,
     account.NOVA3D_OT_open_output_folder,
+    account.NOVA3D_OT_copy_workflow_id,
     images.NOVA3D_OT_add_images,
     images.NOVA3D_OT_remove_image,
     images.NOVA3D_OT_clear_images,

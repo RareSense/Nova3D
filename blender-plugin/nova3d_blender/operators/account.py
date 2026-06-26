@@ -77,6 +77,21 @@ class NOVA3D_OT_open_output_folder(bpy.types.Operator):
         return {"CANCELLED"}
 
 
+class NOVA3D_OT_copy_workflow_id(bpy.types.Operator):
+    bl_idname = "nova3d.copy_workflow_id"
+    bl_label = "Copy Workflow ID"
+    bl_description = "Copy the current workflow ID to the clipboard"
+
+    def execute(self, context):
+        workflow_id = context.window_manager.nova3d_workflow_id
+        if not workflow_id:
+            self.report({"WARNING"}, "No workflow ID yet.")
+            return {"CANCELLED"}
+        context.window_manager.clipboard = workflow_id
+        self.report({"INFO"}, f"Copied {workflow_id}")
+        return {"FINISHED"}
+
+
 class NOVA3D_OT_refresh_credits(bpy.types.Operator):
     bl_idname = "nova3d.refresh_credits"
     bl_label = "Refresh Credits"

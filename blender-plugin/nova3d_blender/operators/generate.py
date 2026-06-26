@@ -96,6 +96,7 @@ class NOVA3D_OT_generate(bpy.types.Operator):
         wm.nova3d_running = True
         wm.nova3d_status = "Starting generation..."
         wm.nova3d_uv_status = ""
+        wm.nova3d_workflow_id = ""
         self._job.start()
 
         self._timer = wm.event_timer_add(0.25, window=context.window)
@@ -130,6 +131,9 @@ class NOVA3D_OT_generate(bpy.types.Operator):
         wm = context.window_manager
         if kind == "status":
             wm.nova3d_status = payload
+            _tag_redraw(context)
+        elif kind == "workflow":
+            wm.nova3d_workflow_id = payload or ""
             _tag_redraw(context)
         elif kind == "uv_status":
             wm.nova3d_uv_status = payload

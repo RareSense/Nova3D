@@ -50,6 +50,7 @@ def register_properties():
     wm.nova3d_running = bpy.props.BoolProperty(default=False)
     wm.nova3d_status = bpy.props.StringProperty(default="")
     wm.nova3d_uv_status = bpy.props.StringProperty(default="")
+    wm.nova3d_workflow_id = bpy.props.StringProperty(default="")
     wm.nova3d_credits = bpy.props.IntProperty(default=-1)  # -1 = unknown
     wm.nova3d_credits_busy = bpy.props.BoolProperty(default=False)
     wm.nova3d_last_dir = bpy.props.StringProperty(default="")
@@ -64,7 +65,8 @@ def unregister_properties():
 
     wm = bpy.types.WindowManager
     for attr in ("nova3d_running", "nova3d_status", "nova3d_uv_status",
-                 "nova3d_credits", "nova3d_credits_busy", "nova3d_last_dir"):
+                 "nova3d_workflow_id", "nova3d_credits", "nova3d_credits_busy",
+                 "nova3d_last_dir"):
         if hasattr(wm, attr):
             delattr(wm, attr)
 

@@ -140,6 +140,10 @@ class GenerationJob(threading.Thread):
                 raise
             # keep the client-generated workflow_id and fall through to polling.
 
+        # Surface the workflow id immediately so the user can track the request
+        # (and find it in logs/support) even if it later fails.
+        self._emit("workflow", workflow_id)
+
         # 5. Poll status to completion.
         if not self._poll_status(workflow_id):
             return  # cancelled / errored already emitted
@@ -249,15 +253,28 @@ class GenerationJob(threading.Thread):
         return payload
 
     def _poll_status(self, workflow_id):
-        """Poll /status until terminal. Returns True to continue, False to stop."""
+        """Poll /status until terminal. Returns True to continue, False to stop.
+
+        Handles three "not found" situations distinctly so a dead workflow can
+        never be polled indefinitely:
+          * 404 before the workflow is ever seen running → tolerated only during
+            a short start-up grace window, then reported as "did not start".
+          * 404 after the workflow WAS seen running → the backend terminated it
+            without a queryable result (e.g. a hard fail node); reported as a
+            generation failure after a few confirmations.
+          * transient 502/503/504/timeouts → retried without counting.
+        """
         deadline = time.monotonic() + constants.MAX_GENERATION_SECONDS
+        start_grace_deadline = time.monotonic() + constants.START_VISIBLE_GRACE_SECONDS
+        seen_alive = False
+        consecutive_missing = 0
         while True:
             if self._cancel.is_set():
                 self._emit("finished")
                 return False
             if time.monotonic() > deadline:
                 self._emit("error", "Generation timed out. Check your web history "
-                                    "before retrying.")
+                                    f"before retrying. (Workflow {workflow_id})")
                 return False
             # Sleep in small slices so cancel is responsive.
             self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
@@ -267,11 +284,24 @@ class GenerationJob(threading.Thread):
             try:
                 status = self._client.status(workflow_id)
             except ApiError as exc:
-                if api_client.is_recoverable_lookup_error(exc):
+                if api_client.is_missing_error(exc):
+                    consecutive_missing += 1
+                    if seen_alive and consecutive_missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
+                        self._emit("error", _aborted_message(workflow_id))
+                        return False
+                    if not seen_alive and time.monotonic() > start_grace_deadline:
+                        self._emit("error", "The generation did not start on the "
+                                            f"server. (Workflow {workflow_id})")
+                        return False
                     self._status("Generating…")
+                    continue
+                if api_client.is_recoverable_lookup_error(exc):
+                    self._status("Generating…")  # transient gateway error
                     continue
                 self._emit("error", str(exc))
                 return False
+            seen_alive = True
+            consecutive_missing = 0
             self._status(api_client.progress_label(status))
             if api_client.is_terminal(status):
                 state, _node = api_client.status_snapshot(status)
@@ -282,8 +312,14 @@ class GenerationJob(threading.Thread):
                 return True
 
     def _fetch_result(self, workflow_id):
-        """Fetch /result, re-polling on transient lookup errors."""
+        """Fetch /result, re-polling briefly on transient lookup errors.
+
+        The workflow was just seen terminal, so a sustained 404 here means it
+        was aborted without a queryable result — we stop after a few tries
+        rather than polling for the full deadline.
+        """
         deadline = time.monotonic() + constants.MAX_GENERATION_SECONDS
+        consecutive_missing = 0
         while True:
             if self._cancel.is_set():
                 self._emit("finished")
@@ -291,6 +327,13 @@ class GenerationJob(threading.Thread):
             try:
                 raw = self._client.result(workflow_id)
             except ApiError as exc:
+                if api_client.is_missing_error(exc):
+                    consecutive_missing += 1
+                    if consecutive_missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
+                        self._emit("error", _aborted_message(workflow_id))
+                        return None
+                    self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
+                    continue
                 if time.monotonic() < deadline and api_client.is_recoverable_lookup_error(exc):
                     self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
                     continue
@@ -314,3 +357,15 @@ def _readiness_message(reason):
     if reason == "generation_service_unavailable":
         return "The generation service is unavailable right now. Try again shortly."
     return "Generation is not available right now. Try again shortly."
+
+
+def _aborted_message(workflow_id):
+    """Shown when a workflow that was running stops returning a result.
+
+    The backend ended the run without a queryable result (typically the model
+    could not be built after automatic repairs). We cannot read the specific
+    reason in this case, so the message is generic but honest and actionable.
+    """
+    return ("Generation failed — the model could not be built after automatic "
+            f"repair attempts. Try again or pick a different model. "
+            f"(Workflow {workflow_id})")

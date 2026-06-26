@@ -256,6 +256,19 @@ def parse_result(result_json):
     )
 
 
+def is_missing_error(error):
+    """True when /status or /result reports the workflow is not found (404).
+
+    Distinct from transient gateway errors: a 404 right after start means "not
+    registered yet", but a sustained 404 after the workflow was seen running
+    means it terminated on the backend without leaving a queryable result.
+    """
+    if isinstance(error, ApiError) and error.status == 404:
+        return True
+    text = str(error).lower()
+    return "404" in text or "not found" in text
+
+
 def is_recoverable_lookup_error(error):
     """True for transient /status or /result errors worth re-polling.
 
