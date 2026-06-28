@@ -28,7 +28,7 @@ Important: after installing the MCP server in any client, the next step is to
 call `nova3d_login` or `nova3d_setup` from inside that client. Installation
 alone does not complete Nova3D onboarding.
 
-Full documentation and source: https://github.com/RareSense/nova3d-mcp
+Full documentation and source: https://github.com/RareSense/Nova3D/tree/main/mcp
 
 ## Tools available via MCP
 

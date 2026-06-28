@@ -1,6 +1,6 @@
 # nova3d-mcp
 
-<!-- mcp-name: io.github.RareSense/nova3d-mcp -->
+<!-- mcp-name: io.github.RareSense/Nova3D -->
 
 **Structured, part-aware 3D generation for AI agents.**
 
@@ -204,8 +204,8 @@ If you prefer to install from source instead of `uvx`, clone the repository and
 install the package locally:
 
 ```bash
-git clone https://github.com/RareSense/nova3d-mcp.git
-cd nova3d-mcp
+git clone https://github.com/RareSense/Nova3D.git
+cd Nova3D/mcp
 python3.10 -m venv .venv && source .venv/bin/activate
 pip install .
 ```
@@ -429,7 +429,7 @@ nova3d-mcp is different in kind:
 ## Contributing
 
 Issues, PRs, and workflow feedback welcome.
-[github.com/RareSense/nova3d-mcp](https://github.com/RareSense/nova3d-mcp)
+[github.com/RareSense/Nova3D](https://github.com/RareSense/Nova3D/tree/main/mcp)
 
 Community Discord: [discord.gg/QEH8mzcwdR](https://discord.gg/QEH8mzcwdR)
 
