@@ -1,0 +1,4 @@
+# Python build artifacts for the Blender plugin section.
+__pycache__/
+*.py[cod]
+*.egg-info/
