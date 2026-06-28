@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nova3d-mcp"
-version = "0.2.6"
+version = "0.3.0"
 description = "Nova3D MCP server — structured, part-aware 3D generation for AI agents"
 readme = "README.md"
 license = { text = "MIT" }
@@ -47,9 +47,9 @@ dev = [
 
 [project.urls]
 Homepage = "https://nova3d.xyz"
-Repository = "https://github.com/RareSense/nova3d-mcp"
-"Bug Tracker" = "https://github.com/RareSense/nova3d-mcp/issues"
-Documentation = "https://github.com/RareSense/nova3d-mcp#readme"
+Repository = "https://github.com/RareSense/Nova3D"
+"Bug Tracker" = "https://github.com/RareSense/Nova3D/issues"
+Documentation = "https://github.com/RareSense/Nova3D/tree/main/mcp#readme"
 
 [project.scripts]
 nova3d-mcp = "nova3d_mcp.server:main"
