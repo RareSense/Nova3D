@@ -1,0 +1,65 @@
+# Nova3D
+
+> Structured, part-aware 3D generation for AI agents and developers.
+
+Nova3D generates 3D assets where every component is a named, separately editable mesh - not a fused blob. It runs a hosted pipeline: an LLM writes Blender Python construction code, headless Blender executes and validates it, and the result is a structured GLB with intact hierarchy, named parts, and real joint definitions.
+
+## What makes it different
+
+Most AI 3D generators produce diffusion-based mesh blobs that look good in renders but break in real workflows. Nova3D outputs assets that survive contact with game engines, configurators, robotics simulations, and AR scenes. Parts have names. Hierarchy is intact. Joints are real. You can change one component without regenerating everything.
+
+## How to use Nova3D as an AI agent
+
+Nova3D is available as an MCP (Model Context Protocol) server. Install it with:
+
+```
+claude mcp add nova3d -- uvx nova3d-mcp
+```
+
+Preferred onboarding after install:
+
+- call `nova3d_login` to sign in through the browser
+- complete the Nova3D sign-in flow in the browser tab that opens
+- call `nova3d_status` to confirm credits and readiness
+
+Advanced/manual fallback: set `NOVA3D_TOKEN` if you cannot complete the browser flow.
+
+Important: after installing the MCP server in any client, the next step is to
+call `nova3d_login` or `nova3d_setup` from inside that client. Installation
+alone does not complete Nova3D onboarding.
+
+Full documentation and source: https://github.com/RareSense/Nova3D/tree/main/mcp
+
+## Tools available via MCP
+
+- `nova3d_setup` - get setup instructions if the user hasn't configured a token yet
+- `nova3d_login` - start the preferred browser-based Nova3D sign-in flow and store a local MCP session
+- if browser sign-in finishes but local completion is ambiguous, call `nova3d_status` before falling back to manual token setup
+- `nova3d_status` - return the canonical Nova3D onboarding/readiness state, including credits and next action
+- `nova3d_logout` - clear the locally stored MCP session
+- `generate_3d` - generate a structured GLB from a text prompt or reference image using Nova3D's paid v2 workflow; returns glb_url, conversation_url, named parts list, and code_artifact
+- `regenerate_part` - replace one named part without rebuilding the whole asset
+- `add_part` - add a new component to an existing asset
+- `articulate_model` - add joints, hinges, or rotational articulation to an existing asset
+- `get_generation_status` - check the status of a running workflow by ID
+
+## Workflow pattern
+
+```
+generate_3d(prompt) -> glb_url, conversation_url, parts, code_artifact
+regenerate_part(code_artifact, part_type, description) -> updated asset
+add_part(code_artifact, description) -> asset with new component
+articulate_model(code_artifact, model_url, articulation_request) -> asset with joints
+```
+
+Always pass the `code_artifact` from the most recent result into the next edit call - it carries session state. The `conversation_url` returned by `generate_3d` links to a browser-based view of the full generation and edit history in the Nova3D app; surface it to the user.
+
+## Authentication
+
+Preferred authentication is browser sign-in through `nova3d_login`. `NOVA3D_TOKEN` remains available only as an advanced/manual fallback for non-interactive environments.
+
+Set `NOVA3D_APP_URL` if conversation links should open a local or self-hosted client instead of `https://app.nova3d.xyz`.
+
+## Model options
+
+Pass `model` to any generation tool. Valid values: `"gemini"` (default), `"claude-sonnet"`, `"claude-opus"`, `"claude-opus-latest"`, `"gpt-5.5"`. These route to Nova3D-managed paid v2 tiers; this MCP server does not expose BYOK generation.

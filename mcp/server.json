@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.RareSense/Nova3D",
+  "title": "Nova3D",
+  "description": "Structured, part-aware 3D generation for AI agents. Named-part GLB, preview URL, Blender script.",
+  "version": "0.3.0",
+  "repository": {
+    "url": "https://github.com/RareSense/Nova3D",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "nova3d-mcp",
+      "version": "0.3.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "NOVA3D_TOKEN",
+          "description": "Advanced/manual fallback API key from https://app.nova3d.xyz/api-key. Preferred onboarding is browser sign-in via nova3d_login.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "NOVA3D_APP_URL",
+          "description": "App URL used for conversation links, for example https://app.nova3d.xyz or http://127.0.0.1:5555",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
