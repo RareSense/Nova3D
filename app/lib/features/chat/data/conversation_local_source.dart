@@ -30,21 +30,35 @@ class ConversationLocalSource {
     }
   }
 
+  /// Persists the conversation list as a best-effort local summary cache.
+  ///
+  /// Only lightweight summary fields are stored: the heavy
+  /// [ConversationModel.metadata] snapshot (which can embed base64 reference
+  /// images and reach several MB per conversation) is intentionally dropped so
+  /// the cache stays well within the browser's localStorage quota. Message
+  /// content is re-fetched from the backend when a conversation is opened.
+  ///
+  /// The backend is the source of truth, so a write failure (e.g. a quota or
+  /// private-mode error) is logged and swallowed — persisting the cache must
+  /// never discard conversation data the caller already fetched.
   Future<void> save(List<ConversationModel> convs) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         _kConversationsKey,
-        json.encode(convs.map((c) => c.toJson()).toList()),
+        json.encode(convs.map(_toCacheEntry).toList()),
       );
     } catch (e, st) {
-      debugPrint('[ConversationLocalSource] save failed: $e\n$st');
-      throw AppError(
-        'Failed to persist conversations.',
-        kind: AppErrorKind.persistence,
-        cause: e,
-      );
+      debugPrint('[ConversationLocalSource] save failed (ignored): $e\n$st');
     }
+  }
+
+  /// Serializes a conversation for the local summary cache, omitting the heavy
+  /// metadata snapshot. See [save] for why metadata is not cached.
+  static Map<String, dynamic> _toCacheEntry(ConversationModel conv) {
+    final entry = conv.toJson();
+    entry.remove('conversation_metadata');
+    return entry;
   }
 
   // Non-fatal cleanup — orphaned message data in storage is acceptable.

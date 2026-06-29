@@ -31,6 +31,10 @@ class MessageLocalSource {
     }
   }
 
+  /// Persists a conversation's messages as a best-effort local cache. The
+  /// backend remains the source of truth, so a write failure (e.g. a storage
+  /// quota error) is logged and swallowed rather than propagated — this runs
+  /// fire-and-forget, so throwing here would surface as an uncaught async error.
   Future<void> save(String conversationId, List<MessageModel> messages) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -39,12 +43,7 @@ class MessageLocalSource {
         json.encode(messages.map((m) => m.toLocalJson()).toList()),
       );
     } catch (e, st) {
-      debugPrint('[MessageLocalSource] save($conversationId) failed: $e\n$st');
-      throw AppError(
-        'Failed to persist messages.',
-        kind: AppErrorKind.persistence,
-        cause: e,
-      );
+      debugPrint('[MessageLocalSource] save($conversationId) failed (ignored): $e\n$st');
     }
   }
 

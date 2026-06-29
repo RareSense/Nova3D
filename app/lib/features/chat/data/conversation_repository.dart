@@ -136,7 +136,11 @@ class ConversationRepository {
     final byId = <String, ConversationModel>{};
     for (final conv in [...local, ...remote]) {
       final existing = byId[conv.id];
-      if (existing == null || conv.updatedAt.isAfter(existing.updatedAt)) {
+      // On equal timestamps the later-iterated source wins. Callers pass the
+      // more authoritative list second (remote after the local summary cache,
+      // or the updated conversation after the current set), so its richer
+      // fields — e.g. the metadata snapshot the local cache omits — are kept.
+      if (existing == null || !conv.updatedAt.isBefore(existing.updatedAt)) {
         byId[conv.id] = conv;
       }
     }
