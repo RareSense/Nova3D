@@ -61,6 +61,16 @@ class NOVA3D_PT_main(bpy.types.Panel):
             warn.operator("screen.userpref_show", text="Open Preferences",
                           icon="PREFERENCES")
 
+        # ── Resume interrupted generations ───────────────────────────────────
+        pending = wm.nova3d_pending
+        if pending > 0 and not running:
+            rbox = layout.box()
+            rbox.label(
+                text=f"{pending} generation(s) waiting to finish",
+                icon="RECOVER_LAST")
+            rbox.operator("nova3d.resume",
+                          text=f"Resume {pending} pending", icon="PLAY")
+
         # ── Credits ──────────────────────────────────────────────────────────
         box = layout.box()
         row = box.row(align=True)

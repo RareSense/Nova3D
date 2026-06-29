@@ -41,6 +41,37 @@ from . import preferences, properties
 from . import operators, ui
 
 
+def _deferred_startup():
+    """Run shortly after enable: load the credit balance and resume any
+    generations that were interrupted (so closing Blender / a dropped network
+    never loses a running, paid generation). One-shot — returns None.
+
+    Deferred (not run inline at register) so a window/context exists for the
+    modal operators it launches. Fully guarded: a startup hiccup never breaks
+    add-on registration, and the Resume button remains as a manual fallback.
+    """
+    try:
+        context = bpy.context
+        prefs = preferences.get_prefs(context)
+        operators.generate.update_pending_count(context)
+        if not (prefs and prefs.api_key.strip() and preferences.online_access_ok()):
+            return None
+        wm = context.window_manager
+        if getattr(wm, "nova3d_credits", -1) < 0 and not getattr(wm, "nova3d_credits_busy", False):
+            try:
+                bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
+            except Exception:
+                pass
+        if getattr(wm, "nova3d_pending", 0) > 0 and not operators.generate.is_generating():
+            try:
+                bpy.ops.nova3d.resume("INVOKE_DEFAULT")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None  # one-shot timer
+
+
 def register():
     bpy.utils.register_class(preferences.Nova3DPreferences)
     properties.register_properties()
@@ -48,9 +79,18 @@ def register():
         bpy.utils.register_class(cls)
     for cls in ui.classes:
         bpy.utils.register_class(cls)
+    try:
+        bpy.app.timers.register(_deferred_startup, first_interval=1.5)
+    except Exception:
+        pass
 
 
 def unregister():
+    try:
+        if bpy.app.timers.is_registered(_deferred_startup):
+            bpy.app.timers.unregister(_deferred_startup)
+    except Exception:
+        pass
     for cls in reversed(ui.classes):
         bpy.utils.unregister_class(cls)
     for cls in reversed(operators.classes):

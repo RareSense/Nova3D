@@ -143,6 +143,45 @@ def persist(client, *, conversation_id, title, user_msg, assistant_msg, workflow
     return remote_id
 
 
+def build_failure_messages(*, prompt, image_data_urls, error_message, now_us):
+    """User message + a failed assistant message, in content_json shape.
+
+    Mirrors how the web client persists a failed generation so the conversation
+    renders the failure text instead of appearing empty.
+    """
+    created_at = _utc_iso()
+    user = _user_message(
+        message_id=f"user-{now_us}", created_at=created_at, prompt=prompt,
+        image_data_urls=image_data_urls,
+    )
+    assistant = {
+        "id": f"cad-{now_us}",
+        "role": "assistant",
+        "text": error_message or "Generation failed.",
+        "created_at": created_at,
+        "is_streaming": False,
+        "operation": "initial_generation",
+    }
+    return user, assistant
+
+
+def persist_failure(client, *, conversation_id, title, prompt, image_data_urls,
+                    error_message, now_us):
+    """Write a failure snapshot so the web conversation isn't left empty.
+
+    Best-effort and snapshot-only (no workflow link): the conversation chat view
+    reads the snapshot, so this is enough to show the user what went wrong.
+    """
+    user, assistant = build_failure_messages(
+        prompt=prompt, image_data_urls=image_data_urls,
+        error_message=error_message, now_us=now_us,
+    )
+    client.patch_conversation_snapshot(
+        conversation_id, title=title,
+        metadata=build_snapshot_metadata([user, assistant]),
+    )
+
+
 def conversation_title(prompt):
     """First-message title, matching the web client's 50-char truncation."""
     text = (prompt or "Untitled generation").strip() or "Untitled generation"

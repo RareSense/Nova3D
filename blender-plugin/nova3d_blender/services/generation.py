@@ -7,13 +7,27 @@ thread-safe queue. It NEVER touches `bpy` — the only Blender-side work
 (importing the GLB, creating the text datablock, hiding old collections) happens
 on the main thread in `operators/generate.py` when it receives the `done` event.
 
+Durability (so a generation is never lost):
+  * The backend run is durable (Temporal); the client matches it. The moment a
+    workflow starts we write a `pending` record to disk. It is removed only on a
+    definite outcome we handled — success, a known failure, or explicit cancel.
+  * Polling rides through transient network errors (dropped connection, DNS
+    blip, 502/503/504, timeouts) for several minutes rather than aborting, so a
+    momentary blip never loses a running generation (this is what makes the web
+    history populate, exactly like the MCP server).
+  * If the client is interrupted anyway (laptop sleep, Blender closed, a long
+    outage), the pending record survives and the run is resumed later — on the
+    next launch or via the Resume button — by re-attaching to the same workflow
+    id with `GenerationJob.for_resume(...)`.
+
 Event protocol (queue items are `(kind, payload)`):
     ("status",   str)      progress line update
+    ("workflow", str)      the workflow id, as soon as it is known
     ("done",     dict)     model is on disk; main thread should import it now
     ("uv_status",str)      UV sub-step progress
     ("uv_done",  dict)     UV atlases written
-    ("error",    str)      terminal failure (user-safe message)
-    ("finished", None)     the job is fully complete (always last on success)
+    ("error",    str)      terminal/abandoned outcome (user-safe message)
+    ("finished", None)     the job is fully complete
 """
 
 import threading
@@ -22,7 +36,7 @@ import time
 from .. import constants
 from ..api import client as api_client
 from ..api.errors import ApiError, AuthError
-from . import history, project_store, uv_maps
+from . import history, pending, project_store, uv_maps
 
 
 class GenerationParams:
@@ -43,7 +57,7 @@ class GenerationParams:
 
 
 class GenerationJob(threading.Thread):
-    """Runs one generation to completion and emits progress events."""
+    """Runs one generation (fresh or resumed) and emits progress events."""
 
     def __init__(self, params, queue):
         super().__init__(daemon=True, name="Nova3DGeneration")
@@ -51,6 +65,29 @@ class GenerationJob(threading.Thread):
         self._queue = queue
         self._cancel = threading.Event()
         self._client = api_client.Nova3DClient(params.api_base_url, params.api_key)
+        self._conversation_id = None
+        self._workflow_id = None
+        self._required = 0
+        self._now_us = int(time.time() * 1_000_000)
+        self._resume = False  # True when re-attaching to an existing workflow
+
+    @classmethod
+    def for_resume(cls, record, *, api_base_url, api_key, queue):
+        """Build a job that re-attaches to an already-started workflow."""
+        params = GenerationParams(
+            api_base_url=api_base_url, api_key=api_key,
+            prompt=record.get("prompt", ""),
+            image_data_urls=record.get("image_data_urls") or [],
+            model_option=tuple(record.get("model_option") or ("", "", "", 0, "")),
+            output_root=record.get("output_root"),
+        )
+        job = cls(params, queue)
+        job._resume = True
+        job._conversation_id = record.get("conversation_id")
+        job._workflow_id = record.get("workflow_id")
+        job._required = int(record.get("required") or 0)
+        job._now_us = int(record.get("now_us") or job._now_us)
+        return job
 
     # ── public control ───────────────────────────────────────────────────────
     def cancel(self):
@@ -60,38 +97,78 @@ class GenerationJob(threading.Thread):
     def cancelled(self):
         return self._cancel.is_set()
 
-    # ── event helpers ────────────────────────────────────────────────────────
+    # ── event + outcome helpers ──────────────────────────────────────────────
     def _emit(self, kind, payload=None):
         self._queue.put((kind, payload))
 
     def _status(self, message):
         self._emit("status", message)
 
+    def _remove_pending(self):
+        if self._workflow_id:
+            try:
+                pending.remove(self._params.output_root, self._workflow_id)
+            except OSError:
+                pass
+
+    def _fail(self, message):
+        """A definite terminal failure: record it to the conversation (so web
+        history shows the failure, not an empty thread), drop the pending record
+        (resuming a known failure is pointless), then surface it in Blender."""
+        if self._conversation_id:
+            try:
+                history.persist_failure(
+                    self._client, conversation_id=self._conversation_id,
+                    title=history.conversation_title(self._params.prompt),
+                    prompt=self._params.prompt,
+                    image_data_urls=self._params.image_data_urls,
+                    error_message=message, now_us=self._now_us,
+                )
+            except ApiError:
+                pass  # history write is best-effort; never mask the real error
+        self._remove_pending()
+        self._emit("error", message)
+
+    def _abandon(self, message):
+        """Stop tracking but KEEP the pending record so the run can resume.
+
+        Used when the run may still be alive on the backend (sustained network
+        loss, overall timeout) — the model isn't lost, we just lost contact.
+        """
+        self._emit("error", message)
+
+    def _on_cancel(self):
+        """User explicitly cancelled — respect it and drop the pending record."""
+        self._remove_pending()
+        self._emit("finished")
+
     # ── thread entry point ───────────────────────────────────────────────────
     def run(self):
         try:
-            self._run_pipeline()
+            if self._resume:
+                self._run_resume()
+            else:
+                self._run_pipeline()
         except AuthError as exc:
-            self._emit("error", str(exc))
+            self._fail(str(exc))
         except ApiError as exc:
-            self._emit("error", str(exc))
+            self._fail(str(exc))
         except Exception as exc:  # noqa: BLE001 - last-resort guard for the thread
-            self._emit("error", f"Generation failed unexpectedly: {exc}")
+            self._fail(f"Generation failed unexpectedly: {exc}")
 
-    # ── pipeline ─────────────────────────────────────────────────────────────
+    # ── fresh generation ─────────────────────────────────────────────────────
     def _run_pipeline(self):
         params = self._params
-        model_id, model_label, tier, _credits, _badge = params.model_option
+        _model_id, _model_label, tier, _credits, _badge = params.model_option
 
         # 1. Preflight: service readiness.
         self._status("Checking the generation service...")
         readiness = self._client.readiness(constants.WORKFLOW_NAME)
         if not readiness.get("ready", False):
-            reason = readiness.get("reason")
-            self._emit("error", _readiness_message(reason))
+            self._fail(_readiness_message(readiness.get("reason")))
             return
 
-        # 2. Preflight: credits estimate vs. wallet balance.
+        # 2. Preflight: credit estimate vs. wallet balance.
         self._status("Estimating credits...")
         estimate = self._client.estimate(constants.WORKFLOW_NAME, tier)
         required = int(estimate.get("authorized_budget")
@@ -99,65 +176,87 @@ class GenerationJob(threading.Thread):
         balance = self._client.balance()
         available = _int(balance.get("available"))
         if available is None:
-            self._emit("error", "Could not confirm your credit balance. "
-                                "Open Buy Credits, refresh, and try again.")
+            self._fail("Could not confirm your credit balance. "
+                       "Open Buy Credits, refresh, and try again.")
             return
         if available < required:
-            self._emit("error",
-                       f"This model needs {required} credits, but you have "
+            self._fail(f"This model needs {required} credits, but you have "
                        f"{available}. Use 'Buy Credits' and try again.")
             return
+        self._required = required
 
         if self._cancel.is_set():
-            self._emit("finished")
+            self._on_cancel()
             return
 
         # 3. Create the conversation so this generation shows in web history.
         self._status("Creating session...")
         conversation = self._client.create_conversation(
             history.conversation_title(params.prompt))
-        conversation_id = conversation.get("id") or conversation.get("conversation_id")
+        self._conversation_id = conversation.get("id") or conversation.get("conversation_id")
 
         # 4. Start the workflow (linked to the conversation).
-        now_us = int(time.time() * 1_000_000)
-        workflow_id = f"state-{now_us}"
+        workflow_id = f"state-{self._now_us}"
         self._status("Starting generation...")
         payload = self._build_payload(tier)
         try:
             workflow_id = self._client.start_generation(
                 constants.WORKFLOW_NAME, request_id=workflow_id, payload=payload,
                 return_nodes=constants.GENERATION_RETURN_NODES,
-                conversation_link=history.start_link(conversation_id) if conversation_id else None,
+                conversation_link=history.start_link(self._conversation_id)
+                if self._conversation_id else None,
             )
         except AuthError:
             raise
         except ApiError as exc:
-            # A transport/timeout error (no HTTP status) may still have started
-            # the workflow — poll the id we requested, matching the web client's
-            # `_mayHaveStarted`. A real HTTP error (e.g. 402 insufficient credits)
+            # Transport/timeout error (no HTTP status) may still have started the
+            # workflow — poll the id we requested. A real HTTP error (e.g. 402)
             # must surface instead of silently charging the user.
             if exc.status is not None:
                 raise
-            # keep the client-generated workflow_id and fall through to polling.
+        self._workflow_id = workflow_id
 
-        # Surface the workflow id immediately so the user can track the request
-        # (and find it in logs/support) even if it later fails.
+        # Persist the pending record NOW, before polling — so a crash, close, or
+        # outage from this point on can be resumed.
+        try:
+            pending.save(params.output_root, pending.build_record(
+                workflow_id=workflow_id, conversation_id=self._conversation_id,
+                prompt=params.prompt, image_data_urls=params.image_data_urls,
+                model_option=params.model_option, output_root=params.output_root,
+                now_us=self._now_us, required=required))
+        except OSError:
+            pass  # a disk hiccup must not abort an already-running generation
+
         self._emit("workflow", workflow_id)
+        self._complete()
 
-        # 5. Poll status to completion.
-        if not self._poll_status(workflow_id):
-            return  # cancelled / errored already emitted
+    # ── resumed generation (re-attach to an existing workflow) ───────────────
+    def _run_resume(self):
+        if not self._workflow_id:
+            self._emit("finished")
+            return
+        self._status("Resuming a previous generation...")
+        self._emit("workflow", self._workflow_id)
+        self._complete()
 
-        # 6. Fetch + parse the result.
+    # ── shared tail: poll → result → save → import → history → uv ────────────
+    def _complete(self):
+        params = self._params
+        _id, model_label, _tier, _c, _b = params.model_option
+        workflow_id = self._workflow_id
+
+        if not self._poll_status():
+            return
+
         self._status("Finalizing the model...")
-        parsed = self._fetch_result(workflow_id)
+        parsed = self._fetch_result()
         if parsed is None:
             return
         if parsed.failed or not parsed.glb_url:
-            self._emit("error", parsed.error_message or "Generation failed.")
+            self._fail(parsed.error_message or "Generation failed.")
             return
 
-        # 7. Download artifacts into a fresh project folder.
+        # Download artifacts into a fresh project folder.
         self._status("Saving files to disk...")
         project = project_store.ProjectFolder.create(params.output_root, params.prompt)
         project.download(parsed.glb_url, "model.glb")
@@ -171,39 +270,39 @@ class GenerationJob(threading.Thread):
             except ApiError:
                 pass  # joints are optional
 
-        # 8. Persist conversation history (best-effort; never fails generation).
-        message_id = f"cad-{now_us}"
+        # Persist conversation history (best-effort; never fails the generation).
+        message_id = f"cad-{self._now_us}"
         remote_message_id = None
-        if conversation_id:
+        if self._conversation_id:
             self._status("Saving to your Nova3D history...")
             try:
                 user_msg, assistant_msg = history.build_messages(
-                    user_message_id=f"user-{now_us}",
+                    user_message_id=f"user-{self._now_us}",
                     assistant_message_id=message_id,
                     prompt=params.prompt, image_data_urls=params.image_data_urls,
                     workflow_id=workflow_id, parsed=parsed,
                     model_option=params.model_option,
                 )
                 remote_message_id = history.persist(
-                    self._client, conversation_id=conversation_id,
+                    self._client, conversation_id=self._conversation_id,
                     title=history.conversation_title(params.prompt),
                     user_msg=user_msg, assistant_msg=assistant_msg,
                     workflow_id=workflow_id,
                 )
             except ApiError:
-                # History sync is non-fatal; the asset is already on disk.
                 pass
 
-        # 9. Write meta.json (the durable pointer record).
+        # Durable pointer record on disk.
         meta = project_store.build_meta(
             prompt=params.prompt, model_option=params.model_option,
-            credits={"authorized": required}, workflow_id=workflow_id,
-            conversation_id=conversation_id, message_id=remote_message_id or message_id,
-            parsed=parsed, files=dict(project.files),
+            credits={"authorized": self._required}, workflow_id=workflow_id,
+            conversation_id=self._conversation_id,
+            message_id=remote_message_id or message_id, parsed=parsed,
+            files=dict(project.files),
         )
         project.write_meta(meta)
 
-        # 10. Hand the asset to the main thread for scene import.
+        # Hand the asset to the main thread for scene import.
         self._emit("done", {
             "project_dir": project.path,
             "slug": project.slug,
@@ -213,18 +312,20 @@ class GenerationJob(threading.Thread):
             "joints": parsed.joints,
             "model_label": model_label,
             "workflow_id": workflow_id,
-            "conversation_id": conversation_id,
+            "conversation_id": self._conversation_id,
         })
 
-        # 11. UV atlases — generated on every successful generation (same as the
-        #     web app's UV bundle). Best-effort: a UV failure is non-fatal because
-        #     the model itself is already saved and in the scene.
+        # Success — the run no longer needs to be resumable.
+        self._remove_pending()
+
+        # UV atlases — every successful generation, same as the web app's bundle.
+        # Best-effort: a UV failure is non-fatal (the model is already saved).
         if parsed.code_artifact and not self._cancel.is_set():
             self._emit("uv_status", "Generating UV maps...")
             try:
                 summary = uv_maps.generate(
                     self._client, parsed.code_artifact, project,
-                    conversation_id=conversation_id, cancel_event=self._cancel,
+                    conversation_id=self._conversation_id, cancel_event=self._cancel,
                     on_status=lambda m: self._emit("uv_status", m),
                     base_request_id=workflow_id,
                 )
@@ -236,7 +337,7 @@ class GenerationJob(threading.Thread):
 
         self._emit("finished")
 
-    # ── pipeline helpers ─────────────────────────────────────────────────────
+    # ── helpers ──────────────────────────────────────────────────────────────
     def _build_payload(self, tier):
         """Build the /run/state payload — identical shape to the web client."""
         params = self._params
@@ -245,99 +346,112 @@ class GenerationJob(threading.Thread):
             "code_llm_profile": constants.CODE_LLM_PROFILE,
             "code_llm_tier": tier,
         }
-        # Paid generations intentionally omit any provider API key — the backend
-        # resolves provider credentials server-side.
         if params.has_image:
             payload["has_reference_images"] = True
             payload["image_artifact"] = params.image_data_urls
         return payload
 
-    def _poll_status(self, workflow_id):
+    def _poll_status(self):
         """Poll /status until terminal. Returns True to continue, False to stop.
 
-        Handles three "not found" situations distinctly so a dead workflow can
-        never be polled indefinitely:
-          * 404 before the workflow is ever seen running → tolerated only during
-            a short start-up grace window, then reported as "did not start".
-          * 404 after the workflow WAS seen running → the backend terminated it
-            without a queryable result (e.g. a hard fail node); reported as a
-            generation failure after a few confirmations.
-          * transient 502/503/504/timeouts → retried without counting.
+        Resilience model:
+          * transient transport errors (dropped connection, DNS, 502/503/504,
+            timeouts) are retried for up to LOST_CONNECTION_LIMIT polls; only a
+            sustained outage abandons the run (keeping it resumable).
+          * 404 before the workflow is ever seen → tolerated for a short start-up
+            grace window, then reported as "did not start".
+          * 404 after it WAS seen running → backend ended it without a queryable
+            result (e.g. a hard fail node) → reported as a failure.
         """
+        workflow_id = self._workflow_id
         deadline = time.monotonic() + constants.MAX_GENERATION_SECONDS
-        start_grace_deadline = time.monotonic() + constants.START_VISIBLE_GRACE_SECONDS
+        start_grace = time.monotonic() + constants.START_VISIBLE_GRACE_SECONDS
         seen_alive = False
-        consecutive_missing = 0
+        missing = 0
+        transport = 0
         while True:
             if self._cancel.is_set():
-                self._emit("finished")
+                self._on_cancel()
                 return False
             if time.monotonic() > deadline:
-                self._emit("error", "Generation timed out. Check your web history "
-                                    f"before retrying. (Workflow {workflow_id})")
+                self._abandon(_timeout_message(workflow_id))
                 return False
-            # Sleep in small slices so cancel is responsive.
             self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
             if self._cancel.is_set():
-                self._emit("finished")
+                self._on_cancel()
                 return False
             try:
                 status = self._client.status(workflow_id)
             except ApiError as exc:
+                if isinstance(exc, AuthError) or exc.status == 401:
+                    self._fail(str(exc))
+                    return False
                 if api_client.is_missing_error(exc):
-                    consecutive_missing += 1
-                    if seen_alive and consecutive_missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
-                        self._emit("error", _aborted_message(workflow_id))
+                    missing += 1
+                    transport = 0
+                    if seen_alive and missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
+                        self._fail(_aborted_message(workflow_id))
                         return False
-                    if not seen_alive and time.monotonic() > start_grace_deadline:
-                        self._emit("error", "The generation did not start on the "
-                                            f"server. (Workflow {workflow_id})")
+                    if not seen_alive and time.monotonic() > start_grace:
+                        self._fail("The generation did not start on the server. "
+                                   f"(Workflow {workflow_id})")
                         return False
                     self._status("Generating…")
                     continue
-                if api_client.is_recoverable_lookup_error(exc):
-                    self._status("Generating…")  # transient gateway error
+                if exc.status is None or api_client.is_recoverable_lookup_error(exc):
+                    transport += 1
+                    missing = 0
+                    if transport >= constants.LOST_CONNECTION_LIMIT:
+                        self._abandon(_lost_connection_message(workflow_id))
+                        return False
+                    self._status("Generating… (reconnecting)")
                     continue
-                self._emit("error", str(exc))
+                self._fail(str(exc))
                 return False
             seen_alive = True
-            consecutive_missing = 0
+            missing = 0
+            transport = 0
             self._status(api_client.progress_label(status))
             if api_client.is_terminal(status):
                 state, _node = api_client.status_snapshot(status)
                 if state == "budget_exhausted":
-                    self._emit("error", "Your credit budget was exhausted before "
-                                        "the model completed.")
+                    self._fail("Your credit budget was exhausted before the model "
+                               "completed.")
                     return False
                 return True
 
-    def _fetch_result(self, workflow_id):
-        """Fetch /result, re-polling briefly on transient lookup errors.
-
-        The workflow was just seen terminal, so a sustained 404 here means it
-        was aborted without a queryable result — we stop after a few tries
-        rather than polling for the full deadline.
-        """
-        deadline = time.monotonic() + constants.MAX_GENERATION_SECONDS
-        consecutive_missing = 0
+    def _fetch_result(self):
+        """Fetch /result with the same resilience as polling."""
+        workflow_id = self._workflow_id
+        missing = 0
+        transport = 0
         while True:
             if self._cancel.is_set():
-                self._emit("finished")
+                self._on_cancel()
                 return None
             try:
                 raw = self._client.result(workflow_id)
             except ApiError as exc:
+                if isinstance(exc, AuthError) or exc.status == 401:
+                    self._fail(str(exc))
+                    return None
                 if api_client.is_missing_error(exc):
-                    consecutive_missing += 1
-                    if consecutive_missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
-                        self._emit("error", _aborted_message(workflow_id))
+                    missing += 1
+                    transport = 0
+                    if missing >= constants.MISSING_AFTER_ALIVE_LIMIT:
+                        self._fail(_aborted_message(workflow_id))
                         return None
                     self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
                     continue
-                if time.monotonic() < deadline and api_client.is_recoverable_lookup_error(exc):
+                if exc.status is None or api_client.is_recoverable_lookup_error(exc):
+                    transport += 1
+                    missing = 0
+                    if transport >= constants.LOST_CONNECTION_LIMIT:
+                        self._abandon(_lost_connection_message(workflow_id))
+                        return None
                     self._interruptible_sleep(constants.STATUS_POLL_SECONDS)
                     continue
-                self._emit("error", str(exc))
+                self._fail(str(exc))
                 return None
             return api_client.parse_result(raw)
 
@@ -360,12 +474,21 @@ def _readiness_message(reason):
 
 
 def _aborted_message(workflow_id):
-    """Shown when a workflow that was running stops returning a result.
-
-    The backend ended the run without a queryable result (typically the model
-    could not be built after automatic repairs). We cannot read the specific
-    reason in this case, so the message is generic but honest and actionable.
-    """
+    """A workflow that was running stopped returning a result — the backend ended
+    it without a queryable result (typically the model could not be built after
+    automatic repairs). The specific reason is unreadable in this case."""
     return ("Generation failed — the model could not be built after automatic "
             f"repair attempts. Try again or pick a different model. "
+            f"(Workflow {workflow_id})")
+
+
+def _lost_connection_message(workflow_id):
+    return ("Lost connection to Nova3D. Your model may still be generating — it "
+            "will resume automatically next time, or use the Resume button. "
+            f"(Workflow {workflow_id})")
+
+
+def _timeout_message(workflow_id):
+    return ("Generation is taking longer than expected. It may still finish — it "
+            "will resume next time, or use the Resume button. "
             f"(Workflow {workflow_id})")

@@ -58,6 +58,11 @@ START_VISIBLE_GRACE_SECONDS = 90
 # hard fail node whose error escaped the workflow). We then stop and report a
 # failure instead of polling indefinitely. 4 × 3s ≈ 12s of confirmation.
 MISSING_AFTER_ALIVE_LIMIT = 4
+# Transient network errors (DNS blip, dropped connection, gateway 502/503/504)
+# are EXPECTED across a multi-minute generation and must never abort polling.
+# We keep retrying through them and only give up after this many consecutive
+# failures with no contact at all. 60 × 3s ≈ 3 minutes of sustained outage.
+LOST_CONNECTION_LIMIT = 60
 
 
 # ── Paid-credit model options ────────────────────────────────────────────────

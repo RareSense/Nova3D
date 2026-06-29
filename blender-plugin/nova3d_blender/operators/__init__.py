@@ -15,5 +15,6 @@ classes = (
     images.NOVA3D_OT_remove_image,
     images.NOVA3D_OT_clear_images,
     generate.NOVA3D_OT_generate,
+    generate.NOVA3D_OT_resume,
     generate.NOVA3D_OT_cancel,
 )

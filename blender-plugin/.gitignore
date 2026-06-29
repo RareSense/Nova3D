@@ -1,0 +1,11 @@
+# Python build artifacts (regenerated automatically; never commit)
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Local virtualenvs
+.venv/
+venv/
+
+# Built extension/add-on packages
+*.zip
