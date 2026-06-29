@@ -33,7 +33,7 @@ This repository is the home for Nova3D's open clients and integrations. The host
 ```
 Nova3D/
 ├── app/              # Flutter/Dart web client  ·  see app/README.md
-├── mcp/              # Nova3D MCP server (coming soon)
+├── mcp/              # Nova3D MCP server  ·  see mcp/README.md
 ├── blender-plugin/   # Blender plugin (coming soon)
 ├── claude-skills/    # Claude skills (coming soon)
 ├── docs/             # architecture & the "3D as code" thesis (coming soon)
