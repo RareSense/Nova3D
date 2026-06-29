@@ -63,6 +63,13 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         default="~/Nova3D",
         subtype="DIR_PATH",
     )
+    clean_viewport: bpy.props.BoolProperty(
+        name="Clean Viewport on Import",
+        description="After importing, hide other objects and switch to Material "
+                    "Preview so the new generation shows clearly with its colours. "
+                    "Reversible — unhide with Alt+H. Turn off to keep your scene as-is",
+        default=True,
+    )
 
     def draw(self, context):
         layout = self.layout
@@ -86,6 +93,7 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         box = layout.box()
         box.label(text="Storage", icon="FILE_FOLDER")
         box.prop(self, "output_dir")
+        box.prop(self, "clean_viewport")
 
         box = layout.box()
         box.label(text="Endpoints (advanced / self-hosting)", icon="WORLD")

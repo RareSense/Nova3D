@@ -137,7 +137,14 @@ class NOVA3D_PT_main(bpy.types.Panel):
 
         # ── Last generation ──────────────────────────────────────────────────
         if wm.nova3d_last_dir:
-            layout.operator("nova3d.open_output_folder", icon="FILE_FOLDER")
+            box = layout.box()
+            box.label(text="Saved to:", icon="FILE_FOLDER")
+            # Folder name (timestamp_slug) is the most useful at-a-glance; the
+            # full path is shown below it and via the open button.
+            box.label(text=bpy.path.basename(wm.nova3d_last_dir.rstrip("/")))
+            box.label(text=wm.nova3d_last_dir)
+            box.operator("nova3d.open_output_folder", text="Open Folder",
+                         icon="FILEBROWSER")
 
         # ── Account footer (how you're connected + sign out) ─────────────────
         layout.separator()

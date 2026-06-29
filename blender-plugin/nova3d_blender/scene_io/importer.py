@@ -15,6 +15,7 @@ a custom property), which is how we find and hide prior generations.
 import bpy
 
 from .. import constants
+from ..preferences import get_prefs
 
 
 def _iter_generation_collections():
@@ -92,25 +93,72 @@ def import_generation(context, *, glb_path, slug):
 
     # Hide prior generations only after a successful import of the new one.
     hide_previous_generations(context, keep_name=collection.name)
-    _frame_new_collection(context)
+
+    # "Clean viewport" (default on, reversible): hide everything else so only the
+    # new generation shows, and switch Solid shading to Material Preview so the
+    # asset's colours appear (Solid mode renders flat grey). Users with a real
+    # scene can turn this off in preferences.
+    prefs = get_prefs(context)
+    if prefs is None or prefs.clean_viewport:
+        _isolate_collection(context, collection)
+        _enable_material_preview(context)
+
+    _focus_collection(context, collection)
     return collection
 
 
-def _frame_new_collection(context):
-    """Best-effort: frame the viewport on the newly imported objects."""
+def _isolate_collection(context, keep_collection):
+    """Hide (reversibly) every object that is not in the new collection."""
+    keep = set(keep_collection.objects)
+    for obj in context.view_layer.objects:
+        if obj not in keep:
+            try:
+                obj.hide_set(True)  # eye toggle — restore with Alt+H / the Outliner
+            except Exception:
+                pass
+
+
+def _enable_material_preview(context):
+    """Show materials in the viewport (Solid mode renders flat grey)."""
+    for area in context.window.screen.areas:
+        if area.type != "VIEW_3D":
+            continue
+        space = area.spaces.active
+        try:
+            if space.shading.type in ("SOLID", "WIREFRAME"):
+                space.shading.type = "MATERIAL"
+        except Exception:
+            pass
+        break
+
+
+def _focus_collection(context, collection):
+    """Select the new objects and frame the viewport on them."""
+    objects = list(collection.objects)
+    if not objects:
+        return
     try:
-        for area in context.window.screen.areas:
-            if area.type != "VIEW_3D":
-                continue
-            region = next((r for r in area.regions if r.type == "WINDOW"), None)
-            if region is None:
-                continue
-            with context.temp_override(area=area, region=region):
-                bpy.ops.view3d.view_all(center=False)
-            break
+        bpy.ops.object.select_all(action="DESELECT")
     except Exception:
-        # Framing is a convenience; never let it break the import.
         pass
+    for obj in objects:
+        try:
+            obj.select_set(True)
+        except Exception:
+            pass
+    context.view_layer.objects.active = objects[0]
+    for area in context.window.screen.areas:
+        if area.type != "VIEW_3D":
+            continue
+        region = next((r for r in area.regions if r.type == "WINDOW"), None)
+        if region is None:
+            continue
+        try:
+            with context.temp_override(area=area, region=region):
+                bpy.ops.view3d.view_selected(use_all_regions=False)
+        except Exception:
+            pass  # framing is a convenience; never let it break the import
+        break
 
 
 def load_code_text(slug, code_text):
