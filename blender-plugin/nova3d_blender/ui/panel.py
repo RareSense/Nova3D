@@ -43,11 +43,20 @@ class NOVA3D_PT_main(bpy.types.Panel):
         if prefs is None or not prefs.api_key.strip():
             box = layout.box()
             box.label(text="Connect your Nova3D account", icon="USER")
-            box.label(text="Create an account and API key, then")
-            box.label(text="paste the key in add-on preferences.")
-            box.operator("nova3d.open_api_key", icon="URL")
-            box.operator("screen.userpref_show", text="Open Preferences",
-                         icon="PREFERENCES")
+            if wm.nova3d_signing_in:
+                box.label(text=wm.nova3d_status or "Signing in…", icon="SORTTIME")
+                box.label(text="Finish in your browser (Esc to cancel).")
+                return
+            # Primary: one-click browser sign-in (no key to copy).
+            big = box.row()
+            big.scale_y = 1.4
+            big.operator("nova3d.sign_in", icon="USER")
+            # Fallback: paste a key (for headless / locked-down setups).
+            box.separator()
+            box.label(text="or use an API key:")
+            row = box.row(align=True)
+            row.operator("nova3d.enter_api_key", text="Enter Key", icon="GREASEPENCIL")
+            row.operator("nova3d.open_api_key", text="Create Key", icon="URL")
             return
 
         running = wm.nova3d_running
@@ -129,6 +138,13 @@ class NOVA3D_PT_main(bpy.types.Panel):
         # ── Last generation ──────────────────────────────────────────────────
         if wm.nova3d_last_dir:
             layout.operator("nova3d.open_output_folder", icon="FILE_FOLDER")
+
+        # ── Account footer (how you're connected + sign out) ─────────────────
+        layout.separator()
+        foot = layout.row(align=True)
+        connected = "Signed in" if prefs.key_source == "sign_in" else "API key"
+        foot.label(text=connected, icon="CHECKMARK")
+        foot.operator("nova3d.sign_out", text="Sign out", icon="PANEL_CLOSE")
 
 
 def _draw_word_counter(layout, prompt):

@@ -21,6 +21,15 @@ DEFAULT_WEB_BASE_URL = "https://app.nova3d.xyz"
 API_KEY_PATH = "/api-key"        # where users create their n3d_ key
 SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
 
+# ── Browser ("Sign in with Google") auth ─────────────────────────────────────
+# Reuses the hosted MCP browser-login flow, so no backend changes are needed:
+#   1. open <web>/mcp/connect?state=..&port=..  (user signs in with Google)
+#   2. the app redirects to http://127.0.0.1:<port>/?code=..&state=..
+#   3. swap the one-time code for an n3d_ token at <api>/mcp/session/exchange
+MCP_CONNECT_PATH = "/mcp/connect"
+SESSION_EXCHANGE_PATH = "/mcp/session/exchange"
+SIGN_IN_TIMEOUT_SECONDS = 300    # how long to wait for the browser callback
+
 # ── Workflow contract ────────────────────────────────────────────────────────
 # Credits-only initial generation. BYOK (`sketch_to_3d_byok_v2`) is intentionally
 # NOT supported by this plugin — generations always use the paid-credit workflow.

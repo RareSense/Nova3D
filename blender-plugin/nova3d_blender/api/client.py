@@ -256,6 +256,31 @@ def parse_result(result_json):
     )
 
 
+def exchange_session(api_base_url, code):
+    """Swap a one-time browser sign-in code for an n3d_ token.
+
+    Unauthenticated by design — the one-time `code` *is* the credential. Returns
+    (token, expires_at). Mirrors the MCP server's `exchange_mcp_session`,
+    including its tolerance for the token field name.
+    """
+    base = (api_base_url or constants.DEFAULT_API_BASE_URL).rstrip("/")
+    resp = http.request_json(
+        "POST", f"{base}{constants.SESSION_EXCHANGE_PATH}",
+        body={"code": (code or "").strip()},
+        timeout=constants.STATUS_HTTP_TIMEOUT,
+    ) or {}
+    token = None
+    for key in ("token", "api_key", "n3d_token", "credential"):
+        value = resp.get(key)
+        if isinstance(value, str) and value.strip():
+            token = value.strip()
+            break
+    if not token:
+        raise ApiError("Sign-in did not return a Nova3D credential. Try again.")
+    expires_at = resp.get("expires_at")
+    return token, (str(expires_at) if expires_at is not None else None)
+
+
 def is_missing_error(error):
     """True when /status or /result reports the workflow is not found (404).
 

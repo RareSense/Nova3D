@@ -38,10 +38,15 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
 
     api_key: bpy.props.StringProperty(
         name="API Key",
-        description="Your Nova3D API key (starts with n3d_). Create one on the web.",
+        description="Your Nova3D credential (an n3d_ token). Set by signing in, "
+                    "or paste a key created on the web.",
         default="",
         subtype="PASSWORD",
     )
+    # How the credential was obtained ("sign_in" | "manual" | ""), and its expiry
+    # if known. Hidden — used for messaging and sign-out, not user-edited.
+    key_source: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    key_expires_at: bpy.props.StringProperty(default="", options={"HIDDEN"})
     api_base_url: bpy.props.StringProperty(
         name="API Base URL",
         description="Hosted Nova3D API base. Change only for self-hosting.",
@@ -64,13 +69,19 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
 
         box = layout.box()
         box.label(text="Account", icon="USER")
+        if self.api_key.strip():
+            connected = "Signed in with Google" if self.key_source == "sign_in" \
+                else "Connected with an API key"
+            box.label(text=connected, icon="CHECKMARK")
+            box.operator("nova3d.sign_out", icon="PANEL_CLOSE")
+        else:
+            row = box.row()
+            row.scale_y = 1.3
+            row.operator("nova3d.sign_in", icon="USER")
+            box.label(text="— or —")
+        # Manual key field is always available as a fallback / override.
         box.prop(self, "api_key")
-        row = box.row()
-        row.operator("nova3d.open_api_key", icon="URL",
-                     text="Get / Create API Key")
-        if not self.api_key.strip():
-            box.label(text="No API key set — create one, then paste it above.",
-                      icon="INFO")
+        box.operator("nova3d.open_api_key", icon="URL", text="Create a key on the web")
 
         box = layout.box()
         box.label(text="Storage", icon="FILE_FOLDER")
@@ -86,3 +97,21 @@ def get_prefs(context):
     """Return this add-on's preferences, or None if unavailable."""
     addon = context.preferences.addons.get(ADDON_ID)
     return addon.preferences if addon else None
+
+
+def has_credential(prefs):
+    return bool(prefs and prefs.api_key.strip())
+
+
+def set_credential(prefs, token, *, source, expires_at=None):
+    """Store a credential and how it was obtained (persists in user prefs)."""
+    prefs.api_key = token
+    prefs.key_source = source
+    prefs.key_expires_at = expires_at or ""
+
+
+def clear_credential(prefs):
+    """Sign out / forget the stored credential."""
+    prefs.api_key = ""
+    prefs.key_source = ""
+    prefs.key_expires_at = ""
