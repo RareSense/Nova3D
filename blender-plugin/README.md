@@ -55,46 +55,44 @@ wallet, and writes into the same chat history you see at
 ## Install
 
 No extra Python packages are needed — the plugin uses only Blender's bundled
-standard library.
+standard library (no venv, no `requirements.txt`).
 
-### Blender 4.2+ / 5.x — install as an extension (recommended)
+### 1. Get the zip
 
-An extension zip must have `blender_manifest.toml` at its **root**, so build it
-with Blender's own packager (handles the layout for you):
+**Easiest — download a release:** grab `nova3d_blender-<version>.zip` from the
+[latest release](https://github.com/RareSense/Nova3D/releases) (filter by the
+`blender-plugin-v*` tags).
 
-```bash
-cd blender-plugin
-blender --command extension build --source-dir nova3d_blender
-# → nova3d_blender-1.0.0.zip
-```
-
-Or zip the package **contents** manually (note the trailing `.`):
-
-```bash
-cd blender-plugin/nova3d_blender
-zip -r ../nova3d_blender.zip . -x '*/__pycache__/*'
-```
-
-Then drag the zip onto the Blender window, or **Edit ▸ Preferences ▸ Get
-Extensions ▸ ⌄ ▸ Install from Disk…**, and confirm the requested *network* and
-*files* permissions.
-
-### Blender 3.6–4.1 — install as a legacy add-on
-
-Here the zip must contain the **folder** `nova3d_blender/`:
+**Or build from source** (no `zip` binary needed, just `python3`):
 
 ```bash
 cd blender-plugin
-zip -r nova3d_blender-legacy.zip nova3d_blender -x '*/__pycache__/*'
+bash build.sh           # → blender-plugin/dist/nova3d_blender-<version>.zip
 ```
 
-Then **Edit ▸ Preferences ▸ Add-ons ▸ Install…**, pick the zip, and enable
-**"Nova3D — Code-native 3D Generation"**. (The bundled `blender_manifest.toml`
-is simply ignored on these versions.)
+### 2. Install in Blender
+
+**Blender 4.2+ / 5.x (extension):** drag the zip onto the Blender window, or
+**Edit ▸ Preferences ▸ Get Extensions ▸ ⌄ ▸ Install from Disk…**, and confirm
+the requested *Network* + *Files* permissions.
+
+**Blender 3.6–4.1 (legacy add-on):** **Edit ▸ Preferences ▸ Add-ons ▸ Install…**,
+pick the zip, and enable **"Nova3D — Code-native 3D Generation"**. (The bundled
+`blender_manifest.toml` is simply ignored on these versions.)
 
 > **Compatibility:** Blender **3.6 → 5.x** (verified against 5.1). On 4.2+/5.x it
 > runs as an extension and respects **Preferences ▸ System ▸ Allow Online
 > Access** — that toggle must be on for generation to work.
+
+### Maintainer: cutting a release
+
+The release zip is built and attached automatically by
+`.github/workflows/blender-plugin-release.yml` when you push a surface tag:
+
+```bash
+git tag blender-plugin-v1.0.0
+git push origin blender-plugin-v1.0.0
+```
 
 ## Set up your account
 
@@ -127,7 +125,7 @@ Open the **N-panel** in the 3D Viewport and pick the **Nova3D** tab.
 | **API Key** | _(empty)_ | Your `n3d_…` key. |
 | **Output Folder** | `~/Nova3D` | Root for per-generation project folders. |
 | **API Base URL** | `https://nova3d.xyz/api` | Change only for self-hosting. |
-| **Web Base URL** | `https://nova3d.xyz` | Hosts the API-key and credits pages. |
+| **Web Base URL** | `https://app.nova3d.xyz` | Hosts the API-key and credits pages (the Flutter app). |
 
 **Self-hosting:** point *API Base URL* / *Web Base URL* at your own deployment.
 The plugin calls the standard GraphFlow routes (`/workflow/readiness`,

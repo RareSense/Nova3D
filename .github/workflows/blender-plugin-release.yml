@@ -1,0 +1,43 @@
+name: Blender Plugin Release
+
+# Tag the blender-plugin surface (e.g. `blender-plugin-v1.0.0`) to build the
+# extension zip and publish it as a GitHub Release asset. Mirrors the per-surface
+# tag convention used by `mcp-v*`.
+on:
+  push:
+    tags: ['blender-plugin-v*']
+
+permissions:
+  contents: write   # required to create the Release and upload the asset
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Build extension zip
+        working-directory: blender-plugin
+        run: bash build.sh
+
+      - name: Publish GitHub Release with the add-on zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            blender-plugin/dist/*.zip \
+            --repo "${{ github.repository }}" \
+            --title "Blender Plugin ${{ github.ref_name }}" \
+            --notes "$(cat <<'NOTES'
+          Nova3D — Code-native 3D Generation (Blender add-on).
+
+          **Install (Blender 4.2+ / 5.x):** download the `.zip` below, then
+          Blender → Edit ▸ Preferences ▸ Get Extensions ▸ ⌄ ▸ Install from Disk…
+          and confirm the Network + Files permissions.
+
+          **Install (Blender 3.6–4.1):** Edit ▸ Preferences ▸ Add-ons ▸ Install…
+
+          Then set your Nova3D API key in the add-on preferences. See
+          `blender-plugin/README.md` for full setup and usage.
+          NOTES
+          )"

@@ -9,3 +9,4 @@ venv/
 
 # Built extension/add-on packages
 *.zip
+dist/

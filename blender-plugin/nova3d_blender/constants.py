@@ -16,7 +16,7 @@ threads.
 DEFAULT_API_BASE_URL = "https://nova3d.xyz/api"
 # Web base hosts the browser-only pages: account/API-key creation and the Stripe
 # subscription/credits checkout. Same account, same Stripe as the web app.
-DEFAULT_WEB_BASE_URL = "https://nova3d.xyz"
+DEFAULT_WEB_BASE_URL = "https://app.nova3d.xyz"
 
 API_KEY_PATH = "/api-key"        # where users create their n3d_ key
 SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
