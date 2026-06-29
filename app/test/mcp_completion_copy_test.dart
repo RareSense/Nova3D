@@ -90,7 +90,7 @@ void main() {
     test('uses client-aware missing-context message', () {
       expect(
         McpCompletionCopy.missingContextMessage('cursor'),
-        'This browser page is missing the MCP handoff details for Cursor. Restart setup from the Nova3D MCP command in Cursor.',
+        'This browser page is missing the handoff details for Cursor. Restart setup from Cursor.',
       );
     });
   });

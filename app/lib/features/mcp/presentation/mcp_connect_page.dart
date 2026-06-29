@@ -76,7 +76,7 @@ class _McpConnectPageState extends ConsumerState<McpConnectPage> {
               ),
               McpStatusRow(
                 label: 'Step 2',
-                value: 'Finish the local MCP handoff on this device',
+                value: 'Finish the local handoff on this device',
               ),
               const McpStatusRow(
                 label: 'Step 3',

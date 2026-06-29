@@ -100,7 +100,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
       ref.read(mcpProvider.notifier).clearError();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not reach the local MCP callback.'),
+          content: Text('Could not reach the local callback.'),
         ),
       );
     }
@@ -155,7 +155,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           McpHeader(
-            badge: 'mcp setup',
+            badge: 'setup',
             title: McpCompletionCopy.completionTitle(ready: ready),
             subtitle: McpCompletionCopy.completionSubtitle(clientName),
           ),
@@ -175,17 +175,17 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
                     : '${status!.credits!.available} available',
               ),
               McpStatusRow(
-                label: 'MCP session',
+                label: 'Session',
                 value: status?.mcpSession?.established == true
                     ? 'Established'
                     : status?.nextAction == 'service_unavailable'
                     ? 'Nova3D setup service unavailable'
                     : _handoffUrl != null
-                    ? 'Waiting for local MCP client callback'
+                    ? 'Waiting for local callback'
                     : 'Preparing one-time handoff',
               ),
               McpStatusRow(
-                label: 'MCP client',
+                label: 'Client',
                 value: McpCompletionCopy.targetName(clientName),
               ),
             ],
@@ -207,7 +207,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
             const SizedBox(height: 18),
             McpMessageBanner(
               message:
-                  'Nova3D confirmed your account is funded and ready. Continue in ${McpCompletionCopy.targetName(clientName)} to complete the local MCP session handoff.',
+                  'Nova3D confirmed your account is funded and ready. Continue in ${McpCompletionCopy.targetName(clientName)} to complete the local session handoff.',
             ),
           ] else if (status?.nextAction == 'service_unavailable') ...[
             const SizedBox(height: 18),
@@ -251,7 +251,7 @@ class _McpCompletePageState extends ConsumerState<McpCompletePage> {
           ],
           const SizedBox(height: 16),
           Text(
-            'If the local callback does not complete immediately, keep this tab open and retry the handoff from your MCP setup surface.',
+            'If the local callback does not complete immediately, keep this tab open and retry the handoff from your client.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,

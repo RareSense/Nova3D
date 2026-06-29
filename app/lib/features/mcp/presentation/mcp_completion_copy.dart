@@ -20,7 +20,7 @@ class McpCompletionCopy {
   }
 
   static String handoffPendingMessage(String? clientName) =>
-      'Finishing the local MCP connection with ${targetName(clientName)} first. '
+      'Finishing the local connection with ${targetName(clientName)} first. '
       'Nova3D will open credits once the handoff completes.';
 
   static String checkingStatusMessage(String? clientName) =>
@@ -38,8 +38,8 @@ class McpCompletionCopy {
       'your normal account wallet, and paid generation will only start once credits are ready.';
 
   static String missingContextMessage(String? clientName) =>
-      'This browser page is missing the MCP handoff details for ${targetName(clientName)}. '
-      'Restart setup from the Nova3D MCP command in ${targetName(clientName)}.';
+      'This browser page is missing the handoff details for ${targetName(clientName)}. '
+      'Restart setup from ${targetName(clientName)}.';
 
   static bool showBlockingSpinner({
     required bool loadingStatus,
