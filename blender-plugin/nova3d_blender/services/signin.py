@@ -64,7 +64,12 @@ class SignInJob(threading.Thread):
         port = server.start()
         connect_url = (
             f"{self._web_base}{constants.MCP_CONNECT_PATH}?"
-            + urlencode({"state": state, "port": port})
+            + urlencode({
+                "state": state,
+                "port": port,
+                # The connect page renders "Continue in <client_name>".
+                "client_name": constants.CLIENT_DISPLAY_NAME,
+            })
         )
 
         self._emit("status", "Opening your browser to sign in…")

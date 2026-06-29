@@ -29,6 +29,9 @@ SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
 MCP_CONNECT_PATH = "/mcp/connect"
 SESSION_EXCHANGE_PATH = "/mcp/session/exchange"
 SIGN_IN_TIMEOUT_SECONDS = 300    # how long to wait for the browser callback
+# Sent as `client_name` to the connect page so it reads "Continue in Blender"
+# instead of the generic "your MCP client".
+CLIENT_DISPLAY_NAME = "Blender"
 
 # ── Workflow contract ────────────────────────────────────────────────────────
 # Credits-only initial generation. BYOK (`sketch_to_3d_byok_v2`) is intentionally
