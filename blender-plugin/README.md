@@ -7,8 +7,6 @@ Powered by the hosted Nova3D service; billed in Nova3D credits.
 
 > Works in Blender **3.6 → 5.x** (tested on 5.1). Nothing else to install.
 
-New to Blender? Just follow the numbered steps — every click is spelled out.
-
 ## 1. Get the add-on file
 
 Download `nova3d_blender-1.0.0.zip` from the
@@ -19,8 +17,6 @@ git clone https://github.com/RareSense/Nova3D.git
 cd Nova3D/blender-plugin
 bash build.sh            # creates dist/nova3d_blender-1.0.0.zip
 ```
-
-Remember where the `.zip` is — you'll pick it in the next step.
 
 ## 2. Install it in Blender
 
@@ -39,8 +35,7 @@ Remember where the `.zip` is — you'll pick it in the next step.
 
 ## 3. Open the Nova3D panel
 
-Move your mouse over the large 3D area and press the **N** key (or use **View → Sidebar**).
-A strip of tabs appears on the right edge — click the vertical **Nova3D** tab.
+Press **N** in the 3D viewport to open the sidebar, then click the **Nova3D** tab.
 
 ## 4. Sign in
 
