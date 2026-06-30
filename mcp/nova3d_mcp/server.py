@@ -829,35 +829,33 @@ async def regenerate_part(
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
-    Regenerate a specific named part within an existing 3D asset.
+    Submit a regeneration of one named part within an existing 3D asset.
 
-    Use this after generate_3d when you want to change one component without
-    rebuilding the entire asset. The part name must match a name from the
-    parts list returned by the original generate_3d call, or a part name visible
-    in the conversation viewer.
+    Use this after generate_3d to change one component without rebuilding the
+    whole asset. Pass a natural part name (e.g. "seat", "door", "drum") — derive
+    it from your original prompt or the conversation viewer; the backend
+    resolves it against the asset. There is no fixed list of part names.
+
+    This tool is ASYNCHRONOUS: it returns a workflow_id immediately. Poll
+    get_generation_status(workflow_id) until is_terminal; on completion that
+    call returns the updated glb_url and code_artifact.
 
     Args:
-        code_artifact: The code_artifact object from a prior generate_3d or
-                       edit workflow result. Required — this is how Nova3D
-                       knows the current structure of the asset.
-        part_type:     Name of the part to regenerate. Must match a part name
-                       from the asset. Example: "door", "handle", "drum",
-                       "control_panel". Check the conversation URL to identify
-                       exact part names.
-        description:   Description of what the regenerated part should look
-                       like. Be specific. Example: "glass panel door with
-                       chrome frame and rubber seal around the edges".
+        code_artifact: The code_artifact object from a prior generate_3d or edit
+                       result. Required — it carries the current asset structure
+                       and the session link.
+        part_type:     Natural name of the part to regenerate, e.g. "door",
+                       "handle", "drum", "control_panel".
+        description:   What the regenerated part should look like. Be specific,
+                       e.g. "glass panel door with chrome frame".
         model:         LLM model. One of: "gemini" (default), "claude-sonnet",
                        "claude-opus", "claude-opus-latest", "gpt-5.5".
 
     Returns:
-        glb_url:           Updated GLB with the regenerated part.
-        code_artifact:     Updated construction script for further edits.
-        workflow_id:       Workflow identifier.
-        conversation_url:  Browser URL for the editing session. Present only if
-                           the original generate_3d call successfully created a
-                           conversation. Same URL as returned by generate_3d.
-        failed:            True if regeneration failed.
+        workflow_id:       Identifier to poll with get_generation_status.
+        status:            "running" on a successful submit.
+        conversation_url:  Browser URL for the editing session, if linked.
+        failed:            True if the submit failed (then error_message is set).
         error_message:     Human-readable error if failed is True.
     """
     if _startup_error:
@@ -870,53 +868,31 @@ async def regenerate_part(
     base_url = _get_api_url()
     app_url = _get_app_url()
     conversation_id = _extract_conversation_id(code_artifact)
+    carried_prompt = code_artifact.get("_nova3d_prompt") if isinstance(code_artifact, dict) else None
 
     async with Nova3DClient(token=token, base_url=base_url) as client:
-        result = await client.regenerate_part(
+        workflow_id = await client.start_regenerate_part(
             code_artifact=code_artifact,
             part_type=part_type,
             description=description,
             provider=model_opts["provider"],
             llm=model_opts["llm"],
             conversation_id=conversation_id,
-            on_progress=_make_progress_callback(ctx),
         )
 
-        if result.failed:
-            return {
-                "failed": True,
-                "error_message": result.error_message,
-                "error_category": result.error_category,
-                "retryable": result.retryable,
-            }
-
-        updated_code_artifact = _embed_code_artifact_metadata(
-            result.code_artifact,
-            conversation_id,
-            source_code_artifact=code_artifact,
-        )
-        history_persisted = await _persist_edit_history(
-            client,
-            conversation_id=conversation_id,
-            operation="regenerate_3d_part",
-            description=description,
-            result=result,
-            code_artifact=updated_code_artifact,
-            model_option_id=model_opts["option_id"],
-            instruction_prompt=(
-                code_artifact.get("_nova3d_prompt")
-                if isinstance(code_artifact, dict)
-                else None
-            ),
-        )
+    _get_workflow_store().put(
+        workflow_id,
+        operation="regenerate_part",
+        conversation_id=conversation_id,
+        prompt=carried_prompt,
+        description=description,
+        title=None,
+        model_option_id=model_opts["option_id"],
+    )
 
     response: Dict[str, Any] = {
-        "glb_url": result.glb_url,
-        "parts": result.parts,
-        "code_artifact": updated_code_artifact,
-        "workflow_id": result.workflow_id,
-        "api_key_source": result.api_key_source,
-        "history_persisted": history_persisted,
+        "workflow_id": workflow_id,
+        "status": "running",
         "failed": False,
     }
     conv_url = _conversation_url(app_url, conversation_id)
@@ -933,31 +909,30 @@ async def add_part(
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
-    Add a new named part to an existing 3D asset.
+    Submit the addition of a new part to an existing 3D asset.
 
-    Use this to extend an asset with additional components after the initial
-    generation. The new part is integrated into the scene graph alongside the
-    existing parts, preserving all naming and hierarchy.
+    Use this to extend an asset with a new component after generation. Describe
+    the new part; it is integrated alongside existing parts, preserving naming
+    and hierarchy.
+
+    This tool is ASYNCHRONOUS: it returns a workflow_id immediately. Poll
+    get_generation_status(workflow_id) until is_terminal; on completion that
+    call returns the updated glb_url and code_artifact.
 
     Args:
-        code_artifact: The code_artifact object from a prior generate_3d or
-                       edit workflow result.
-        description:   Description of the new part to add. Be specific about
-                       shape, position relative to existing parts, and any
-                       material properties. Example: "add a chrome handle bar
-                       to the front face of the door, centered horizontally".
+        code_artifact: The code_artifact object from a prior generate_3d or edit
+                       result.
+        description:   Description of the new part. Be specific about shape,
+                       position relative to existing parts, and materials, e.g.
+                       "add a chrome handle bar to the front face of the door".
         model:         LLM model. One of: "gemini" (default), "claude-sonnet",
                        "claude-opus", "claude-opus-latest", "gpt-5.5".
 
     Returns:
-        glb_url:           Updated GLB with the new part added.
-        parts:             Updated list of part names including the new part.
-        code_artifact:     Updated construction script for further edits.
-        workflow_id:       Workflow identifier.
-        conversation_url:  Browser URL for the editing session. Present only if
-                           the original generate_3d call successfully created a
-                           conversation. Same URL as returned by generate_3d.
-        failed:            True if the add operation failed.
+        workflow_id:       Identifier to poll with get_generation_status.
+        status:            "running" on a successful submit.
+        conversation_url:  Browser URL for the editing session, if linked.
+        failed:            True if the submit failed (then error_message is set).
         error_message:     Human-readable error if failed is True.
     """
     if _startup_error:
@@ -970,52 +945,30 @@ async def add_part(
     base_url = _get_api_url()
     app_url = _get_app_url()
     conversation_id = _extract_conversation_id(code_artifact)
+    carried_prompt = code_artifact.get("_nova3d_prompt") if isinstance(code_artifact, dict) else None
 
     async with Nova3DClient(token=token, base_url=base_url) as client:
-        result = await client.add_part(
+        workflow_id = await client.start_add_part(
             code_artifact=code_artifact,
             description=description,
             provider=model_opts["provider"],
             llm=model_opts["llm"],
             conversation_id=conversation_id,
-            on_progress=_make_progress_callback(ctx),
         )
 
-        if result.failed:
-            return {
-                "failed": True,
-                "error_message": result.error_message,
-                "error_category": result.error_category,
-                "retryable": result.retryable,
-            }
-
-        updated_code_artifact = _embed_code_artifact_metadata(
-            result.code_artifact,
-            conversation_id,
-            source_code_artifact=code_artifact,
-        )
-        history_persisted = await _persist_edit_history(
-            client,
-            conversation_id=conversation_id,
-            operation="add_3d_part",
-            description=description,
-            result=result,
-            code_artifact=updated_code_artifact,
-            model_option_id=model_opts["option_id"],
-            instruction_prompt=(
-                code_artifact.get("_nova3d_prompt")
-                if isinstance(code_artifact, dict)
-                else None
-            ),
-        )
+    _get_workflow_store().put(
+        workflow_id,
+        operation="add_part",
+        conversation_id=conversation_id,
+        prompt=carried_prompt,
+        description=description,
+        title=None,
+        model_option_id=model_opts["option_id"],
+    )
 
     response: Dict[str, Any] = {
-        "glb_url": result.glb_url,
-        "parts": result.parts,
-        "code_artifact": updated_code_artifact,
-        "workflow_id": result.workflow_id,
-        "api_key_source": result.api_key_source,
-        "history_persisted": history_persisted,
+        "workflow_id": workflow_id,
+        "status": "running",
         "failed": False,
     }
     conv_url = _conversation_url(app_url, conversation_id)
@@ -1035,39 +988,34 @@ async def articulate_model(
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
-    Add joints, hinges, or rotational articulation to an existing 3D asset.
+    Submit articulation (joints/hinges/rotation) for an existing 3D asset.
 
-    Use this to make parts of a generated asset physically movable — rotating
-    drums, swinging doors, articulated robot joints, etc. The articulation is
-    real and exported as joint definitions in the GLB, not baked into the mesh.
+    Use this to make parts physically movable — rotating drums, swinging doors,
+    robot joints. Articulation is exported as joint definitions in the GLB.
+
+    This tool is ASYNCHRONOUS: it returns a workflow_id immediately. Poll
+    get_generation_status(workflow_id) until is_terminal; on completion that
+    call returns the updated glb_url, code_artifact, joints, and joint_count.
 
     Args:
         code_artifact:        The code_artifact object from a prior generation.
-        articulation_request: Plain language description of the desired
-                              articulation. Example: "make the drum rotate
-                              around its central axis and the door swing open
-                              on a hinge at the left edge".
-        model_url:            The glb_url from the prior generation result.
-                              Provide this or model_artifact (or both).
-                              Must be a direct HTTPS URL, not a blob: URL.
-        model_artifact:       The model_artifact object from the prior generation
-                              result. Provide this or model_url (or both).
-        model:                LLM model. One of: "gemini" (default), "claude-sonnet",
-                              "claude-opus", "claude-opus-latest", "gpt-5.5".
-        selected_meshes:      Optional list of specific mesh names to articulate.
-                              If omitted, the LLM infers which parts to articulate
-                              from the articulation_request.
+        articulation_request: Plain-language description of the desired
+                              articulation, e.g. "make the drum rotate and the
+                              door swing on a hinge at the left edge".
+        model_url:            The glb_url from the prior result. Provide this or
+                              model_artifact (or both). Direct HTTPS URL only.
+        model_artifact:       The model_artifact object from the prior result.
+        model:                LLM model. One of: "gemini" (default),
+                              "claude-sonnet", "claude-opus", "claude-opus-latest",
+                              "gpt-5.5".
+        selected_meshes:      Optional list of mesh names to articulate. If
+                              omitted, the LLM infers them from the request.
 
     Returns:
-        glb_url:           Updated GLB with joint definitions embedded.
-        joints:            List of joint definition objects.
-        joint_count:       Number of joints added.
-        code_artifact:     Updated construction script.
-        workflow_id:       Workflow identifier.
-        conversation_url:  Browser URL for the editing session. Present only if
-                           the original generate_3d call successfully created a
-                           conversation. Same URL as returned by generate_3d.
-        failed:            True if articulation failed.
+        workflow_id:       Identifier to poll with get_generation_status.
+        status:            "running" on a successful submit.
+        conversation_url:  Browser URL for the editing session, if linked.
+        failed:            True if the submit failed (then error_message is set).
         error_message:     Human-readable error if failed is True.
     """
     if _startup_error:
@@ -1088,7 +1036,7 @@ async def articulate_model(
     instruction_prompt = code_artifact.get("_nova3d_prompt") if isinstance(code_artifact, dict) else None
 
     async with Nova3DClient(token=token, base_url=base_url) as client:
-        result = await client.articulate_model(
+        workflow_id = await client.start_articulate_model(
             code_artifact=code_artifact,
             articulation_request=articulation_request,
             provider=model_opts["provider"],
@@ -1098,41 +1046,21 @@ async def articulate_model(
             instruction_prompt=instruction_prompt,
             selected_meshes=selected_meshes,
             conversation_id=conversation_id,
-            on_progress=_make_progress_callback(ctx),
         )
 
-        if result.failed:
-            return {
-                "failed": True,
-                "error_message": result.error_message,
-                "error_category": result.error_category,
-                "retryable": result.retryable,
-            }
-
-        updated_code_artifact = _embed_code_artifact_metadata(
-            result.code_artifact,
-            conversation_id,
-            source_code_artifact=code_artifact,
-        )
-        history_persisted = await _persist_edit_history(
-            client,
-            conversation_id=conversation_id,
-            operation="articulate_3d_model",
-            description=articulation_request,
-            result=result,
-            code_artifact=updated_code_artifact,
-            model_option_id=model_opts["option_id"],
-            instruction_prompt=instruction_prompt,
-        )
+    _get_workflow_store().put(
+        workflow_id,
+        operation="articulate_model",
+        conversation_id=conversation_id,
+        prompt=instruction_prompt,
+        description=articulation_request,
+        title=None,
+        model_option_id=model_opts["option_id"],
+    )
 
     response: Dict[str, Any] = {
-        "glb_url": result.glb_url,
-        "joints": result.joints,
-        "joint_count": result.joint_count,
-        "code_artifact": updated_code_artifact,
-        "workflow_id": result.workflow_id,
-        "api_key_source": result.api_key_source,
-        "history_persisted": history_persisted,
+        "workflow_id": workflow_id,
+        "status": "running",
         "failed": False,
     }
     conv_url = _conversation_url(app_url, conversation_id)

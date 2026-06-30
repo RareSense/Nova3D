@@ -206,122 +206,95 @@ async def test_generate_3d_conversation_failure_still_submits(monkeypatch):
 # ── Edit tool conversation propagation tests ──────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_regenerate_part_propagates_conversation_id(monkeypatch):
+async def test_regenerate_part_submits_and_stores_context(monkeypatch):
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = ["body", "door"]
-    fake_result.code_artifact = {"content": "import bpy # updated"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.joints = []
-    fake_result.workflow_id = "wf-456"
-    fake_result.api_key_source = "request"
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
 
     mock_client = AsyncMock()
-    mock_client.regenerate_part = AsyncMock(return_value=fake_result)
-    mock_client.append_conversation_message = AsyncMock(return_value="remote-edit")
-    mock_client.link_workflow_to_message = AsyncMock(return_value=None)
+    mock_client.start_regenerate_part = AsyncMock(return_value="wf-edit")
+    mock_client.get_result = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
-        result = await server_module.regenerate_part(
-            code_artifact={
-                "content": "import bpy",
-                "_nova3d_conversation_id": "conv-xyz",
-                "_nova3d_prompt": "original prompt",
-            },
-            part_type="door",
-            description="glass door with chrome frame",
-        )
-
-    assert result["failed"] is False
-    assert result["conversation_url"] == "https://app.nova3d.xyz/chat/conv-xyz"
-    assert result["history_persisted"] is True
-    assert result["code_artifact"]["_nova3d_conversation_id"] == "conv-xyz"
-    assert result["code_artifact"]["_nova3d_prompt"] == "original prompt"
-    mock_client.append_conversation_message.assert_called_once()
-    edit_message = mock_client.append_conversation_message.call_args.args[1]
-    assert edit_message["message_type"] == "asset_version"
-    assert edit_message["operation"] == "regenerate_3d_part"
-    call_kwargs = mock_client.regenerate_part.call_args.kwargs
-    assert call_kwargs["conversation_id"] == "conv-xyz"
-
-
-@pytest.mark.asyncio
-async def test_regenerate_part_no_conversation_id_in_artifact(monkeypatch):
-    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = ["body"]
-    fake_result.code_artifact = {"content": "import bpy"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.joints = []
-    fake_result.workflow_id = "wf-456"
-    fake_result.api_key_source = "request"
-
-    mock_client = AsyncMock()
-    mock_client.regenerate_part = AsyncMock(return_value=fake_result)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    stored = {}
+    fake_store = MagicMock()
+    fake_store.put = lambda wf, **kw: stored.update({wf: kw})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
 
     with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
         result = await server_module.regenerate_part(
-            code_artifact={"content": "import bpy"},
+            code_artifact={"url": "https://x/c.py", "_nova3d_conversation_id": "conv-xyz", "_nova3d_prompt": "a washing machine"},
             part_type="door",
             description="glass door",
         )
 
     assert result["failed"] is False
-    assert "conversation_url" not in result
-    assert result["history_persisted"] is False
-    assert "_nova3d_conversation_id" not in result.get("code_artifact", {})
-    call_kwargs = mock_client.regenerate_part.call_args.kwargs
-    assert call_kwargs.get("conversation_id") is None
+    assert result["status"] == "running"
+    assert result["workflow_id"] == "wf-edit"
+    assert result["conversation_url"] == "https://app.nova3d.xyz/chat/conv-xyz"
+    assert "parts" not in result
+    mock_client.get_result.assert_not_called()
+    assert stored["wf-edit"]["operation"] == "regenerate_part"
+    assert stored["wf-edit"]["conversation_id"] == "conv-xyz"
+    assert stored["wf-edit"]["description"] == "glass door"
+    assert stored["wf-edit"]["prompt"] == "a washing machine"  # carried-forward
 
 
 @pytest.mark.asyncio
-async def test_add_part_propagates_conversation_id(monkeypatch):
+async def test_add_part_submits_and_stores_context(monkeypatch):
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = ["body", "handle"]
-    fake_result.code_artifact = {"content": "import bpy # with handle"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.joints = []
-    fake_result.workflow_id = "wf-789"
-    fake_result.api_key_source = "request"
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
 
     mock_client = AsyncMock()
-    mock_client.add_part = AsyncMock(return_value=fake_result)
-    mock_client.append_conversation_message = AsyncMock(return_value="remote-edit")
-    mock_client.link_workflow_to_message = AsyncMock(return_value=None)
+    mock_client.start_add_part = AsyncMock(return_value="wf-add")
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    stored = {}
+    fake_store = MagicMock()
+    fake_store.put = lambda wf, **kw: stored.update({wf: kw})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
     with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
         result = await server_module.add_part(
-            code_artifact={"content": "import bpy", "_nova3d_conversation_id": "conv-xyz"},
-            description="a chrome handle bar",
+            code_artifact={"url": "https://x/c.py"},
+            description="a chrome handle",
         )
 
-    assert result["conversation_url"] == "https://app.nova3d.xyz/chat/conv-xyz"
-    assert result["code_artifact"]["_nova3d_conversation_id"] == "conv-xyz"
-    assert result["history_persisted"] is True
-    call_kwargs = mock_client.add_part.call_args.kwargs
-    assert call_kwargs["conversation_id"] == "conv-xyz"
+    assert result["failed"] is False
+    assert result["workflow_id"] == "wf-add"
+    assert "conversation_url" not in result  # no conversation id in artifact
+    assert stored["wf-add"]["operation"] == "add_part"
+    assert stored["wf-add"]["description"] == "a chrome handle"
+
+
+@pytest.mark.asyncio
+async def test_articulate_model_submits_and_stores_context(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
+
+    mock_client = AsyncMock()
+    mock_client.start_articulate_model = AsyncMock(return_value="wf-art")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    stored = {}
+    fake_store = MagicMock()
+    fake_store.put = lambda wf, **kw: stored.update({wf: kw})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.articulate_model(
+            code_artifact={"url": "https://x/c.py", "_nova3d_conversation_id": "conv-9"},
+            articulation_request="make the door swing",
+            model_url="https://nova3d.xyz/assets/abc.glb",
+        )
+
+    assert result["failed"] is False
+    assert result["workflow_id"] == "wf-art"
+    assert result["conversation_url"] == "https://app.nova3d.xyz/chat/conv-9"
+    assert stored["wf-art"]["operation"] == "articulate_model"
+    assert stored["wf-art"]["description"] == "make the door swing"
 
 
 # ── nova3d_setup tests ────────────────────────────────────────────────────────
@@ -649,25 +622,18 @@ async def test_generate_3d_invalid_model():
 
 @pytest.mark.asyncio
 async def test_articulate_model_with_model_artifact(monkeypatch):
-    """articulate_model accepts model_artifact in place of model_url."""
+    """articulate_model accepts model_artifact in place of model_url (submit-only)."""
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/articulated.glb"
-    fake_result.joints = [{"name": "door_hinge"}]
-    fake_result.joint_count = 1
-    fake_result.code_artifact = {"content": "import bpy"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.workflow_id = "wf-art"
-    fake_result.api_key_source = None
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
 
     mock_client = AsyncMock()
-    mock_client.articulate_model = AsyncMock(return_value=fake_result)
+    mock_client.start_articulate_model = AsyncMock(return_value="wf-art-artifact")
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    fake_store = MagicMock()
+    fake_store.put = MagicMock()
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
 
     artifact = {"url": "https://nova3d.xyz/assets/abc.glb", "id": "art-123"}
 
@@ -679,7 +645,8 @@ async def test_articulate_model_with_model_artifact(monkeypatch):
         )
 
     assert result["failed"] is False
-    call_kwargs = mock_client.articulate_model.call_args.kwargs
+    assert result["workflow_id"] == "wf-art-artifact"
+    call_kwargs = mock_client.start_articulate_model.call_args.kwargs
     assert call_kwargs["model_artifact"] == artifact
     assert call_kwargs["model_url"] is None
 
