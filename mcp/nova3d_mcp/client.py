@@ -284,6 +284,148 @@ class Nova3DClient:
         )
         return await self._poll_and_collect(workflow_id, on_progress=on_progress)
 
+    async def start_generate(
+        self,
+        prompt: str,
+        code_llm_profile: str,
+        code_llm_tier: str,
+        image_artifact: Optional[list[str]] = None,
+        conversation_id: Optional[str] = None,
+    ) -> str:
+        """Submit an initial generation workflow and return its workflow_id."""
+        readiness = await self.check_readiness()
+        if not readiness.ready:
+            raise Nova3DError(readiness.user_message)
+
+        payload: Dict[str, Any] = {
+            "prompt": prompt.strip(),
+            "code_llm_profile": code_llm_profile,
+            "code_llm_tier": code_llm_tier,
+        }
+        if image_artifact:
+            payload["has_reference_images"] = True
+            payload["image_artifact"] = image_artifact
+
+        return await self._start_workflow(
+            workflow=WORKFLOW_SKETCH_TO_3D,
+            payload=payload,
+            return_nodes=[
+                "final_validated_correction",
+                "final_latest_valid",
+                "fail_generation",
+            ],
+            conversation_id=conversation_id,
+            relation_type="initial_generation",
+            link_metadata={
+                "operation": WORKFLOW_SKETCH_TO_3D,
+                "client": "mcp",
+            },
+        )
+
+    async def start_regenerate_part(
+        self,
+        code_artifact: Dict[str, Any],
+        part_type: str,
+        description: str,
+        provider: str,
+        llm: str,
+        conversation_id: Optional[str] = None,
+    ) -> str:
+        """Submit a regenerate-part workflow and return its workflow_id."""
+        if not description.strip():
+            raise Nova3DError("A description of the desired change is required.")
+        if not part_type.strip():
+            raise Nova3DError("A part name is required (e.g. 'door', 'handle').")
+
+        payload: Dict[str, Any] = {
+            "code_artifact": code_artifact,
+            "description": description.strip(),
+            "part_type": part_type.strip(),
+            "llm": llm,
+            "provider": provider,
+        }
+        return await self._start_workflow(
+            workflow=WORKFLOW_REGENERATE_PART,
+            payload=payload,
+            return_nodes=["regenerate_3d_part"],
+            conversation_id=conversation_id,
+            relation_type=WORKFLOW_REGENERATE_PART,
+            link_metadata={
+                "operation": WORKFLOW_REGENERATE_PART,
+                "client": "mcp",
+            },
+        )
+
+    async def start_add_part(
+        self,
+        code_artifact: Dict[str, Any],
+        description: str,
+        provider: str,
+        llm: str,
+        conversation_id: Optional[str] = None,
+    ) -> str:
+        """Submit an add-part workflow and return its workflow_id."""
+        if not description.strip():
+            raise Nova3DError("A description of the new part is required.")
+
+        payload: Dict[str, Any] = {
+            "code_artifact": code_artifact,
+            "description": description.strip(),
+            "llm": llm,
+            "provider": provider,
+        }
+        return await self._start_workflow(
+            workflow=WORKFLOW_ADD_PART,
+            payload=payload,
+            return_nodes=["add_3d_part"],
+            conversation_id=conversation_id,
+            relation_type=WORKFLOW_ADD_PART,
+            link_metadata={
+                "operation": WORKFLOW_ADD_PART,
+                "client": "mcp",
+            },
+        )
+
+    async def start_articulate_model(
+        self,
+        code_artifact: Dict[str, Any],
+        articulation_request: str,
+        provider: str,
+        llm: str,
+        model_url: Optional[str] = None,
+        model_artifact: Optional[Dict[str, Any]] = None,
+        instruction_prompt: Optional[str] = None,
+        selected_meshes: Optional[list] = None,
+        conversation_id: Optional[str] = None,
+    ) -> str:
+        """Submit an articulate-model workflow and return its workflow_id."""
+        payload: Dict[str, Any] = {
+            "code_artifact": code_artifact,
+            "articulation_request": articulation_request.strip(),
+            "llm": llm,
+            "provider": provider,
+        }
+        if model_url:
+            payload["model_url"] = model_url
+        if model_artifact:
+            payload["model_artifact"] = model_artifact
+        if instruction_prompt:
+            payload["instruction_prompt"] = instruction_prompt
+        if selected_meshes:
+            payload["selected_meshes"] = selected_meshes
+
+        return await self._start_workflow(
+            workflow=WORKFLOW_ARTICULATE,
+            payload=payload,
+            return_nodes=["articulate_3d_model"],
+            conversation_id=conversation_id,
+            relation_type="articulate_model",
+            link_metadata={
+                "operation": WORKFLOW_ARTICULATE,
+                "client": "mcp",
+            },
+        )
+
     async def get_status(self, workflow_id: str) -> WorkflowStatus:
         """Get current workflow status."""
         resp = await self._get(f"/status/{workflow_id}")

@@ -865,3 +865,55 @@ def test_status_progress_label_for_v2_node():
         },
     )
     assert status.progress_label == "Reviewing the generated model..."
+
+
+@pytest.mark.asyncio
+async def test_start_generate_returns_workflow_id_without_polling(monkeypatch):
+    from nova3d_mcp.client import Nova3DClient
+
+    client = Nova3DClient(token="t", base_url="https://nova3d.xyz/api")
+
+    async def fake_check_readiness():
+        from nova3d_mcp.models import GenerationReadiness
+        return GenerationReadiness(ready=True)  # user_message is a derived property, not a field
+
+    captured = {}
+
+    async def fake_start_workflow(**kwargs):
+        captured.update(kwargs)
+        return "wf-xyz"
+
+    monkeypatch.setattr(client, "check_readiness", fake_check_readiness)
+    monkeypatch.setattr(client, "_start_workflow", fake_start_workflow)
+
+    workflow_id = await client.start_generate(
+        prompt="a chair",
+        code_llm_profile="nova3d_code_generation",
+        code_llm_tier="gemini_3_1_pro_google",
+        conversation_id="conv-1",
+    )
+    assert workflow_id == "wf-xyz"
+    assert captured["workflow"]  # a workflow name was passed
+    assert captured["conversation_id"] == "conv-1"
+
+
+@pytest.mark.asyncio
+async def test_start_regenerate_part_returns_workflow_id(monkeypatch):
+    from nova3d_mcp.client import Nova3DClient
+
+    client = Nova3DClient(token="t", base_url="https://nova3d.xyz/api")
+
+    async def fake_start_workflow(**kwargs):
+        return "wf-edit"
+
+    monkeypatch.setattr(client, "_start_workflow", fake_start_workflow)
+
+    workflow_id = await client.start_regenerate_part(
+        code_artifact={"url": "https://x/code.py"},
+        part_type="door",
+        description="glass door",
+        provider="gemini",
+        llm="gemini",
+        conversation_id="conv-1",
+    )
+    assert workflow_id == "wf-edit"
