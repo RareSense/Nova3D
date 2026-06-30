@@ -38,6 +38,7 @@ from nova3d_mcp.conversation import (
 )
 from nova3d_mcp.models import GenerationResult, MCPStatus, WorkflowStatus
 from nova3d_mcp.session_store import SessionStore
+from nova3d_mcp.workflow_store import WorkflowStore
 
 load_dotenv()
 
@@ -413,6 +414,109 @@ async def _append_and_link_messages(
                 remote_message_id=remote_message_id,
                 operation=str(message.get("operation") or "generation"),
             )
+
+
+# ── Async workflow finish machinery ───────────────────────────────────────────
+
+_EDIT_BACKEND_OPERATION = {
+    "regenerate_part": "regenerate_3d_part",
+    "add_part": "add_3d_part",
+    "articulate_model": "articulate_3d_model",
+}
+
+
+def _get_workflow_store() -> WorkflowStore:
+    return WorkflowStore()
+
+
+async def _finish_workflow(
+    client: Nova3DClient,
+    workflow_id: str,
+    entry: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Fetch a terminal workflow's result, persist, cache, and build its payload."""
+    result = await client.get_result(workflow_id)
+    if result.failed:
+        return {
+            "workflow_id": workflow_id,
+            "state": "failed",
+            "is_terminal": True,
+            "status": "failed",
+            "failed": True,
+            "error_message": result.error_message,
+            "error_category": result.error_category,
+            "retryable": result.retryable,
+        }
+
+    operation = entry.get("operation") or "generate"
+    conversation_id = entry.get("conversation_id")
+    model_option_id = entry.get("model_option_id") or ""
+    app_url = _get_app_url()
+
+    updated_code_artifact = _embed_code_artifact_metadata(
+        result.code_artifact,
+        conversation_id,
+        prompt=entry.get("prompt"),
+    )
+
+    if operation == "generate":
+        history_persisted = await _persist_generation_history(
+            client,
+            conversation_id=conversation_id,
+            title=entry.get("title") or "",
+            prompt=entry.get("prompt") or "",
+            result=result,
+            code_artifact=updated_code_artifact,
+            model_option_id=model_option_id,
+        )
+        payload: Dict[str, Any] = {
+            "glb_url": result.glb_url,
+            "joint_count": result.joint_count,
+            "joints": result.joints,
+            "code_artifact": updated_code_artifact,
+            "model_artifact": result.model_artifact,
+        }
+    else:
+        history_persisted = await _persist_edit_history(
+            client,
+            conversation_id=conversation_id,
+            operation=_EDIT_BACKEND_OPERATION.get(operation, operation),
+            description=entry.get("description") or "",
+            result=result,
+            code_artifact=updated_code_artifact,
+            model_option_id=model_option_id,
+            instruction_prompt=entry.get("prompt"),
+        )
+        if operation == "articulate_model":
+            payload = {
+                "glb_url": result.glb_url,
+                "joints": result.joints,
+                "joint_count": result.joint_count,
+                "code_artifact": updated_code_artifact,
+            }
+        else:
+            payload = {
+                "glb_url": result.glb_url,
+                "code_artifact": updated_code_artifact,
+            }
+
+    payload.update(
+        {
+            "workflow_id": workflow_id,
+            "state": "completed",
+            "is_terminal": True,
+            "status": "completed",
+            "api_key_source": result.api_key_source,
+            "history_persisted": history_persisted,
+            "failed": False,
+        }
+    )
+    conv_url = _conversation_url(app_url, conversation_id)
+    if conv_url:
+        payload["conversation_url"] = conv_url
+
+    _get_workflow_store().complete(workflow_id, payload)
+    return payload
 
 
 def _status_payload(status: MCPStatus) -> Dict[str, Any]:

@@ -760,3 +760,92 @@ async def test_articulate_model_neither_url_nor_artifact():
     )
     assert result["failed"] is True
     assert "model_url" in result["error_message"] or "model_artifact" in result["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_finish_workflow_generate_builds_completed_payload(monkeypatch):
+    """_finish_workflow embeds conversation id, persists, caches, and returns the result."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    fake_result = MagicMock()
+    fake_result.failed = False
+    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
+    fake_result.joint_count = 0
+    fake_result.joints = []
+    fake_result.code_artifact = {"url": "https://x/code.py"}
+    fake_result.model_artifact = {"url": "https://x/model.glb"}
+    fake_result.joints_artifact = None
+    fake_result.workflow_id = "wf-123"
+    fake_result.api_key_source = "request"
+
+    mock_client = AsyncMock()
+    mock_client.get_result = AsyncMock(return_value=fake_result)
+    mock_client.update_conversation_snapshot = AsyncMock(return_value=None)
+    mock_client.append_conversation_message = AsyncMock(side_effect=["m1", "m2"])
+    mock_client.link_workflow_to_message = AsyncMock(return_value=None)
+
+    captured_complete = {}
+    fake_store = MagicMock()
+    fake_store.complete = lambda wf, payload: captured_complete.update({wf: payload})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
+
+    entry = {
+        "operation": "generate",
+        "conversation_id": "conv-xyz",
+        "prompt": "a washing machine",
+        "description": None,
+        "title": "a washing machine",
+        "model_option_id": "opt-gemini",
+        "completed": False,
+        "result_payload": None,
+    }
+
+    payload = await server_module._finish_workflow(mock_client, "wf-123", entry)
+
+    assert payload["failed"] is False
+    assert payload["status"] == "completed"
+    assert payload["is_terminal"] is True
+    assert payload["glb_url"] == "https://nova3d.xyz/assets/abc.glb"
+    assert payload["code_artifact"]["_nova3d_conversation_id"] == "conv-xyz"
+    assert payload["code_artifact"]["_nova3d_prompt"] == "a washing machine"
+    assert payload["conversation_url"] == "https://app.nova3d.xyz/chat/conv-xyz"
+    assert "parts" not in payload
+    assert captured_complete["wf-123"] is payload
+
+
+@pytest.mark.asyncio
+async def test_finish_workflow_failed_result_returns_error(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+
+    fake_result = MagicMock()
+    fake_result.failed = True
+    fake_result.error_message = "Generation failed."
+    fake_result.error_category = "blender_generation_failed"
+    fake_result.retryable = False
+
+    mock_client = AsyncMock()
+    mock_client.get_result = AsyncMock(return_value=fake_result)
+
+    completed_calls = []
+    fake_store = MagicMock()
+    fake_store.complete = lambda wf, payload: completed_calls.append(wf)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    entry = {
+        "operation": "generate",
+        "conversation_id": "conv-xyz",
+        "prompt": "a chair",
+        "description": None,
+        "title": "a chair",
+        "model_option_id": "opt-gemini",
+        "completed": False,
+        "result_payload": None,
+    }
+
+    payload = await server_module._finish_workflow(mock_client, "wf-err", entry)
+    assert payload["failed"] is True
+    assert payload["error_message"] == "Generation failed."
+    assert payload["is_terminal"] is True
+    assert payload["status"] == "failed"
+    assert completed_calls == []  # failures are not cached
