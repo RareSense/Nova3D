@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 WORKFLOW_TTL_SECONDS = 86400  # 24h; well past the ~45-min max generation
 
@@ -62,7 +62,7 @@ class WorkflowStore:
         title: Optional[str],
         model_option_id: Optional[str],
     ) -> None:
-        data = self._load_pruned()
+        data, _ = self._load_pruned()
         data["workflows"][workflow_id] = {
             "operation": operation,
             "conversation_id": conversation_id,
@@ -77,14 +77,15 @@ class WorkflowStore:
         self._write(data)
 
     def get(self, workflow_id: str) -> Optional[Dict[str, Any]]:
-        data = self._load_pruned()
+        data, pruned = self._load_pruned()
         entry = data["workflows"].get(workflow_id)
-        # Persist any pruning that happened during load.
-        self._write(data)
+        # Persist only if pruning actually removed entries.
+        if pruned:
+            self._write(data)
         return entry
 
     def complete(self, workflow_id: str, result_payload: Dict[str, Any]) -> None:
-        data = self._load_pruned()
+        data, _ = self._load_pruned()
         entry = data["workflows"].get(workflow_id)
         if entry is None:
             self._write(data)
@@ -94,9 +95,10 @@ class WorkflowStore:
         self._write(data)
 
     # ── internals ──────────────────────────────────────────────────────────
-    def _load_pruned(self) -> Dict[str, Any]:
+    def _load_pruned(self) -> Tuple[Dict[str, Any], bool]:
         data = self._load_raw()
         now = datetime.now(timezone.utc)
+        original_count = len(data["workflows"])
         kept: Dict[str, Any] = {}
         for wf_id, entry in data["workflows"].items():
             created = _parse_iso(entry.get("created_at")) if isinstance(entry, dict) else None
@@ -105,7 +107,8 @@ class WorkflowStore:
             if (now - created).total_seconds() <= WORKFLOW_TTL_SECONDS:
                 kept[wf_id] = entry
         data["workflows"] = kept
-        return data
+        pruned = len(kept) < original_count
+        return data, pruned
 
     def _load_raw(self) -> Dict[str, Any]:
         try:
