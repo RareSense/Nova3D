@@ -740,15 +740,16 @@ async def generate_3d(
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
     """
-    Generate a structured, part-aware 3D asset from a text prompt.
+    Submit a structured, part-aware 3D generation from a text prompt.
 
     Initial generation uses Nova3D's paid GraphFlow v2 workflow. The selected
     model routes to a Nova3D-managed paid tier; this MCP tool does not expose
     BYOK provider-key generation.
 
-    Nova3D writes Blender Python construction code, executes it server-side,
-    validates spatial structure, and exports a GLB with named, separately
-    addressable parts — not a fused mesh blob.
+    This tool is ASYNCHRONOUS: it submits the workflow and returns a
+    workflow_id immediately — it does NOT wait for the model. Poll
+    get_generation_status(workflow_id) until is_terminal is true; on completion
+    that call returns the full result (glb_url, code_artifact, …).
 
     Args:
         prompt:       Description of the 3D asset. Be specific about parts.
@@ -762,17 +763,12 @@ async def generate_3d(
         image_mime:   MIME type of the reference image e.g. "image/jpeg".
 
     Returns:
-        glb_url:       Direct download URL for the structured GLB file.
-        parts:         List of named mesh/joint identifiers in the asset.
-        joint_count:   Number of articulated joints.
-        code_artifact: Blender Python construction script. Pass this to
-                       regenerate_part, add_part, or articulate_model.
-        model_artifact: GLB artifact object. Pass to articulate_model.
-        workflow_id:       Workflow identifier for status tracking.
+        workflow_id:       Identifier to poll with get_generation_status.
+        status:            "running" on a successful submit.
         conversation_url:  Browser URL for the editing session in the Nova3D app.
-                           All regenerate/edit calls on this asset link here too.
-                           Open this to see the full generation history for this asset.
-        failed:            True if generation failed.
+                           Present only if conversation creation succeeded.
+        failed:            True if the submit itself failed (then error_message
+                           is set and no workflow_id is returned).
         error_message:     Human-readable error if failed is True.
     """
     if _startup_error:
@@ -795,48 +791,27 @@ async def generate_3d(
         except Exception as e:
             print(f"Nova3D: conversation creation failed (generation will proceed): {e}", file=sys.stderr)
 
-        result = await client.generate(
+        workflow_id = await client.start_generate(
             prompt=prompt,
             code_llm_profile=model_opts["code_llm_profile"],
             code_llm_tier=model_opts["code_llm_tier"],
             image_artifact=_build_image_artifact(image_base64, image_mime),
             conversation_id=conversation_id,
-            on_progress=_make_progress_callback(ctx),
         )
 
-        if result.failed:
-            return {
-                "failed": True,
-                "error_message": result.error_message,
-                "error_category": result.error_category,
-                "retryable": result.retryable,
-            }
-
-        code_artifact = _embed_code_artifact_metadata(
-            result.code_artifact or {},
-            conversation_id,
-            prompt=prompt,
-        )
-        history_persisted = await _persist_generation_history(
-            client,
-            conversation_id=conversation_id,
-            title=prompt[:100],
-            prompt=prompt,
-            result=result,
-            code_artifact=code_artifact,
-            model_option_id=model_opts["option_id"],
-        )
+    _get_workflow_store().put(
+        workflow_id,
+        operation="generate",
+        conversation_id=conversation_id,
+        prompt=prompt,
+        description=None,
+        title=prompt[:100],
+        model_option_id=model_opts["option_id"],
+    )
 
     response: Dict[str, Any] = {
-        "glb_url": result.glb_url,
-        "parts": result.parts,
-        "joint_count": result.joint_count,
-        "joints": result.joints,
-        "code_artifact": code_artifact,
-        "model_artifact": result.model_artifact,
-        "workflow_id": result.workflow_id,
-        "api_key_source": result.api_key_source,
-        "history_persisted": history_persisted,
+        "workflow_id": workflow_id,
+        "status": "running",
         "failed": False,
     }
     conv_url = _conversation_url(app_url, conversation_id)

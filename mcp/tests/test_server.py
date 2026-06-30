@@ -139,135 +139,68 @@ async def test_generate_3d_proceeds_when_no_startup_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_generate_3d_creates_conversation_and_returns_url(monkeypatch):
-    """generate_3d creates a conversation and embeds its ID in code_artifact."""
+async def test_generate_3d_submits_and_returns_workflow_id(monkeypatch):
+    """generate_3d creates a conversation, submits, stores context, returns workflow_id — no blocking."""
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
     monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
     monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
 
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = ["body", "door"]
-    fake_result.joint_count = 0
-    fake_result.joints = []
-    fake_result.code_artifact = {"content": "import bpy"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.workflow_id = "wf-123"
-    fake_result.api_key_source = "request"
-
     mock_client = AsyncMock()
     mock_client.create_conversation = AsyncMock(return_value="conv-xyz")
-    mock_client.generate = AsyncMock(return_value=fake_result)
-    mock_client.update_conversation_snapshot = AsyncMock(return_value=None)
-    mock_client.append_conversation_message = AsyncMock(
-        side_effect=["remote-user", "remote-assistant"]
-    )
-    mock_client.link_workflow_to_message = AsyncMock(return_value=None)
+    mock_client.start_generate = AsyncMock(return_value="wf-123")
+    mock_client.get_result = AsyncMock()  # must NOT be called in submit path
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    stored = {}
+    fake_store = MagicMock()
+    fake_store.put = lambda wf, **kw: stored.update({wf: kw})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
     with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
-        result = await server_module.generate_3d(
-            prompt="a washing machine",
-        )
+        result = await server_module.generate_3d(prompt="a washing machine")
 
     assert result["failed"] is False
+    assert result["status"] == "running"
+    assert result["workflow_id"] == "wf-123"
     assert result["conversation_url"] == "https://app.nova3d.xyz/chat/conv-xyz"
-    assert result["history_persisted"] is True
-    assert result["code_artifact"]["_nova3d_conversation_id"] == "conv-xyz"
-    assert result["code_artifact"]["_nova3d_prompt"] == "a washing machine"
-    mock_client.create_conversation.assert_called_once_with(title="a washing machine")
-    mock_client.generate.assert_called_once()
-    mock_client.update_conversation_snapshot.assert_called_once()
-    assert mock_client.append_conversation_message.call_count == 2
-    mock_client.link_workflow_to_message.assert_called_once()
-    snapshot_messages = mock_client.update_conversation_snapshot.call_args.kwargs["messages"]
-    assert snapshot_messages[0]["role"] == "user"
-    assert snapshot_messages[0]["text"] == "a washing machine"
-    assert snapshot_messages[1]["role"] == "assistant"
-    assert snapshot_messages[1]["model_url"] == fake_result.glb_url
-    assert snapshot_messages[1]["code_artifact"]["_nova3d_conversation_id"] == "conv-xyz"
-    call_kwargs = mock_client.generate.call_args.kwargs
+    assert "parts" not in result
+    assert "glb_url" not in result
+    mock_client.start_generate.assert_called_once()
+    mock_client.get_result.assert_not_called()
+    assert stored["wf-123"]["operation"] == "generate"
+    assert stored["wf-123"]["conversation_id"] == "conv-xyz"
+    assert stored["wf-123"]["prompt"] == "a washing machine"
+    assert stored["wf-123"]["title"] == "a washing machine"
+    call_kwargs = mock_client.start_generate.call_args.kwargs
     assert call_kwargs["conversation_id"] == "conv-xyz"
     assert call_kwargs["code_llm_profile"] == "nova3d_code_generation"
     assert call_kwargs["code_llm_tier"] == "gemini_3_1_pro_google"
-    assert call_kwargs["image_artifact"] is None
 
 
 @pytest.mark.asyncio
-async def test_generate_3d_uses_configured_app_url(monkeypatch):
+async def test_generate_3d_conversation_failure_still_submits(monkeypatch):
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-    monkeypatch.setenv("NOVA3D_APP_URL", "http://127.0.0.1:5555")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = []
-    fake_result.joint_count = 0
-    fake_result.joints = []
-    fake_result.code_artifact = {"content": "import bpy"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.workflow_id = "wf-local"
-    fake_result.api_key_source = None
+    monkeypatch.delenv("NOVA3D_APP_URL", raising=False)
 
     mock_client = AsyncMock()
-    mock_client.create_conversation = AsyncMock(return_value="conv-local")
-    mock_client.generate = AsyncMock(return_value=fake_result)
-    mock_client.update_conversation_snapshot = AsyncMock(return_value=None)
-    mock_client.append_conversation_message = AsyncMock(
-        side_effect=["remote-user", "remote-assistant"]
-    )
-    mock_client.link_workflow_to_message = AsyncMock(return_value=None)
+    mock_client.create_conversation = AsyncMock(side_effect=Exception("boom"))
+    mock_client.start_generate = AsyncMock(return_value="wf-789")
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
-        result = await server_module.generate_3d(prompt="a local model")
-
-    assert result["conversation_url"] == "http://127.0.0.1:5555/chat/conv-local"
-
-
-@pytest.mark.asyncio
-async def test_generate_3d_conversation_failure_does_not_block_generation(monkeypatch):
-    """If create_conversation raises, generation still proceeds and conversation_url is absent."""
-    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
-    monkeypatch.setenv("NOVA3D_API_URL", "https://nova3d.xyz/api")
-
-    fake_result = MagicMock()
-    fake_result.failed = False
-    fake_result.glb_url = "https://nova3d.xyz/assets/abc.glb"
-    fake_result.parts = ["body"]
-    fake_result.joint_count = 0
-    fake_result.joints = []
-    fake_result.code_artifact = {"content": "import bpy"}
-    fake_result.model_artifact = None
-    fake_result.joints_artifact = None
-    fake_result.workflow_id = "wf-123"
-    fake_result.api_key_source = "request"
-
-    from nova3d_mcp.client import Nova3DError
-    mock_client = AsyncMock()
-    mock_client.create_conversation = AsyncMock(side_effect=Nova3DError("network error"))
-    mock_client.generate = AsyncMock(return_value=fake_result)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    fake_store = MagicMock()
+    fake_store.put = MagicMock()
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
 
     with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
-        result = await server_module.generate_3d(
-            prompt="a chair",
-        )
+        result = await server_module.generate_3d(prompt="a chair")
 
     assert result["failed"] is False
-    assert result["code_artifact"].get("_nova3d_prompt") == "a chair"
+    assert result["workflow_id"] == "wf-789"
     assert "conversation_url" not in result
-    assert result["history_persisted"] is False
-    assert "_nova3d_conversation_id" not in result.get("code_artifact", {})
-    mock_client.generate.assert_called_once()
-    assert mock_client.generate.call_args.kwargs["conversation_id"] is None
+    call_kwargs = mock_client.start_generate.call_args.kwargs
+    assert call_kwargs["conversation_id"] is None
 
 
 # ── Edit tool conversation propagation tests ──────────────────────────────────
