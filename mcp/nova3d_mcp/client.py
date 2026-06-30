@@ -83,11 +83,14 @@ class Nova3DClient:
 
     Usage:
         async with Nova3DClient(token="n3d_your-key") as client:
-            result = await client.generate(
+            workflow_id = await client.start_generate(
                 prompt="a toaster with removable tray",
-                provider="gemini",
-                llm="gemini",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
             )
+            status = await client.get_status(workflow_id)
+            if status.is_terminal:
+                result = await client.get_result(workflow_id)
     """
 
     def __init__(

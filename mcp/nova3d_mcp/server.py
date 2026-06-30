@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+import httpx
+
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import Context
@@ -1128,7 +1130,28 @@ async def get_generation_status(workflow_id: str) -> Dict[str, Any]:
                 ),
             }
 
-        return await _finish_workflow(client, workflow_id, entry)
+        try:
+            return await _finish_workflow(client, workflow_id, entry)
+        except Nova3DError as e:
+            if _is_recoverable(str(e)):
+                return {
+                    "workflow_id": workflow_id,
+                    "state": "running",
+                    "is_terminal": False,
+                    "progress_label": "Finalizing result...",
+                    "current_node": None,
+                    "status": "running",
+                }
+            return {"failed": True, "error_message": str(e)}
+        except httpx.TimeoutException:
+            return {
+                "workflow_id": workflow_id,
+                "state": "running",
+                "is_terminal": False,
+                "progress_label": "Finalizing result...",
+                "current_node": None,
+                "status": "running",
+            }
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────

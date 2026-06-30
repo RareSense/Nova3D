@@ -757,6 +757,105 @@ async def test_get_generation_status_unknown_workflow(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_get_generation_status_finish_recoverable_error_keeps_polling(monkeypatch):
+    """A recoverable Nova3DError from _finish_workflow returns a keep-polling running payload."""
+    from nova3d_mcp.client import Nova3DError
+
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-3", state=WorkflowState.COMPLETED, current_node="final_latest_valid"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    entry = {"completed": False, "operation": "generate"}
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value=entry)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    # _finish_workflow raises a recoverable Nova3DError (503 is in RECOVERABLE_ERROR_SIGNALS)
+    monkeypatch.setattr(
+        server_module,
+        "_finish_workflow",
+        AsyncMock(side_effect=Nova3DError("request failed (503): service unavailable")),
+    )
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-3")
+
+    assert result["is_terminal"] is False
+    assert result["status"] == "running"
+    assert "failed" not in result or result.get("failed") is not True
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_finish_nonrecoverable_error_fails(monkeypatch):
+    """A non-recoverable Nova3DError from _finish_workflow returns failed=True."""
+    from nova3d_mcp.client import Nova3DError
+
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-4", state=WorkflowState.COMPLETED, current_node="final_latest_valid"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    entry = {"completed": False, "operation": "generate"}
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value=entry)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    # _finish_workflow raises a non-recoverable Nova3DError (no RECOVERABLE_ERROR_SIGNALS match)
+    monkeypatch.setattr(
+        server_module,
+        "_finish_workflow",
+        AsyncMock(side_effect=Nova3DError("Blender execution failed: syntax error in generated code")),
+    )
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-4")
+
+    assert result["failed"] is True
+    assert "error_message" in result
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_finish_timeout_keeps_polling(monkeypatch):
+    """An httpx.TimeoutException from _finish_workflow returns a keep-polling running payload."""
+    import httpx as _httpx
+
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-5", state=WorkflowState.COMPLETED, current_node="final_latest_valid"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    entry = {"completed": False, "operation": "generate"}
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value=entry)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    monkeypatch.setattr(
+        server_module,
+        "_finish_workflow",
+        AsyncMock(side_effect=_httpx.TimeoutException("read timeout")),
+    )
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-5")
+
+    assert result["is_terminal"] is False
+    assert result["status"] == "running"
+
+
+@pytest.mark.asyncio
 async def test_get_generation_status_budget_exhausted(monkeypatch):
     monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
     terminal = WorkflowStatus(
