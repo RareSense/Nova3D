@@ -7,9 +7,8 @@ Handles workflow submission, polling, and result extraction.
 """
 from __future__ import annotations
 
-import asyncio
 import time
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 import httpx
 
@@ -34,7 +33,6 @@ WORKFLOW_REGENERATE_PART = "regenerate_3d_part"
 WORKFLOW_ADD_PART = "add_3d_part"
 WORKFLOW_ARTICULATE = "articulate_3d_model"
 
-POLL_INTERVAL_SECONDS = 3.0
 START_TIMEOUT_SECONDS = 120.0
 RESULT_TIMEOUT_SECONDS = 300.0
 CONNECT_TIMEOUT_SECONDS = 30.0
@@ -130,159 +128,6 @@ class Nova3DClient:
         """Preflight check — confirm the generation service is available."""
         resp = await self._get(f"/workflow/readiness/{WORKFLOW_SKETCH_TO_3D}")
         return GenerationReadiness(**resp)
-
-    async def generate(
-        self,
-        prompt: str,
-        code_llm_profile: str,
-        code_llm_tier: str,
-        image_artifact: Optional[list[str]] = None,
-        conversation_id: Optional[str] = None,
-        on_progress: Optional[Callable[[WorkflowStatus], Awaitable[None]]] = None,
-    ) -> GenerationResult:
-        """
-        Generate a 3D asset from a text prompt and optional reference image.
-        Blocks until the workflow completes or fails.
-        """
-        readiness = await self.check_readiness()
-        if not readiness.ready:
-            raise Nova3DError(readiness.user_message)
-
-        payload: Dict[str, Any] = {
-            "prompt": prompt.strip(),
-            "code_llm_profile": code_llm_profile,
-            "code_llm_tier": code_llm_tier,
-        }
-        if image_artifact:
-            payload["has_reference_images"] = True
-            payload["image_artifact"] = image_artifact
-
-        workflow_id = await self._start_workflow(
-            workflow=WORKFLOW_SKETCH_TO_3D,
-            payload=payload,
-            return_nodes=[
-                "final_validated_correction",
-                "final_latest_valid",
-                "fail_generation",
-            ],
-            conversation_id=conversation_id,
-            relation_type="initial_generation",
-            link_metadata={
-                "operation": WORKFLOW_SKETCH_TO_3D,
-                "client": "mcp",
-            },
-        )
-        return await self._poll_and_collect(workflow_id, on_progress=on_progress)
-
-    async def regenerate_part(
-        self,
-        code_artifact: Dict[str, Any],
-        part_type: str,
-        description: str,
-        provider: str,
-        llm: str,
-        conversation_id: Optional[str] = None,
-        on_progress: Optional[Callable[[WorkflowStatus], Awaitable[None]]] = None,
-    ) -> GenerationResult:
-        """Regenerate a specific named part within an existing asset."""
-        if not description.strip():
-            raise Nova3DError("A description of the desired change is required.")
-        if not part_type.strip():
-            raise Nova3DError("A part name is required (e.g. 'door', 'handle').")
-
-        payload: Dict[str, Any] = {
-            "code_artifact": code_artifact,
-            "description": description.strip(),
-            "part_type": part_type.strip(),
-            "llm": llm,
-            "provider": provider,
-        }
-        workflow_id = await self._start_workflow(
-            workflow=WORKFLOW_REGENERATE_PART,
-            payload=payload,
-            return_nodes=["regenerate_3d_part"],
-            conversation_id=conversation_id,
-            relation_type=WORKFLOW_REGENERATE_PART,
-            link_metadata={
-                "operation": WORKFLOW_REGENERATE_PART,
-                "client": "mcp",
-            },
-        )
-        return await self._poll_and_collect(workflow_id, on_progress=on_progress)
-
-    async def add_part(
-        self,
-        code_artifact: Dict[str, Any],
-        description: str,
-        provider: str,
-        llm: str,
-        conversation_id: Optional[str] = None,
-        on_progress: Optional[Callable[[WorkflowStatus], Awaitable[None]]] = None,
-    ) -> GenerationResult:
-        """Add a new part to an existing asset."""
-        if not description.strip():
-            raise Nova3DError("A description of the new part is required.")
-
-        payload: Dict[str, Any] = {
-            "code_artifact": code_artifact,
-            "description": description.strip(),
-            "llm": llm,
-            "provider": provider,
-        }
-        workflow_id = await self._start_workflow(
-            workflow=WORKFLOW_ADD_PART,
-            payload=payload,
-            return_nodes=["add_3d_part"],
-            conversation_id=conversation_id,
-            relation_type=WORKFLOW_ADD_PART,
-            link_metadata={
-                "operation": WORKFLOW_ADD_PART,
-                "client": "mcp",
-            },
-        )
-        return await self._poll_and_collect(workflow_id, on_progress=on_progress)
-
-    async def articulate_model(
-        self,
-        code_artifact: Dict[str, Any],
-        articulation_request: str,
-        provider: str,
-        llm: str,
-        model_url: Optional[str] = None,
-        model_artifact: Optional[Dict[str, Any]] = None,
-        instruction_prompt: Optional[str] = None,
-        selected_meshes: Optional[list] = None,
-        conversation_id: Optional[str] = None,
-        on_progress: Optional[Callable[[WorkflowStatus], Awaitable[None]]] = None,
-    ) -> GenerationResult:
-        """Add joints, hinges, or rotation to an existing asset."""
-        payload: Dict[str, Any] = {
-            "code_artifact": code_artifact,
-            "articulation_request": articulation_request.strip(),
-            "llm": llm,
-            "provider": provider,
-        }
-        if model_url:
-            payload["model_url"] = model_url
-        if model_artifact:
-            payload["model_artifact"] = model_artifact
-        if instruction_prompt:
-            payload["instruction_prompt"] = instruction_prompt
-        if selected_meshes:
-            payload["selected_meshes"] = selected_meshes
-
-        workflow_id = await self._start_workflow(
-            workflow=WORKFLOW_ARTICULATE,
-            payload=payload,
-            return_nodes=["articulate_3d_model"],
-            conversation_id=conversation_id,
-            relation_type="articulate_model",
-            link_metadata={
-                "operation": WORKFLOW_ARTICULATE,
-                "client": "mcp",
-            },
-        )
-        return await self._poll_and_collect(workflow_id, on_progress=on_progress)
 
     async def start_generate(
         self,
@@ -575,46 +420,6 @@ class Nova3DClient:
         if not returned_id:
             raise Nova3DError("Generation did not return a workflow ID.")
         return returned_id
-
-    async def _poll_and_collect(
-        self,
-        workflow_id: str,
-        on_progress: Optional[Callable[[WorkflowStatus], Awaitable[None]]] = None,
-    ) -> GenerationResult:
-        """Poll status until terminal, then fetch and return result."""
-        while True:
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
-            try:
-                status = await self.get_status(workflow_id)
-            except Nova3DError as e:
-                if _is_recoverable(str(e)):
-                    if on_progress:
-                        await on_progress(WorkflowStatus(
-                            workflow_id=workflow_id,
-                            state="pending",  # type: ignore[arg-type]
-                            current_node="sketch_to_3d_generator",
-                        ))
-                    continue
-                raise
-
-            if on_progress:
-                await on_progress(status)
-
-            if status.state.value == "budget_exhausted":
-                raise Nova3DError(
-                    "Your provider or generation budget was exhausted before the model completed."
-                )
-            if status.is_terminal:
-                break
-
-        # Fetch result with retry on recoverable errors
-        while True:
-            try:
-                return await self.get_result(workflow_id)
-            except Nova3DError as e:
-                if not _is_recoverable(str(e)):
-                    raise
-                await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
     async def _get(
         self,

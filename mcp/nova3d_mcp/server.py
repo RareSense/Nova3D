@@ -36,7 +36,7 @@ from nova3d_mcp.conversation import (
     build_edit_message,
     build_generation_messages,
 )
-from nova3d_mcp.models import GenerationResult, MCPStatus, WorkflowStatus, WorkflowState
+from nova3d_mcp.models import GenerationResult, MCPStatus, WorkflowState
 from nova3d_mcp.session_store import SessionStore
 from nova3d_mcp.workflow_store import WorkflowStore
 
@@ -108,28 +108,32 @@ mcp = FastMCP(
         "Nova3D generates structured, part-aware 3D assets from text prompts or "
         "reference images. Unlike diffusion-based tools, Nova3D outputs named, "
         "separately editable mesh components — not fused blobs.\n\n"
-        "WORKFLOW:\n"
-        "1. Call generate_3d → returns glb_url (download), parts list, "
-        "code_artifact, and "
-        "conversation_url. Always surface conversation_url to the user — it opens "
-        "a browser view of the asset and its full edit history in the Nova3D app.\n"
-        "   - Initial generation runs through Nova3D's paid GraphFlow v2 path.\n"
-        "   - The model selector routes to a paid Nova3D tier; this MCP server does "
-        "not expose BYOK provider-key generation.\n"
-        "2. Call regenerate_part, add_part, or articulate_model with the "
-        "code_artifact from any prior result. These tools return an updated glb_url "
-        "and the same conversation_url, linking all edits into one session.\n"
-        "   - conversation_url may be absent from edit-tool responses if session "
-        "creation failed silently at generate time; generation still succeeded.\n"
-        "   - Always pass the most recent code_artifact forward — it carries session "
-        "state that links edits together.\n\n"
+        "WORKFLOW (asynchronous):\n"
+        "1. Call generate_3d → returns a workflow_id immediately (it does NOT "
+        "wait). Initial generation runs through Nova3D's paid GraphFlow v2 path; "
+        "the model selector routes to a paid Nova3D tier (no BYOK).\n"
+        "2. Poll get_generation_status(workflow_id) every ~3–5 seconds until "
+        "is_terminal is true. On completion it returns the full result — "
+        "glb_url (download), code_artifact, and conversation_url. Generations "
+        "take a few minutes; regenerate_part can take up to ~45 minutes.\n"
+        "3. Always surface conversation_url to the user — it opens a browser "
+        "view of the asset and its full edit history in the Nova3D app.\n"
+        "4. To edit, call regenerate_part, add_part, or articulate_model with "
+        "the code_artifact from any completed result. They are also async — "
+        "poll get_generation_status the same way. Pass a natural part name to "
+        "regenerate_part (e.g. 'door', 'seat'); the backend resolves it.\n"
+        "   - Always pass the most recent code_artifact forward — it carries "
+        "session state that links edits together.\n"
+        "   - conversation_url may be absent if conversation creation failed at "
+        "generate time; generation still succeeds.\n\n"
         "SETUP:\n"
-        "1. After installing this MCP server in your client, the next step is to call "
-        "nova3d_setup or go directly to nova3d_login.\n"
-        "2. Preferred: Call nova3d_login to sign in through the browser.\n"
-        "3. Check nova3d_status to confirm credits and readiness before generation.\n"
-        "4. Advanced fallback: you may still provide NOVA3D_TOKEN manually in "
-        "non-interactive environments.\n"
+        "1. After installing this MCP server, call nova3d_setup or go directly "
+        "to nova3d_login.\n"
+        "2. Preferred: nova3d_login signs in through the browser.\n"
+        "3. Check nova3d_status to confirm credits and readiness before "
+        "generation.\n"
+        "4. Advanced fallback: set NOVA3D_TOKEN manually in non-interactive "
+        "environments.\n"
         "\n"
         "If any tool returns {\"failed\": true}, surface the error_message to the user verbatim."
     ),
@@ -248,29 +252,6 @@ async def _require_generation_ready() -> Optional[Dict[str, Any]]:
 
 
 # ── Progress helper ───────────────────────────────────────────────────────────
-
-def _make_progress_callback(
-    ctx: Optional[Context],
-) -> Callable[[WorkflowStatus], Awaitable[None]]:
-    """Return an async on_progress callback that reports each newly completed node."""
-    seen: set = set()
-    counter: List[int] = [0]
-
-    async def on_progress(status: WorkflowStatus) -> None:
-        node = status.last_exit_node or status.current_node
-        if not node or node in seen:
-            return
-        seen.add(node)
-        counter[0] += 1
-        if ctx:
-            await ctx.report_progress(
-                progress=counter[0],
-                total=None,
-                message=f"Completed: {node}",
-            )
-
-    return on_progress
-
 
 def _make_login_progress_callback(
     ctx: Optional[Context],
