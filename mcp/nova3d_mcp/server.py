@@ -31,12 +31,12 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.server import Context
 
 from nova3d_mcp.auth import Nova3DAuthenticator, Nova3DLoginError
-from nova3d_mcp.client import Nova3DClient, Nova3DAuthError, Nova3DError
+from nova3d_mcp.client import Nova3DClient, Nova3DAuthError, Nova3DError, _is_recoverable
 from nova3d_mcp.conversation import (
     build_edit_message,
     build_generation_messages,
 )
-from nova3d_mcp.models import GenerationResult, MCPStatus, WorkflowStatus
+from nova3d_mcp.models import GenerationResult, MCPStatus, WorkflowStatus, WorkflowState
 from nova3d_mcp.session_store import SessionStore
 from nova3d_mcp.workflow_store import WorkflowStore
 
@@ -1072,36 +1072,82 @@ async def articulate_model(
 @mcp.tool()
 async def get_generation_status(workflow_id: str) -> Dict[str, Any]:
     """
-    Get the current status of a running generation workflow.
+    Poll a generation/edit workflow and, on completion, return its full result.
 
-    Use this to check on a long-running generation without waiting for
-    the full result. The generate_3d and edit tools block until completion,
-    but this tool is useful if you have a workflow_id from a prior session.
+    This is THE way to obtain a result from generate_3d, regenerate_part,
+    add_part, or articulate_model — those tools return a workflow_id and do not
+    wait. Call this repeatedly (every ~3–5 seconds) until is_terminal is true.
+    Generations typically take a few minutes; regenerate_part can take up to
+    ~45 minutes.
 
     Args:
-        workflow_id: The workflow_id returned by any generation tool.
+        workflow_id: The workflow_id returned by a generation/edit tool.
 
-    Returns:
-        state:          Current state string.
-        is_terminal:    True if the workflow has finished (success or failure).
-        progress_label: Human-readable progress description.
-        current_node:   Internal pipeline node currently executing.
+    Returns (while running):
+        state, is_terminal=false, progress_label, current_node, status="running".
+    Returns (on completion):
+        the full result — glb_url, code_artifact, conversation_url, etc.
+    Returns (on failure / unknown id):
+        failed=true with error_message.
     """
     if _startup_error:
         return {"failed": True, "error_message": _startup_error}
+
+    store = _get_workflow_store()
+    entry = store.get(workflow_id)
+    if entry is not None and entry.get("completed") and entry.get("result_payload") is not None:
+        return entry["result_payload"]
+
     token = _get_token()
     base_url = _get_api_url()
 
     async with Nova3DClient(token=token, base_url=base_url) as client:
-        status = await client.get_status(workflow_id)
+        try:
+            status = await client.get_status(workflow_id)
+        except Nova3DError as e:
+            if _is_recoverable(str(e)):
+                return {
+                    "workflow_id": workflow_id,
+                    "state": "pending",
+                    "is_terminal": False,
+                    "progress_label": "Starting generation...",
+                    "current_node": None,
+                    "status": "running",
+                }
+            return {"failed": True, "error_message": str(e)}
 
-    return {
-        "workflow_id": status.workflow_id,
-        "state": status.state.value,
-        "is_terminal": status.is_terminal,
-        "progress_label": status.progress_label,
-        "current_node": status.current_node,
-    }
+        if not status.is_terminal:
+            return {
+                "workflow_id": status.workflow_id,
+                "state": status.state.value,
+                "is_terminal": False,
+                "progress_label": status.progress_label,
+                "current_node": status.current_node,
+                "status": "running",
+            }
+
+        # Terminal from here on.
+        if status.state == WorkflowState.BUDGET_EXHAUSTED:
+            return {
+                "workflow_id": workflow_id,
+                "state": status.state.value,
+                "is_terminal": True,
+                "status": "failed",
+                "failed": True,
+                "error_message": "Your provider or generation budget was exhausted before the model completed.",
+            }
+
+        if entry is None:
+            return {
+                "failed": True,
+                "error_message": (
+                    "Unknown or expired workflow_id. The workflow may have "
+                    "finished, but its session context is no longer available "
+                    "in this MCP server. Start a new generation."
+                ),
+            }
+
+        return await _finish_workflow(client, workflow_id, entry)
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────────────

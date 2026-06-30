@@ -749,3 +749,118 @@ async def test_finish_workflow_failed_result_returns_error(monkeypatch):
     assert payload["is_terminal"] is True
     assert payload["status"] == "failed"
     assert completed_calls == []  # failures are not cached
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_running(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    running = WorkflowStatus(
+        workflow_id="wf-1", state=WorkflowState.RUNNING, current_node="run_blender"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=running)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value={"completed": False, "operation": "generate"})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-1")
+
+    assert result["is_terminal"] is False
+    assert result["status"] == "running"
+    assert result["state"] == "running"
+    assert "glb_url" not in result
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_returns_cached_when_completed(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    cached = {"failed": False, "status": "completed", "glb_url": "https://x/y.glb"}
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value={"completed": True, "result_payload": cached})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    # Client must never be constructed when the cache is hit.
+    def explode(*a, **k):
+        raise AssertionError("client should not be used on cache hit")
+
+    with patch("nova3d_mcp.server.Nova3DClient", explode):
+        result = await server_module.get_generation_status(workflow_id="wf-done")
+
+    assert result is cached
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_terminal_calls_finish(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-2", state=WorkflowState.COMPLETED, current_node="final_latest_valid"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    entry = {"completed": False, "operation": "generate"}
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value=entry)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    finish_payload = {"failed": False, "status": "completed", "glb_url": "https://x/y.glb"}
+    finish_mock = AsyncMock(return_value=finish_payload)
+    monkeypatch.setattr(server_module, "_finish_workflow", finish_mock)
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-2")
+
+    assert result is finish_payload
+    finish_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_unknown_workflow(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-x", state=WorkflowState.COMPLETED, current_node="final_latest_valid"
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value=None)
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-x")
+
+    assert result["failed"] is True
+    assert "expired" in result["error_message"].lower() or "unknown" in result["error_message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_get_generation_status_budget_exhausted(monkeypatch):
+    monkeypatch.setenv("NOVA3D_TOKEN", "n3d_testkey")
+    terminal = WorkflowStatus(
+        workflow_id="wf-b", state=WorkflowState.BUDGET_EXHAUSTED, current_node=None
+    )
+    mock_client = AsyncMock()
+    mock_client.get_status = AsyncMock(return_value=terminal)
+    mock_client.get_result = AsyncMock()  # must not be called
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    fake_store = MagicMock()
+    fake_store.get = MagicMock(return_value={"completed": False, "operation": "generate"})
+    monkeypatch.setattr(server_module, "_get_workflow_store", lambda: fake_store)
+
+    with patch("nova3d_mcp.server.Nova3DClient", return_value=mock_client):
+        result = await server_module.get_generation_status(workflow_id="wf-b")
+
+    assert result["failed"] is True
+    assert "budget" in result["error_message"].lower()
+    mock_client.get_result.assert_not_called()
