@@ -12,8 +12,8 @@ import httpx
 from nova3d_mcp.client import _parse_auth_error
 from nova3d_mcp.server import _validate_startup
 
-from nova3d_mcp.client import Nova3DClient, Nova3DError, Nova3DAuthError
-from nova3d_mcp.models import GenerationResult, WorkflowState
+from nova3d_mcp.client import Nova3DClient, Nova3DError, Nova3DAuthError, Nova3DCreditsError
+from nova3d_mcp.models import GenerationReadiness, GenerationResult, WorkflowState
 
 
 FAKE_TOKEN = "test-jwt-token"
@@ -579,3 +579,64 @@ async def test_start_regenerate_part_returns_workflow_id(monkeypatch):
         conversation_id="conv-1",
     )
     assert workflow_id == "wf-edit"
+
+
+# ── start_generate error-path coverage ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_start_generate_raises_when_not_ready(monkeypatch):
+    client = Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL)
+
+    async def fake_check_readiness():
+        return GenerationReadiness(ready=False, reason="generation_service_unavailable")
+
+    monkeypatch.setattr(client, "check_readiness", fake_check_readiness)
+
+    async with client:
+        with pytest.raises(Nova3DError, match="unavailable"):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
+
+
+@pytest.mark.asyncio
+async def test_start_generate_propagates_credits_error(mock_api):
+    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(200, json=_readiness_ok())
+    )
+    mock_api.post("/run/state/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(402, json={
+            "code": "credits_or_user_key_required",
+            "message": "Add credits or provide your own provider API key to generate.",
+        })
+    )
+
+    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
+        with pytest.raises(Nova3DCreditsError):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
+
+
+@pytest.mark.asyncio
+async def test_start_generate_propagates_auth_error(mock_api):
+    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(200, json=_readiness_ok())
+    )
+    mock_api.post("/run/state/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(401, json={
+            "detail": {"code": "api_key_revoked", "message": "Revoked."}
+        })
+    )
+
+    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
+        with pytest.raises(Nova3DAuthError, match="revoked"):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
