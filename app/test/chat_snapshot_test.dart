@@ -3,7 +3,7 @@ import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 
 void main() {
-  test('restores exact chat bubbles from conversation metadata snapshot', () {
+  test('restores chat bubbles from the lightweight metadata snapshot', () {
     final now = DateTime.utc(2026, 6, 3, 12);
     final messages = [
       MessageModel(
@@ -37,7 +37,11 @@ void main() {
 
     expect(restored, hasLength(2));
     expect(restored.first.text, 'Make a desk lamp');
-    expect(restored.first.imageDataUrl, 'data:image/png;base64,abc');
+    // Reference images are intentionally excluded from the snapshot so the
+    // conversation-list response stays bounded; they are recovered from the
+    // per-message content when a conversation is opened.
+    expect(restored.first.imageDataUrl, isNull);
+    expect(restored.first.imageDataUrls, isEmpty);
     expect(restored.last.modelUrl, 'https://example.test/lamp.glb');
     expect(restored.last.workflowId, 'state-123');
     expect(restored.last.messageType, 'asset_version');

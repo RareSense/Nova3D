@@ -17,8 +17,27 @@ class ConversationRepository {
 
   Future<List<ConversationModel>> load() => _local.loadConversations();
 
-  Future<List<ConversationModel>> syncLatest({int limit = 50}) async {
-    final remote = await _remote.getConversations(limit: limit);
+  /// Syncs the conversation list from the backend.
+  ///
+  /// The backend returns each conversation's full metadata snapshot inline, so
+  /// the list is fetched in small pages rather than one request. This bounds
+  /// the size of any single response the browser must download and parse,
+  /// keeping history loadable even while older conversations still carry heavy
+  /// (pre-trim) snapshots. [maxConversations] caps the walk so a growing list
+  /// can never loop unbounded.
+  Future<List<ConversationModel>> syncLatest({
+    int pageSize = 10,
+    int maxConversations = 500,
+  }) async {
+    final remote = <ConversationModel>[];
+    for (var offset = 0; offset < maxConversations; offset += pageSize) {
+      final page = await _remote.getConversations(
+        limit: pageSize,
+        offset: offset,
+      );
+      remote.addAll(page);
+      if (page.length < pageSize) break;
+    }
     final local = await _local.loadConversations();
     final merged = _mergeConversations(local, remote);
     await _local.save(merged);

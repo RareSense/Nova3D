@@ -104,8 +104,15 @@ class MessageModel {
 
   Map<String, dynamic> toLocalJson() => toContentJson();
 
-  Map<String, dynamic> toContentJson() {
-    final images = allImageDataUrls;
+  /// Serializes the message for persistence.
+  ///
+  /// [includeImages] controls whether the (potentially multi-MB, base64)
+  /// reference images are embedded. It is `false` for the conversation-list
+  /// snapshot, which is returned inline for every conversation and would
+  /// otherwise make the list response grow without bound; restored bubbles
+  /// still recover their images from the per-message content on open.
+  Map<String, dynamic> toContentJson({bool includeImages = true}) {
+    final images = includeImages ? allImageDataUrls : const <String>[];
     return {
       'id': id,
       'role': role == MessageRole.user ? 'user' : 'assistant',
