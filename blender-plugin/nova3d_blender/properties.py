@@ -56,6 +56,13 @@ def register_properties():
     wm.nova3d_credits_busy = bpy.props.BoolProperty(default=False)
     wm.nova3d_last_dir = bpy.props.StringProperty(default="")
     wm.nova3d_pending = bpy.props.IntProperty(default=0)  # interrupted runs to resume
+    # Service health: set when a probe cannot reach Nova3D (outage / no network).
+    wm.nova3d_service_down = bpy.props.BoolProperty(default=False)
+    # Update check (against GitHub Releases; independent of sign-in).
+    wm.nova3d_update_available = bpy.props.BoolProperty(default=False)
+    wm.nova3d_latest_version = bpy.props.StringProperty(default="")
+    wm.nova3d_release_url = bpy.props.StringProperty(default="")
+    wm.nova3d_updates_busy = bpy.props.BoolProperty(default=False)
 
 
 def unregister_properties():
@@ -68,7 +75,10 @@ def unregister_properties():
     wm = bpy.types.WindowManager
     for attr in ("nova3d_running", "nova3d_signing_in", "nova3d_status",
                  "nova3d_uv_status", "nova3d_workflow_id", "nova3d_credits",
-                 "nova3d_credits_busy", "nova3d_last_dir", "nova3d_pending"):
+                 "nova3d_credits_busy", "nova3d_last_dir", "nova3d_pending",
+                 "nova3d_service_down", "nova3d_update_available",
+                 "nova3d_latest_version", "nova3d_release_url",
+                 "nova3d_updates_busy"):
         if hasattr(wm, attr):
             delattr(wm, attr)
 

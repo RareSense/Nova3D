@@ -14,7 +14,7 @@ import ssl
 import urllib.error
 import urllib.request
 
-from .errors import ApiError, AuthError
+from .errors import ApiError, AuthError, ServiceUnavailableError
 
 # One shared, certificate-validating TLS context. We never disable verification —
 # that would expose the user's API key to interception.
@@ -78,17 +78,26 @@ def request_json(method, url, *, headers=None, body=None, timeout=30.0):
                            "add-on preferences.",
                 status=status, code=code, category=category,
             ) from None
+        # 5xx is the server failing, not the caller — flag it as an outage so the
+        # UI can distinguish "Nova3D is down" from a bad request or key.
+        if 500 <= status <= 599:
+            raise ServiceUnavailableError(
+                message or f"Nova3D is temporarily unavailable ({status}).",
+                status=status, code=code, category=category,
+            ) from None
         raise ApiError(
             message or f"Request failed ({status}).",
             status=status, code=code, category=category,
         ) from None
     except urllib.error.URLError as exc:
-        raise ApiError(
+        raise ServiceUnavailableError(
             f"Could not reach the Nova3D service ({exc.reason}). "
             "Check your connection or the API base URL in preferences."
         ) from None
     except (TimeoutError, ssl.SSLError) as exc:
-        raise ApiError(f"Network error contacting Nova3D: {exc}") from None
+        raise ServiceUnavailableError(
+            f"Network error contacting Nova3D: {exc}"
+        ) from None
 
 
 def download_to_file(url, dest_path, *, timeout=300.0, chunk_size=1 << 16):

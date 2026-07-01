@@ -16,7 +16,7 @@ import bpy
 
 from .. import constants
 from ..api import client as api_client
-from ..api.errors import ApiError
+from ..api.errors import ApiError, ServiceUnavailableError
 from ..preferences import get_prefs, online_access_ok
 
 
@@ -125,6 +125,9 @@ class NOVA3D_OT_refresh_credits(bpy.types.Operator):
                 client = api_client.Nova3DClient(api_base, api_key)
                 balance = client.balance()
                 q.put(("ok", int(balance.get("available") or 0)))
+            except ServiceUnavailableError as exc:
+                # Nova3D unreachable / 5xx — a health signal, not a key problem.
+                q.put(("down", str(exc)))
             except ApiError as exc:
                 q.put(("error", str(exc)))
             except Exception as exc:  # noqa: BLE001
@@ -149,7 +152,13 @@ class NOVA3D_OT_refresh_credits(bpy.types.Operator):
         wm = context.window_manager
         if kind == "ok":
             wm.nova3d_credits = payload
+            wm.nova3d_service_down = False
+        elif kind == "down":
+            # Don't spam a toast — the panel shows a persistent "unreachable"
+            # banner with a Retry button instead.
+            wm.nova3d_service_down = True
         else:
+            wm.nova3d_service_down = False
             self.report({"WARNING"}, f"Could not load credits: {payload}")
         self._finish(context)
         return {"FINISHED"}

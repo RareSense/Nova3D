@@ -39,6 +39,9 @@ class NOVA3D_PT_main(bpy.types.Panel):
         scene = context.scene
         prefs = get_prefs(context)
 
+        # A new-version notice is independent of sign-in, so it draws first.
+        _draw_update_banner(layout, wm)
+
         # ── Account gate ─────────────────────────────────────────────────────
         if prefs is None or not prefs.api_key.strip():
             box = layout.box()
@@ -69,6 +72,14 @@ class NOVA3D_PT_main(bpy.types.Panel):
             warn.label(text="Enable it in Preferences > System.")
             warn.operator("screen.userpref_show", text="Open Preferences",
                           icon="PREFERENCES")
+
+        # ── Service reachability ─────────────────────────────────────────────
+        if wm.nova3d_service_down:
+            down = layout.box()
+            down.alert = True
+            down.label(text="Nova3D is unreachable right now.", icon="ERROR")
+            down.label(text="Check your connection, then retry.")
+            down.operator("nova3d.refresh_credits", text="Retry", icon="FILE_REFRESH")
 
         # ── Resume interrupted generations ───────────────────────────────────
         pending = wm.nova3d_pending
@@ -152,6 +163,16 @@ class NOVA3D_PT_main(bpy.types.Panel):
         connected = "Signed in" if prefs.key_source == "sign_in" else "API key"
         foot.label(text=connected, icon="CHECKMARK")
         foot.operator("nova3d.sign_out", text="Sign out", icon="PANEL_CLOSE")
+
+
+def _draw_update_banner(layout, wm):
+    """A subtle 'newer version available' notice, shown only when one exists."""
+    if not wm.nova3d_update_available:
+        return
+    box = layout.box()
+    box.label(text=f"Update available: v{wm.nova3d_latest_version}", icon="IMPORT")
+    url = wm.nova3d_release_url or constants.RELEASES_PAGE_URL
+    box.operator("wm.url_open", text="Download update", icon="URL").url = url
 
 
 def _draw_word_counter(layout, prompt):

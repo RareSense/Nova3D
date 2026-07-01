@@ -28,6 +28,16 @@ class AuthError(ApiError):
     """401/expired/revoked key — the user must fix their API key."""
 
 
+class ServiceUnavailableError(ApiError):
+    """Nova3D could not be reached, or answered with a 5xx.
+
+    Signals a problem on the network/server side (outage, gateway, no
+    connection) rather than anything the user did — so the UI can say "the
+    service is unreachable, retry later" instead of blaming their API key.
+    Still an `ApiError`, so existing `status`-based retry logic is unaffected.
+    """
+
+
 # Maps the backend `error_category` values (see GraphFlow's failure taxonomy)
 # to friendly copy. Mirrors CadResult._messageForCategory in the web client.
 _CATEGORY_MESSAGES = {

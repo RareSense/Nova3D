@@ -54,6 +54,13 @@ def _deferred_startup():
         context = bpy.context
         prefs = preferences.get_prefs(context)
         operators.generate.update_pending_count(context)
+        # Update check is independent of sign-in — run it first (once per session)
+        # so even signed-out users learn a newer build exists.
+        if preferences.online_access_ok():
+            try:
+                bpy.ops.nova3d.check_updates("INVOKE_DEFAULT")
+            except Exception:
+                pass
         if not (prefs and prefs.api_key.strip() and preferences.online_access_ok()):
             return None
         wm = context.window_manager

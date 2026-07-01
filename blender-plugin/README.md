@@ -7,16 +7,11 @@ Powered by the hosted Nova3D service; billed in Nova3D credits.
 
 > Works in Blender **3.6 → 5.x** (tested on 5.1). Nothing else to install.
 
-## 1. Get the add-on file
+## 1. Download the add-on
 
-Download `nova3d_blender-1.0.0.zip` from the
-[Releases page](https://github.com/RareSense/Nova3D/releases) — or build it yourself:
-
-```bash
-git clone https://github.com/RareSense/Nova3D.git
-cd Nova3D/blender-plugin
-bash build.sh            # creates dist/nova3d_blender-1.0.0.zip
-```
+Open the [**Releases page**](https://github.com/RareSense/Nova3D/releases) and,
+under the newest release's **Assets**, download **`nova3d_blender-1.0.0.zip`**.
+Leave it zipped — Blender installs the `.zip` as-is.
 
 ## 2. Install it in Blender
 
@@ -71,9 +66,23 @@ model.glb   ·   code.py   ·   uvs/   ·   meta.json
   **Buy Credits** at the top of the panel.
 - If a run is interrupted (network drop, Blender closed), it **auto-resumes** —
   reopen the panel and click **Resume**.
+- If Nova3D can't be reached, the panel shows an **unreachable** notice with a
+  **Retry** button — no failed generation, just try again when you're back online.
+- The add-on checks for a newer version on startup and shows a **Download update**
+  link when one exists (also under **Preferences → Add-ons → Nova3D**).
 - Don't see colours? Materials only show in **Material Preview**; the add-on
   switches to it for you. Press **Alt + H** to un-hide anything it tucked away.
 - Change the output folder or self-host URLs in
   **Edit → Preferences → Add-ons → Nova3D**.
+
+## Build from source (developers)
+
+```bash
+git clone https://github.com/RareSense/Nova3D.git
+cd Nova3D/blender-plugin
+bash build.sh            # creates dist/nova3d_blender-1.0.0.zip
+```
+
+Then install that zip via step 2 above.
 
 MIT © RareSense.

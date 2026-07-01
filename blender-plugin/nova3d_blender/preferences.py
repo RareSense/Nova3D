@@ -100,6 +100,18 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         box.prop(self, "api_base_url")
         box.prop(self, "web_base_url")
 
+        wm = context.window_manager
+        box = layout.box()
+        box.label(text=f"Version {constants.ADDON_VERSION_STR}", icon="BLENDER")
+        if wm.nova3d_update_available:
+            row = box.row()
+            row.alert = True
+            row.label(text=f"Update available: v{wm.nova3d_latest_version}",
+                      icon="IMPORT")
+            box.operator("wm.url_open", text="Download update", icon="URL").url = (
+                wm.nova3d_release_url or constants.RELEASES_PAGE_URL)
+        box.operator("nova3d.check_updates", icon="FILE_REFRESH")
+
 
 def get_prefs(context):
     """Return this add-on's preferences, or None if unavailable."""

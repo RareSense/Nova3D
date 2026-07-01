@@ -21,6 +21,18 @@ DEFAULT_WEB_BASE_URL = "https://app.nova3d.xyz"
 API_KEY_PATH = "/api-key"        # where users create their n3d_ key
 SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
 
+# ── Add-on version + update check ────────────────────────────────────────────
+# Single source of truth for comparisons. KEEP IN SYNC with the version in
+# blender_manifest.toml and bl_info (__init__.py) when you cut a release.
+ADDON_VERSION = (1, 0, 0)
+ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
+# Public GitHub releases — read-only, unauthenticated, used only to tell the
+# user when a newer build exists. Releases are tagged `blender-plugin-v<x.y.z>`.
+GITHUB_RELEASES_API = "https://api.github.com/repos/RareSense/Nova3D/releases"
+RELEASES_PAGE_URL = "https://github.com/RareSense/Nova3D/releases"
+RELEASE_TAG_PREFIX = "blender-plugin-v"
+UPDATE_HTTP_TIMEOUT = 15.0
+
 # ── Browser ("Sign in with Google") auth ─────────────────────────────────────
 # Reuses the hosted MCP browser-login flow, so no backend changes are needed:
 #   1. open <web>/mcp/connect?state=..&port=..  (user signs in with Google)
