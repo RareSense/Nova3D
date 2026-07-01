@@ -72,6 +72,10 @@ RESULT_HTTP_TIMEOUT = 300.0        # results block until the workflow finishes
 START_HTTP_TIMEOUT = 120.0
 # Hard ceiling so a wedged workflow can never poll forever (backend caps at 7200).
 MAX_GENERATION_SECONDS = 7200
+# UV atlases run AFTER the model is delivered, as background best-effort work, so
+# they get a much tighter ceiling than a full generation: a wedged UV workflow
+# must never keep the worker thread alive for hours.
+UV_MAX_SECONDS = 900
 
 # A freshly accepted (202) workflow can briefly 404 on /status until Temporal
 # registers it. We tolerate that only this long; if it never becomes visible the

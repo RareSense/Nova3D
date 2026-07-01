@@ -24,10 +24,10 @@ Event protocol (queue items are `(kind, payload)`):
     ("status",   str)      progress line update
     ("workflow", str)      the workflow id, as soon as it is known
     ("done",     dict)     model is on disk; main thread should import it now
-    ("uv_status",str)      UV sub-step progress
-    ("uv_done",  dict)     UV atlases written
     ("error",    str)      terminal/abandoned outcome (user-safe message)
-    ("finished", None)     the job is fully complete
+    ("finished", None)     model delivered; the tracked job is complete (UV
+                           atlases, if any, are produced afterwards and never
+                           gate the UI)
 """
 
 import threading
@@ -315,27 +315,35 @@ class GenerationJob(threading.Thread):
             "conversation_id": self._conversation_id,
         })
 
-        # Success — the run no longer needs to be resumable.
+        # The model is saved, imported, and in the user's history — the tracked
+        # job is DONE. Report it finished NOW so the UI unlocks and a second
+        # generation can start immediately; UV atlases are produced afterwards as
+        # background best-effort work that must never gate (or hang) the UI.
         self._remove_pending()
-
-        # UV atlases — every successful generation, same as the web app's bundle.
-        # Best-effort: a UV failure is non-fatal (the model is already saved).
-        if parsed.code_artifact and not self._cancel.is_set():
-            self._emit("uv_status", "Generating UV maps...")
-            try:
-                summary = uv_maps.generate(
-                    self._client, parsed.code_artifact, project,
-                    conversation_id=self._conversation_id, cancel_event=self._cancel,
-                    on_status=lambda m: self._emit("uv_status", m),
-                    base_request_id=workflow_id,
-                )
-                meta["uvs"] = summary
-                project.write_meta(meta)
-                self._emit("uv_done", summary)
-            except ApiError as exc:
-                self._emit("uv_status", f"UV maps skipped: {exc}")
-
         self._emit("finished")
+
+        self._generate_uv_maps(parsed, project, meta)
+
+    def _generate_uv_maps(self, parsed, project, meta):
+        """Produce optional UV atlases AFTER the job is reported finished.
+
+        Runs on this same worker thread once the model is already delivered, so
+        it must never fail the generation or touch the UI — every error is
+        swallowed. It is time-bounded (``constants.UV_MAX_SECONDS``) so a wedged
+        backend UV workflow can never keep this thread alive indefinitely.
+        """
+        if not parsed.code_artifact or self._cancel.is_set():
+            return
+        try:
+            summary = uv_maps.generate(
+                self._client, parsed.code_artifact, project,
+                conversation_id=self._conversation_id, cancel_event=self._cancel,
+                base_request_id=self._workflow_id,
+            )
+            meta["uvs"] = summary
+            project.write_meta(meta)
+        except Exception:  # noqa: BLE001 - UV is optional; never surface it here
+            pass
 
     # ── helpers ──────────────────────────────────────────────────────────────
     def _build_payload(self, tier):

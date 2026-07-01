@@ -59,7 +59,6 @@ class _JobModalMixin:
         self._factories = list(factories)
         wm = context.window_manager
         wm.nova3d_running = True
-        wm.nova3d_uv_status = ""
         self._timer = wm.event_timer_add(0.25, window=context.window)
         wm.modal_handler_add(self)
         self._start_next(context)
@@ -103,13 +102,6 @@ class _JobModalMixin:
             _tag_redraw(context)
         elif kind == "workflow":
             wm.nova3d_workflow_id = payload or ""
-            _tag_redraw(context)
-        elif kind == "uv_status":
-            wm.nova3d_uv_status = payload
-            _tag_redraw(context)
-        elif kind == "uv_done":
-            count = sum(s.get("atlas_count", 0) for s in (payload or {}).get("sets", []))
-            wm.nova3d_uv_status = f"UV maps ready ({count} atlas file(s))."
             _tag_redraw(context)
         elif kind == "done":
             self._import_asset(context, payload)

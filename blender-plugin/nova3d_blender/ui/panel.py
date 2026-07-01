@@ -139,8 +139,6 @@ class NOVA3D_PT_main(bpy.types.Panel):
             sbox = layout.box()
             icon = "SORTTIME" if running else "CHECKMARK"
             sbox.label(text=wm.nova3d_status, icon=icon)
-            if wm.nova3d_uv_status:
-                sbox.label(text=wm.nova3d_uv_status, icon="UV")
             if wm.nova3d_workflow_id:
                 row = sbox.row(align=True)
                 row.label(text=f"Workflow: {wm.nova3d_workflow_id}", icon="FILE_TEXT")

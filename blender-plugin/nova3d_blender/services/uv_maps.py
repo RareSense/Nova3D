@@ -47,6 +47,10 @@ def _poll_until_terminal(client, workflow_id, cancel_event, deadline):
         if api_client.is_terminal(status):
             break
     while True:
+        if cancel_event.is_set():
+            raise ApiError("UV generation cancelled.")
+        if time.monotonic() > deadline:
+            raise ApiError("UV generation timed out.")
         try:
             return client.result(workflow_id)
         except ApiError as exc:
@@ -105,7 +109,7 @@ def _run_one(client, code_artifact, atlas_mode, max_atlases, *, request_id,
 
 
 def generate(client, code_artifact, project, *, conversation_id, cancel_event,
-             on_status=None, base_request_id=None):
+             base_request_id=None):
     """Generate both UV packings into `project/uvs/`. Returns a summary dict.
 
     Raises ApiError only on a hard failure of *every* set; partial success is
@@ -116,7 +120,7 @@ def generate(client, code_artifact, project, *, conversation_id, cancel_event,
         raise ApiError("No source code artifact to derive UV maps from.")
 
     base = base_request_id or api_client_request_id()
-    deadline = time.monotonic() + constants.MAX_GENERATION_SECONDS
+    deadline = time.monotonic() + constants.UV_MAX_SECONDS
     uvs_root = project.uvs_dir()
     summary = {"sets": []}
     produced_any = False
@@ -125,8 +129,6 @@ def generate(client, code_artifact, project, *, conversation_id, cancel_event,
     for label, mode, max_atlases, folder in _SETS:
         if cancel_event.is_set():
             break
-        if on_status:
-            on_status(f"Generating UV maps ({label})...")
         try:
             checker_url, atlases = _run_one(
                 client, code_artifact, mode, max_atlases,
