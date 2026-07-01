@@ -7,7 +7,6 @@ Derived from the Nova3D frontend (CadService, cad_models.dart).
 """
 from __future__ import annotations
 
-import re
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -232,7 +231,6 @@ class GenerationResult(BaseModel):
     joints_artifact: Optional[Dict[str, Any]] = None
     joints: List[Dict[str, Any]] = Field(default_factory=list)
     joint_count: int = 0
-    parts: List[str] = Field(default_factory=list)
     operation: Optional[str] = None
     failed: bool = False
     error_message: Optional[str] = None
@@ -268,7 +266,6 @@ class GenerationResult(BaseModel):
         joint_count = _int_val(unwrapped.get("joint_count")) or len(joints)
         operation = _str_val(unwrapped.get("operation"))
         api_key_source = _str_val(unwrapped.get("api_key_source"))
-        parts = _extract_part_names(unwrapped, joints, code_artifact)
         failure = _extract_failure(unwrapped)
         error_message = (failure.get("message") if failure else None) or _extract_root_error(data)
         failed = glb_url is None and (_is_failed(data) or error_message is not None)
@@ -279,7 +276,6 @@ class GenerationResult(BaseModel):
             joints_artifact=joints_artifact,
             joints=joints,
             joint_count=joint_count,
-            parts=parts,
             operation=operation,
             failed=failed,
             error_message=error_message,
@@ -341,34 +337,6 @@ def _extract_joints(unwrapped: Dict[str, Any]) -> List[Dict[str, Any]]:
         for item in raw
         if isinstance(item, dict)
     ]
-
-
-def _extract_part_names(
-    unwrapped: Dict[str, Any],
-    joints: List[Dict[str, Any]],
-    code_artifact: Optional[Dict[str, Any]] = None,
-) -> List[str]:
-    """Extract named part/mesh identifiers from the result."""
-    # 1. API-first: use explicit parts field if the backend returns one
-    api_parts = unwrapped.get("parts")
-    if isinstance(api_parts, list) and api_parts:
-        return [str(p) for p in api_parts if p]
-
-    # 2. Regex over Blender construction script — obj.name = "part_name"
-    if isinstance(code_artifact, dict):
-        content = code_artifact.get("content") or ""
-        if content:
-            names = re.findall(r'\.name\s*=\s*["\']([^"\']+)["\']', content)
-            if names:
-                return list(dict.fromkeys(names))  # deduplicate, preserve order
-
-    # 3. Fallback: extract from joints (articulated assets)
-    names = []
-    for joint in joints:
-        mesh = joint.get("mesh") or joint.get("name")
-        if isinstance(mesh, str) and mesh.strip():
-            names.append(mesh.strip())
-    return list(dict.fromkeys(names))
 
 
 def _extract_failure(

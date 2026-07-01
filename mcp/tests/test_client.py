@@ -12,8 +12,8 @@ import httpx
 from nova3d_mcp.client import _parse_auth_error
 from nova3d_mcp.server import _validate_startup
 
-from nova3d_mcp.client import Nova3DClient, Nova3DError, Nova3DCreditsError, Nova3DAuthError
-from nova3d_mcp.models import GenerationResult, WorkflowState
+from nova3d_mcp.client import Nova3DClient, Nova3DError, Nova3DAuthError, Nova3DCreditsError
+from nova3d_mcp.models import GenerationReadiness, GenerationResult, WorkflowState
 
 
 FAKE_TOKEN = "test-jwt-token"
@@ -122,85 +122,6 @@ def _mcp_status_ready():
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_generate_success(mock_api):
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json=_readiness_ok())
-    )
-    mock_api.post("/run/state/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(202, json=_start_ok())
-    )
-    # First status poll returns running, second returns completed
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        side_effect=[
-            httpx.Response(200, json=_status_running()),
-            httpx.Response(200, json=_status_completed()),
-        ]
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        # Patch sleep to avoid actual waiting in tests
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        result = await client.generate(
-            prompt="a toaster with removable tray",
-            code_llm_profile="nova3d_code_generation",
-            code_llm_tier="gemini_3_1_pro_google",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    assert result.failed is False
-    assert result.glb_url == "https://nova3d.xyz/assets/abc123.glb"
-    assert result.joint_count == 1
-    assert result.joints[0]["name"] == "door_hinge"
-    assert result.workflow_id == WORKFLOW_ID
-
-
-@pytest.mark.asyncio
-async def test_generate_not_ready(mock_api):
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json={
-            "ready": False,
-            "reason": "generation_service_unavailable",
-        })
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        with pytest.raises(Nova3DError, match="unavailable"):
-            await client.generate(
-                prompt="a robot",
-                code_llm_profile="nova3d_code_generation",
-                code_llm_tier="gemini_3_1_pro_google",
-            )
-
-
-@pytest.mark.asyncio
-async def test_generate_credits_error(mock_api):
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json=_readiness_ok())
-    )
-    mock_api.post("/run/state/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(402, json={
-            "code": "credits_or_user_key_required",
-            "message": "Add credits or provide your own provider API key to generate.",
-        })
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        with pytest.raises(Nova3DCreditsError):
-            await client.generate(
-                prompt="a robot",
-                code_llm_profile="nova3d_code_generation",
-                code_llm_tier="gemini_3_1_pro_google",
-            )
-
-
-@pytest.mark.asyncio
 async def test_result_parsing_glb_url():
     result = GenerationResult.from_api(_result_ok(), WORKFLOW_ID)
     assert result.glb_url == "https://nova3d.xyz/assets/abc123.glb"
@@ -277,25 +198,6 @@ def test_parse_auth_error_no_json():
     code, message = _parse_auth_error(resp)
     assert code is None
     assert "app.nova3d.xyz/api-key" in message
-
-
-@pytest.mark.asyncio
-async def test_generate_raises_auth_error_with_code(mock_api):
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json=_readiness_ok())
-    )
-    mock_api.post("/run/state/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(401, json={
-            "detail": {"code": "api_key_revoked", "message": "Revoked."}
-        })
-    )
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        with pytest.raises(Nova3DAuthError, match="revoked"):
-            await client.generate(
-                prompt="a robot",
-                code_llm_profile="nova3d_code_generation",
-                code_llm_tier="gemini_3_1_pro_google",
-            )
 
 
 @pytest.mark.asyncio
@@ -607,246 +509,6 @@ async def test_validate_startup_network_error(monkeypatch, capsys):
     server_module._startup_error = None
 
 
-def test_result_parsing_parts_from_code_artifact():
-    data = {
-        "final_latest_valid": [
-            {
-                "status": "completed",
-                "ok": True,
-                "glb_artifact": {"url": "https://nova3d.xyz/assets/abc123.glb"},
-                "model_artifact": {"url": "https://nova3d.xyz/assets/abc123.glb"},
-                "code_artifact": {
-                    "content": (
-                        "import bpy\n"
-                        "bpy.ops.mesh.primitive_cube_add()\n"
-                        "obj = bpy.context.active_object\n"
-                        "obj.name = \"body\"\n"
-                        "bpy.ops.mesh.primitive_cylinder_add()\n"
-                        "wheel = bpy.context.active_object\n"
-                        "wheel.name = \"wheel_fr\"\n"
-                    )
-                },
-            }
-        ]
-    }
-    result = GenerationResult.from_api(data, WORKFLOW_ID)
-    assert result.parts == ["body", "wheel_fr"]
-
-
-def test_result_parsing_parts_api_field_takes_precedence():
-    data = {
-        "final_latest_valid": [
-            {
-                "status": "completed",
-                "ok": True,
-                "glb_artifact": {"url": "https://nova3d.xyz/assets/abc123.glb"},
-                "model_artifact": {"url": "https://nova3d.xyz/assets/abc123.glb"},
-                "code_artifact": {
-                    "content": 'obj.name = "should_not_appear"'
-                },
-                "parts": ["door", "frame"],
-            }
-        ]
-    }
-    result = GenerationResult.from_api(data, WORKFLOW_ID)
-    assert result.parts == ["door", "frame"]
-
-
-@pytest.mark.asyncio
-async def test_generate_sends_conversation_id(mock_api):
-    """When conversation_id is provided, _start_workflow includes it in the request body."""
-    captured_requests = []
-
-    def capture_and_respond(request, route):
-        captured_requests.append(request)
-        return httpx.Response(202, json=_start_ok())
-
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json=_readiness_ok())
-    )
-    mock_api.post("/run/state/sketch_to_3d_v2").mock(side_effect=capture_and_respond)
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_status_completed())
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        await client.generate(
-            prompt="a toaster",
-            code_llm_profile="nova3d_code_generation",
-            code_llm_tier="gemini_3_1_pro_google",
-            conversation_id="conv-abc123",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    assert len(captured_requests) == 1
-    parsed = json.loads(captured_requests[0].content)
-    assert parsed["conversation"]["conversation_id"] == "conv-abc123"
-    assert parsed["conversation"]["relation_type"] == "initial_generation"
-    assert parsed["conversation"]["link_metadata"]["operation"] == "sketch_to_3d_v2"
-    assert parsed["payload"]["code_llm_profile"] == "nova3d_code_generation"
-    assert parsed["payload"]["code_llm_tier"] == "gemini_3_1_pro_google"
-    assert parsed["return_nodes"] == [
-        "final_validated_correction",
-        "final_latest_valid",
-        "fail_generation",
-    ]
-
-
-@pytest.mark.asyncio
-async def test_generate_omits_conversation_when_none(mock_api):
-    """When no conversation_id, the conversation key is absent from the request body."""
-    captured_requests = []
-
-    def capture_and_respond(request, route):
-        captured_requests.append(request)
-        return httpx.Response(202, json=_start_ok())
-
-    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
-        return_value=httpx.Response(200, json=_readiness_ok())
-    )
-    mock_api.post("/run/state/sketch_to_3d_v2").mock(side_effect=capture_and_respond)
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_status_completed())
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        await client.generate(
-            prompt="a toaster",
-            code_llm_profile="nova3d_code_generation",
-            code_llm_tier="gemini_3_1_pro_google",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    parsed = json.loads(captured_requests[0].content)
-    assert "conversation" not in parsed
-
-
-@pytest.mark.asyncio
-async def test_regenerate_part_sends_edit_conversation_metadata(mock_api):
-    captured_requests = []
-
-    def capture_and_respond(request, route):
-        captured_requests.append(request)
-        return httpx.Response(202, json=_start_ok())
-
-    mock_api.post("/run/state/regenerate_3d_part").mock(side_effect=capture_and_respond)
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_status_completed())
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        await client.regenerate_part(
-            code_artifact={"content": "import bpy"},
-            part_type="door",
-            description="glass door",
-            provider="gemini",
-            llm="gemini",
-            conversation_id="conv-abc123",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    parsed = json.loads(captured_requests[0].content)
-    assert parsed["conversation"]["relation_type"] == "regenerate_3d_part"
-    assert parsed["conversation"]["link_metadata"]["operation"] == "regenerate_3d_part"
-
-
-@pytest.mark.asyncio
-async def test_add_part_sends_edit_conversation_metadata(mock_api):
-    captured_requests = []
-
-    def capture_and_respond(request, route):
-        captured_requests.append(request)
-        return httpx.Response(202, json=_start_ok())
-
-    mock_api.post("/run/state/add_3d_part").mock(side_effect=capture_and_respond)
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_status_completed())
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        await client.add_part(
-            code_artifact={"content": "import bpy"},
-            description="chrome handle",
-            provider="gemini",
-            llm="gemini",
-            conversation_id="conv-abc123",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    parsed = json.loads(captured_requests[0].content)
-    assert parsed["conversation"]["relation_type"] == "add_3d_part"
-    assert parsed["conversation"]["link_metadata"]["operation"] == "add_3d_part"
-
-
-@pytest.mark.asyncio
-async def test_articulate_model_sends_edit_conversation_metadata(mock_api):
-    captured_requests = []
-
-    def capture_and_respond(request, route):
-        captured_requests.append(request)
-        return httpx.Response(202, json=_start_ok())
-
-    mock_api.post("/run/state/articulate_3d_model").mock(side_effect=capture_and_respond)
-    mock_api.get(f"/status/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_status_completed())
-    )
-    mock_api.get(f"/result/{WORKFLOW_ID}").mock(
-        return_value=httpx.Response(200, json=_result_ok())
-    )
-
-    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
-        import nova3d_mcp.client as client_module
-        original_sleep = client_module.asyncio.sleep
-        client_module.asyncio.sleep = lambda _: original_sleep(0)
-
-        await client.articulate_model(
-            code_artifact={"content": "import bpy"},
-            articulation_request="make the door swing",
-            provider="gemini",
-            llm="gemini",
-            model_url="https://nova3d.xyz/assets/abc123.glb",
-            conversation_id="conv-abc123",
-        )
-
-        client_module.asyncio.sleep = original_sleep
-
-    parsed = json.loads(captured_requests[0].content)
-    assert parsed["conversation"]["relation_type"] == "articulate_model"
-    assert parsed["conversation"]["link_metadata"]["operation"] == "articulate_3d_model"
-
-
 def test_result_parsing_v2_corrected_output():
     result = GenerationResult.from_api(_result_corrected_ok(), WORKFLOW_ID)
     assert result.failed is False
@@ -865,3 +527,116 @@ def test_status_progress_label_for_v2_node():
         },
     )
     assert status.progress_label == "Reviewing the generated model..."
+
+
+@pytest.mark.asyncio
+async def test_start_generate_returns_workflow_id_without_polling(monkeypatch):
+    from nova3d_mcp.client import Nova3DClient
+
+    client = Nova3DClient(token="t", base_url="https://nova3d.xyz/api")
+
+    async def fake_check_readiness():
+        from nova3d_mcp.models import GenerationReadiness
+        return GenerationReadiness(ready=True)  # user_message is a derived property, not a field
+
+    captured = {}
+
+    async def fake_start_workflow(**kwargs):
+        captured.update(kwargs)
+        return "wf-xyz"
+
+    monkeypatch.setattr(client, "check_readiness", fake_check_readiness)
+    monkeypatch.setattr(client, "_start_workflow", fake_start_workflow)
+
+    workflow_id = await client.start_generate(
+        prompt="a chair",
+        code_llm_profile="nova3d_code_generation",
+        code_llm_tier="gemini_3_1_pro_google",
+        conversation_id="conv-1",
+    )
+    assert workflow_id == "wf-xyz"
+    assert captured["workflow"]  # a workflow name was passed
+    assert captured["conversation_id"] == "conv-1"
+
+
+@pytest.mark.asyncio
+async def test_start_regenerate_part_returns_workflow_id(monkeypatch):
+    from nova3d_mcp.client import Nova3DClient
+
+    client = Nova3DClient(token="t", base_url="https://nova3d.xyz/api")
+
+    async def fake_start_workflow(**kwargs):
+        return "wf-edit"
+
+    monkeypatch.setattr(client, "_start_workflow", fake_start_workflow)
+
+    workflow_id = await client.start_regenerate_part(
+        code_artifact={"url": "https://x/code.py"},
+        part_type="door",
+        description="glass door",
+        provider="gemini",
+        llm="gemini",
+        conversation_id="conv-1",
+    )
+    assert workflow_id == "wf-edit"
+
+
+# ── start_generate error-path coverage ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_start_generate_raises_when_not_ready(monkeypatch):
+    client = Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL)
+
+    async def fake_check_readiness():
+        return GenerationReadiness(ready=False, reason="generation_service_unavailable")
+
+    monkeypatch.setattr(client, "check_readiness", fake_check_readiness)
+
+    async with client:
+        with pytest.raises(Nova3DError, match="unavailable"):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
+
+
+@pytest.mark.asyncio
+async def test_start_generate_propagates_credits_error(mock_api):
+    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(200, json=_readiness_ok())
+    )
+    mock_api.post("/run/state/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(402, json={
+            "code": "credits_or_user_key_required",
+            "message": "Add credits or provide your own provider API key to generate.",
+        })
+    )
+
+    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
+        with pytest.raises(Nova3DCreditsError):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
+
+
+@pytest.mark.asyncio
+async def test_start_generate_propagates_auth_error(mock_api):
+    mock_api.get("/workflow/readiness/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(200, json=_readiness_ok())
+    )
+    mock_api.post("/run/state/sketch_to_3d_v2").mock(
+        return_value=httpx.Response(401, json={
+            "detail": {"code": "api_key_revoked", "message": "Revoked."}
+        })
+    )
+
+    async with Nova3DClient(token=FAKE_TOKEN, base_url=BASE_URL) as client:
+        with pytest.raises(Nova3DAuthError, match="revoked"):
+            await client.start_generate(
+                prompt="a robot",
+                code_llm_profile="nova3d_code_generation",
+                code_llm_tier="gemini_3_1_pro_google",
+            )
