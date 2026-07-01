@@ -7,7 +7,7 @@
 schema_version = "1.0.0"
 
 id = "nova3d_blender"
-version = "1.0.0"
+version = "1.0.1"
 name = "Nova3D — Code-native 3D Generation"
 tagline = "Generate part-structured 3D assets from text prompts"
 maintainer = "RareSense (Nova3D)"

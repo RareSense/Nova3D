@@ -24,7 +24,7 @@ SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
 # ── Add-on version + update check ────────────────────────────────────────────
 # Single source of truth for comparisons. KEEP IN SYNC with the version in
 # blender_manifest.toml and bl_info (__init__.py) when you cut a release.
-ADDON_VERSION = (1, 0, 0)
+ADDON_VERSION = (1, 0, 1)
 ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
 # Public GitHub releases — read-only, unauthenticated, used only to tell the
 # user when a newer build exists. Releases are tagged `blender-plugin-v<x.y.z>`.
