@@ -9,8 +9,20 @@ import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
 // ── Public widget ─────────────────────────────────────────────────────────────
 
 class GenerationProgressCard extends StatefulWidget {
-  const GenerationProgressCard({super.key, required this.statusText});
+  const GenerationProgressCard({
+    super.key,
+    required this.statusText,
+    this.title = 'generating',
+    this.modelLabel,
+  });
   final String statusText;
+
+  /// Header verb, e.g. 'generating' or 'texturing'.
+  final String title;
+
+  /// Real model/engine label shown in the toolbar. Hidden when null/empty —
+  /// never a hardcoded placeholder.
+  final String? modelLabel;
 
   @override
   State<GenerationProgressCard> createState() => _GenerationProgressCardState();
@@ -112,11 +124,15 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: kBubbleMaxWidth),
-      child: SizedBox(
-        height: kViewerDefaultHeight,
-        width: double.infinity,
+    // The card runs many looping animations + a per-frame CustomPaint. Isolate
+    // its repaints so they don't invalidate the whole chat/app layer each frame
+    // (which stuttered scrolling everywhere while a run was in progress).
+    return RepaintBoundary(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: kBubbleMaxWidth),
+        child: SizedBox(
+          height: kViewerDefaultHeight,
+          width: double.infinity,
         child: Container(
           decoration: BoxDecoration(
             color: kSurface,
@@ -147,6 +163,7 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -163,7 +180,7 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
     ),
     child: Row(
       children: [
-        Text('generating...', style: kSilkscreen(9, color: kInkSoft)),
+        Text('${widget.title}...', style: kSilkscreen(9, color: kInkSoft)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -198,9 +215,13 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
               style: TextStyle(color: kButter, fontSize: 10, height: 1),
             ),
             const SizedBox(width: 6),
-            Text('GENERATING', style: kSilkscreen(9, color: kInkSoft)),
+            Text(
+              widget.title.toUpperCase(),
+              style: kSilkscreen(9, color: kInkSoft),
+            ),
             const Spacer(),
-            Text('gemini 2.5 flash', style: kSilkscreen(9, color: kInkMuted)),
+            if ((widget.modelLabel ?? '').isNotEmpty)
+              Text(widget.modelLabel!, style: kSilkscreen(9, color: kInkMuted)),
           ],
         ),
         const SizedBox(height: 8),

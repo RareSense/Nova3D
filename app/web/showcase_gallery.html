@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova3D Showcase</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root { --ink:#2A2440; --cream:#FFFBF4; --lilac:#B69CE8; --lilacbg:#E8DEFA; --pink:#FFA8C5;
+          --line:#E5E0EF; --muted:#9C97B5; --soft:#6B6391; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--cream); color:var(--ink);
+    font-family: Inter, system-ui, -apple-system, sans-serif; }
+  #scroll { position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; }
+  /* Single shared canvas overlays the grid; pointer events pass through to the
+     cards so scrolling + per-tile interaction still work. */
+  #stageCanvas { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:5; }
+  #grid { display:grid; gap:18px; padding:18px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); max-width:1600px; margin:0 auto; }
+  @media (max-width:560px){ #grid{ grid-template-columns: repeat(2, 1fr); gap:12px; padding:12px; } }
+  .card { position:relative; border:1.5px solid var(--ink); border-radius:14px; background:#fff;
+    box-shadow:3px 3px 0 var(--ink); overflow:hidden; cursor:pointer; transition: transform .12s ease, box-shadow .12s ease; }
+  .card:hover { transform: translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+  .stage { position:relative; width:100%; aspect-ratio:1/1;
+    background:linear-gradient(160deg,#EFE9FB,#FFE3EE 60%,#FFF1C7); touch-action:none; }
+  .stage .spin { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); font-size:11px; letter-spacing:.5px; }
+  .drag-hint { position:absolute; bottom:8px; right:10px; font-size:10px; color:var(--soft);
+    background:rgba(255,255,255,.7); border-radius:6px; padding:2px 6px; opacity:0; transition:opacity .15s; }
+  .card:hover .drag-hint { opacity:1; }
+  .meta { padding:10px 12px 12px; border-top:1.5px solid var(--line); }
+  .title { font-weight:600; font-size:13px; line-height:1.3; margin:0 0 6px;
+    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+  .row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .badge { font-size:10px; padding:2px 7px; border-radius:6px; border:1.5px solid var(--ink);
+    background:var(--lilac); white-space:nowrap; }
+  .prompt { font-size:11px; color:var(--soft); margin-top:6px; line-height:1.4;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:10px;
+    padding:12px 18px; background:rgba(255,251,244,.92); backdrop-filter:blur(6px);
+    border-bottom:1.5px solid var(--line); }
+  .header h1 { font-size:14px; margin:0; letter-spacing:.5px; }
+  .header .count { font-size:11px; color:var(--muted); }
+  .empty, .loading { text-align:center; color:var(--muted); padding:60px 20px; font-size:13px; }
+
+  /* Fullscreen detail overlay */
+  #detail { position:fixed; inset:0; z-index:50; display:none; background:rgba(20,16,32,.55); backdrop-filter:blur(3px); }
+  #detail.open { display:flex; align-items:center; justify-content:center; padding:24px; }
+  .detail-card { width:min(1180px,97vw); height:min(90vh,900px); background:var(--cream);
+    border:1.5px solid var(--ink); border-radius:16px; box-shadow:6px 6px 0 var(--ink);
+    display:flex; flex-direction:column; overflow:hidden; }
+  .detail-head { display:flex; align-items:center; gap:8px; padding:10px 14px;
+    border-bottom:1.5px solid var(--line); background:#fff; }
+  .tab { font-size:11px; padding:6px 12px; border-radius:8px; border:1.5px solid transparent; cursor:pointer; letter-spacing:.4px; }
+  .tab.active { border-color:var(--ink); background:#fff; box-shadow:2px 2px 0 var(--ink); }
+  .head-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .dl-btn { font-size:11px; letter-spacing:.3px; padding:6px 10px; border:1.5px solid var(--ink);
+    border-radius:8px; background:#fff; cursor:pointer; box-shadow:2px 2px 0 var(--ink); color:var(--ink); }
+  .dl-btn:disabled { opacity:.45; cursor:default; box-shadow:none; }
+  .detail-close { border:1.5px solid var(--ink); background:#fff; border-radius:8px;
+    width:30px; height:30px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); font-size:15px; }
+  .detail-body { position:relative; flex:1; min-height:0; }
+  #detailEditor { position:absolute; inset:0; width:100%; height:100%; border:none; display:block; background:#0d0d0d; }
+  #detailCode { position:absolute; inset:0; overflow:auto; margin:0; padding:16px;
+    font-family:'JetBrains Mono', ui-monospace, monospace; font-size:12px; line-height:1.5;
+    background:#1e1b2e; color:#e6e1f5; white-space:pre; display:none; }
+  #detailInputs { position:absolute; inset:0; overflow:auto; padding:20px; display:none; }
+  #detailInputs h3 { font-size:11px; letter-spacing:.6px; color:var(--soft); margin:0 0 6px; text-transform:uppercase; }
+  #detailInputs p { margin:0 0 16px; font-size:14px; line-height:1.5; }
+  #detailInputs .refs { display:flex; gap:10px; flex-wrap:wrap; }
+  #detailInputs .refs img { width:120px; height:120px; object-fit:cover; border:1.5px solid var(--ink);
+    border-radius:10px; box-shadow:2px 2px 0 var(--ink); }
+</style>
+</head>
+<body>
+<div id="scroll">
+  <div class="header"><h1>✦ NOVA3D SHOWCASE</h1><span class="count" id="count"></span></div>
+  <div id="grid"></div>
+  <div class="loading" id="status">Loading showcase…</div>
+</div>
+<canvas id="stageCanvas"></canvas>
+
+<div id="detail">
+  <div class="detail-card">
+    <div class="detail-head">
+      <div class="tab active" data-tab="model">◆ MODEL</div>
+      <div class="tab" data-tab="code">&lt;/&gt; CODE</div>
+      <div class="tab" data-tab="inputs">✎ INPUTS</div>
+      <div class="head-right">
+        <button class="dl-btn" id="dlGlb" title="Download GLB">⬇ GLB</button>
+        <button class="dl-btn" id="dlCode" title="Download code">⬇ .py</button>
+        <button class="detail-close" id="detailClose" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="detail-body">
+      <iframe id="detailEditor" title="Model editor" allow="fullscreen"></iframe>
+      <pre id="detailCode">Loading code…</pre>
+      <div id="detailInputs"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./showcase/gallery.js"></script>
+</body>
+</html>

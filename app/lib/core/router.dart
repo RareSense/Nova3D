@@ -17,6 +17,7 @@ import 'package:nova3d_frontend/features/chat/presentation/chat_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/home_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/model_preview_page.dart';
 import 'package:nova3d_frontend/features/home/presentation/settings_page.dart';
+import 'package:nova3d_frontend/features/showcase/presentation/showcase_page.dart';
 import 'package:nova3d_frontend/features/subscription/presentation/payment_success_page.dart';
 import 'package:nova3d_frontend/features/subscription/presentation/subscription_page.dart';
 import 'package:nova3d_frontend/shared/widgets/app_layout.dart';
@@ -62,6 +63,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         '/forgot-password',
         '/oauth-callback',
         '/success',
+        '/showcase',
         '/mcp/connect',
         '/mcp/complete',
         '/mcp/no-credits',
@@ -123,6 +125,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/mcp/purchase-success',
         pageBuilder: (_, state) =>
             _fadePage(state.pageKey, const McpPurchaseSuccessPage()),
+      ),
+      GoRoute(
+        path: '/showcase',
+        pageBuilder: (_, state) =>
+            _fadePage(state.pageKey, const ShowcasePage()),
       ),
 
       // ── Authenticated shell ──────────────────────────────────────────────

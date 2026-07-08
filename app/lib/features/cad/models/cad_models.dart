@@ -83,6 +83,13 @@ class WorkflowStatus {
     'final_validated_correction',
     'fail_generation',
     'require_byok_api_key',
+    // texture_3d_v2
+    'final_textured',
+    'fail_texture_plan',
+    'fail_texture_paint',
+    'fail_texture_bake',
+    'fail_pbr_derive',
+    'fail_texture_apply',
   };
 
   static const _nodeLabels = {
@@ -107,6 +114,31 @@ class WorkflowStatus {
     'regenerate_3d_part': 'Regenerating the selected part...',
     'add_3d_part': 'Adding a new part...',
     'articulate_3d_model': 'Articulating your 3D model...',
+    // texture_3d_v2
+    'material_groups': "Reading the model's parts...",
+    'capture_beauty': 'Photographing the model...',
+    'uv_grid_prepare': 'Laying out UV atlases...',
+    'mask_bake': 'Baking surface masks...',
+    'capture_id_parts': 'Mapping parts by color...',
+    'plan_prompt': 'Preparing the material plan...',
+    'plan_llm': 'Planning materials...',
+    'material_plan': 'Reading the material plan...',
+    'paint_batch_plan': 'Planning texture batches...',
+    'paint_prompt_grid': 'Preparing paint prompts...',
+    'relief_prompt_grid': 'Preparing relief prompts...',
+    'paint_b1': 'Painting textures...',
+    'paint_b2': 'Painting textures...',
+    'paint_b3': 'Painting textures...',
+    'relief_b1': 'Adding surface relief...',
+    'relief_b2': 'Adding surface relief...',
+    'relief_b3': 'Adding surface relief...',
+    'paint_batch_assemble': 'Assembling texture atlases...',
+    'seam_bake': 'Smoothing seams...',
+    'texture_composite': 'Compositing textures...',
+    'pbr_derive': 'Deriving PBR maps...',
+    'texture_apply': 'Applying textures to the model...',
+    'capture_final': 'Rendering the textured model...',
+    'final_textured': 'Finalizing the textured model...',
   };
 
   String get progressLabel {

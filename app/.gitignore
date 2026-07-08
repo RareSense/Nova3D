@@ -44,3 +44,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Private showcase curation tooling (never published)
+/tools/showcase/
+
+# Local showcase demo data (replaced by the real public bucket manifest)
+/web/showcase_demo/
+
+# Private showcase admin mockups (submit form + standalone editor)
+/web/showcase_admin/

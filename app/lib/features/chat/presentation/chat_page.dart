@@ -93,8 +93,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       });
     }
 
-    ref.listen(messagesProvider(widget.conversationId), (_, _) {
-      _scrollToBottom();
+    // Auto-scroll only when a NEW message is appended — not on every progress
+    // tick. Scrolling on each 3s poll update yanked the user down whenever they
+    // scrolled up to inspect an earlier model.
+    ref.listen(messagesProvider(widget.conversationId), (prev, next) {
+      final prevCount = prev?.valueOrNull?.messages.length ?? 0;
+      final nextCount = next.valueOrNull?.messages.length ?? 0;
+      if (nextCount > prevCount) _scrollToBottom();
     });
 
     final chatColumn = Column(
@@ -184,7 +189,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       itemCount: visibleMessages.length,
       itemBuilder: (_, i) {
         final message = visibleMessages[i];
+        // Key by message id so the list matches elements by identity, not
+        // index. This keeps each preview's platform view (iframe) bound to its
+        // own message across inserts/reorders instead of being recycled — the
+        // recycling is what flashed previous previews black on every rebuild.
         return _CenteredMessage(
+          key: ValueKey(message.id),
           maxWidth: maxWidth,
           child: MessageBubble(
             message: message,
@@ -236,6 +246,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           modelUrl.isEmpty ||
           workflowId == null ||
           workflowId.isEmpty) {
+        continue;
+      }
+      // Textured models are standalone messages with their own window, not
+      // versions of the source generation — never fold them into its switcher.
+      if (message.operation == 'texture_3d' ||
+          message.messageType == 'texture') {
         continue;
       }
       versions.add(
@@ -297,6 +313,7 @@ class _PendingView extends StatelessWidget {
 
 class _CenteredMessage extends StatelessWidget {
   const _CenteredMessage({
+    super.key,
     required this.child,
     this.maxWidth = kContentMaxWidth,
   });

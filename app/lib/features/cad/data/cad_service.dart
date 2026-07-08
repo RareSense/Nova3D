@@ -6,6 +6,8 @@ import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_request.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_result.dart';
 import 'package:nova3d_frontend/features/cad/models/uv_maps_result.dart';
 
 class CadException implements Exception {
@@ -555,6 +557,99 @@ class CadService {
     ];
   }
 
+  // ── Texturing ────────────────────────────────────────────────────────────
+  // PBR-textures an existing generation via `texture_3d_v2`. Independent of the
+  // generation/edit paths: it never runs the Nova3D credit preflight (the
+  // pipeline is Gemini BYOK — a caller key is always sent) and it targets the
+  // ORIGINAL generation's geometry via its `glb_artifact` + `code_artifact`,
+  // never an AI-edited derivative. Kept separate so the generation path stays
+  // byte-for-byte unchanged.
+
+  static const _textureReturnNodes = <String>[
+    'final_textured',
+    'fail_texture_plan',
+    'fail_texture_paint',
+    'fail_texture_bake',
+    'fail_pbr_derive',
+    'fail_texture_apply',
+  ];
+
+  Future<String> startTexture({
+    required Map<String, dynamic> glbArtifact,
+    required Map<String, dynamic> codeArtifact,
+    required TextureRequest request,
+    String? workflowId,
+    String? conversationId,
+  }) async {
+    final requestedWorkflowId = workflowId ?? createWorkflowId();
+    try {
+      final response = await _dio.post(
+        '/run/state/$kTexture3dWorkflow',
+        queryParameters: {'request_id': requestedWorkflowId},
+        data: {
+          'payload': request.toPayload(
+            glbArtifact: glbArtifact,
+            codeArtifact: codeArtifact,
+          ),
+          'return_nodes': _textureReturnNodes,
+          if (conversationId != null)
+            'conversation': _conversationLink(
+              conversationId,
+              relationType: 'texture_model',
+              operation: kTexture3dWorkflow,
+            ),
+        },
+        options: await _authOptions(receiveTimeout: _startReceiveTimeout),
+      );
+      final returnedWorkflowId = response.data['workflow_id'] as String?;
+      if (returnedWorkflowId == null || returnedWorkflowId.isEmpty) {
+        throw CadException('Texturing did not return a workflow id.');
+      }
+      return returnedWorkflowId;
+    } on DioException catch (e) {
+      if (_mayHaveStarted(e)) return requestedWorkflowId;
+      throw CadException(_errorMessage(e));
+    }
+  }
+
+  // Mirrors [runWorkflow]'s gentle 3s poll, but parses the `final_textured`
+  // node output. Kept separate so the generation result parser stays untouched.
+  Future<TextureResult> runTextureWorkflow(
+    String workflowId, {
+    void Function(WorkflowStatus status)? onProgress,
+    int? startupGraceRetries,
+  }) async {
+    await _awaitTerminalStatus(
+      workflowId,
+      startNode: 'material_groups',
+      budgetMessage:
+          'Your generation budget was exhausted before texturing completed.',
+      startupGraceRetries: startupGraceRetries ?? _maxStartupLookupRetries,
+      onProgress: onProgress,
+    );
+
+    while (true) {
+      try {
+        final resp = await _dio.get(
+          '/result/$workflowId',
+          options: await _authOptions(receiveTimeout: _resultReceiveTimeout),
+        );
+        return TextureResult.fromResultJson(resp.data as Map<String, dynamic>);
+      } on DioException catch (e) {
+        final ex = CadException(_errorMessage(e));
+        if (!_isRecoverableWorkflowLookupError(ex)) throw ex;
+        onProgress?.call(
+          WorkflowStatus(
+            workflowId: workflowId,
+            state: WorkflowState.running,
+            currentNode: 'texture_apply',
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    }
+  }
+
   Future<String> _apiKeyFor(GenerationModelOption option) async {
     final keyProvider = option.keyProvider;
     if (keyProvider == null) {
@@ -595,41 +690,86 @@ class CadService {
     }
   }
 
-  // GraphFlow generations commonly take several minutes. Poll gently so
-  // multiple browser chats can run in parallel without hammering the backend.
-  Future<CadResult> runWorkflow(
+  // Bounded startup grace: how many consecutive "workflow not found" status
+  // lookups to tolerate before a NEVER-observed-alive workflow is treated as a
+  // failed launch (≈ this many × 3s). A FRESH start needs headroom while the
+  // workflow registers; a RESUME of a prior-session workflow uses a much
+  // smaller grace ([resumeStartupGraceRetries]) because "not found" there means
+  // the run has already closed, not that it is still starting.
+  static const _maxStartupLookupRetries = 40;
+  static const resumeStartupGraceRetries = 2;
+
+  /// Polls `/status` every 3s until the workflow reaches a terminal state, then
+  /// returns so the caller can fetch `/result`. Throws [CadException] on budget
+  /// exhaustion or an unrecoverable error.
+  ///
+  /// Critical failure case: a workflow that fails by RAISING (e.g.
+  /// `texture_3d_v2`'s hard-fail nodes) is CLOSED on Temporal, so `/status` can
+  /// no longer be queried and returns "workflow not found". That lookup error is
+  /// otherwise treated as "still starting" and would poll forever. Once the
+  /// workflow has been seen alive, a subsequent persistent lookup failure means
+  /// it has CLOSED — we return so the caller's `/result` fetch surfaces the real
+  /// (failed) outcome instead of the UI spinning indefinitely.
+  Future<void> _awaitTerminalStatus(
     String workflowId, {
+    required String startNode,
+    required String budgetMessage,
+    int startupGraceRetries = _maxStartupLookupRetries,
     void Function(WorkflowStatus status)? onProgress,
   }) async {
+    var observedAlive = false;
+    var consecutiveLookupFailures = 0;
     while (true) {
       await Future.delayed(const Duration(seconds: 3));
       final WorkflowStatus status;
       try {
         status = await getStatus(workflowId);
       } on CadException catch (e) {
-        if (_isRecoverableWorkflowLookupError(e)) {
-          onProgress?.call(
-            WorkflowStatus(
-              workflowId: workflowId,
-              state: WorkflowState.pending,
-              currentNode: 'sketch_to_3d_generator',
-            ),
-          );
-          continue;
+        if (!_isRecoverableWorkflowLookupError(e)) rethrow;
+        consecutiveLookupFailures++;
+        // Seen alive before, now unreachable → the workflow closed
+        // (failed/terminated). Stop; the caller's /result reports the outcome.
+        if (observedAlive && consecutiveLookupFailures >= 2) return;
+        // Never seen alive → bounded startup grace, then give up loudly.
+        if (!observedAlive && consecutiveLookupFailures > startupGraceRetries) {
+          rethrow;
         }
-        rethrow;
+        onProgress?.call(
+          WorkflowStatus(
+            workflowId: workflowId,
+            state: WorkflowState.pending,
+            currentNode: startNode,
+          ),
+        );
+        continue;
       }
+      observedAlive = true;
+      consecutiveLookupFailures = 0;
       onProgress?.call(status);
-
       if (status.isTerminal) {
         if (status.state == WorkflowState.budgetExhausted) {
-          throw CadException(
-            'Your provider or generation budget was exhausted before the model completed.',
-          );
+          throw CadException(budgetMessage);
         }
-        break;
+        return;
       }
     }
+  }
+
+  // GraphFlow generations commonly take several minutes. Poll gently so
+  // multiple browser chats can run in parallel without hammering the backend.
+  Future<CadResult> runWorkflow(
+    String workflowId, {
+    void Function(WorkflowStatus status)? onProgress,
+    int? startupGraceRetries,
+  }) async {
+    await _awaitTerminalStatus(
+      workflowId,
+      startNode: 'sketch_to_3d_generator',
+      budgetMessage:
+          'Your provider or generation budget was exhausted before the model completed.',
+      startupGraceRetries: startupGraceRetries ?? _maxStartupLookupRetries,
+      onProgress: onProgress,
+    );
 
     while (true) {
       try {

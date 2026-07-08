@@ -609,3 +609,23 @@ body.full-ui .selection-toolbar.has-selection { display:block; }
   #flyArticulate .edit-input { min-height:52px; max-height:70px; }
   #jointsList { max-height:clamp(96px, calc(100vh - 470px), 220px); }
 }
+
+/* Showcase mode (public gallery embed): a clean read-only viewer. Hide the
+   backend-dependent AI-edit tools, UV download, fullscreen toggle, and the
+   Transform + Mesh editing rails — leaving Display + Explode on the left. Keep
+   the top Orbit/Move/Rotate/Scale toolbar but force it centered (the ≤1280px
+   media query would otherwise left-align it in the narrow detail iframe).
+   The class is set on <html> by an inline head script so the reduced UI paints
+   from the first frame — no flash of the full rail. */
+.nova-showcase [data-flyout="flyAiRemix"],
+.nova-showcase [data-flyout="flyAiGrow"],
+.nova-showcase [data-flyout="flyArticulate"],
+.nova-showcase [data-flyout="flyTransform"],
+.nova-showcase [data-flyout="flyMesh"],
+.nova-showcase #matSoonBtn,
+.nova-showcase #uvMapsBtn,
+.nova-showcase #fullscreenToggle { display: none !important; }
+
+.nova-showcase .vp-toolbar {
+  left: 50% !important; right: auto !important; transform: translateX(-50%) !important;
+}

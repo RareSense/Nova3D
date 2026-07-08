@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_result.dart';
 import 'package:nova3d_frontend/shared/widgets/code_preview.dart';
 import 'package:nova3d_frontend/shared/widgets/glb_viewer.dart';
+import 'package:nova3d_frontend/shared/widgets/pbr_assets_view.dart';
 import 'package:nova3d_frontend/shared/widgets/uv_maps_view.dart';
 
 /// Wraps [GlbViewer] with a header toolbar that toggles between the model
@@ -30,6 +32,8 @@ class GenerationPreview extends StatefulWidget {
     this.onEditCompleted,
     this.viewerStateKey,
     this.onOpenSidePanel,
+    this.onMagicTexture,
+    this.textureAssets = const [],
   });
 
   final String src;
@@ -55,11 +59,19 @@ class GenerationPreview extends StatefulWidget {
   final String? viewerStateKey;
   final VoidCallback? onOpenSidePanel;
 
+  /// When non-null, a ✨ TEXTURE action is shown in the window header. Only the
+  /// original generation's window passes this — never an edited/textured one.
+  final VoidCallback? onMagicTexture;
+
+  /// Downloadable PBR assets from a texture run. When non-empty, a PBR tab is
+  /// shown. Empty for normal generations.
+  final List<TextureAsset> textureAssets;
+
   @override
   State<GenerationPreview> createState() => _GenerationPreviewState();
 }
 
-enum _PreviewTab { model, code, uv }
+enum _PreviewTab { model, code, uv, pbr }
 
 class _GenerationPreviewState extends State<GenerationPreview> {
   _PreviewTab _tab = _PreviewTab.model;
@@ -68,6 +80,8 @@ class _GenerationPreviewState extends State<GenerationPreview> {
     final url = widget.codeArtifact?['url'];
     return url is String && url.isNotEmpty;
   }
+
+  bool get _hasPbr => widget.textureAssets.isNotEmpty;
 
   GlbViewer _buildGlbViewer() {
     return GlbViewer(
@@ -113,7 +127,10 @@ class _GenerationPreviewState extends State<GenerationPreview> {
             onSelect: (t) => setState(() => _tab = t),
             modelMeta: _modelMeta(),
             codeMeta: _codeMeta(),
+            hasPbr: _hasPbr,
+            pbrCount: widget.textureAssets.length,
             onOpenSidePanel: widget.onOpenSidePanel,
+            onMagicTexture: widget.onMagicTexture,
           ),
           Expanded(
             child: Stack(
@@ -145,6 +162,10 @@ class _GenerationPreviewState extends State<GenerationPreview> {
                       conversationId: widget.conversationId,
                     ),
                   ),
+                if (_tab == _PreviewTab.pbr)
+                  Positioned.fill(
+                    child: PbrAssetsView(assets: widget.textureAssets),
+                  ),
               ],
             ),
           ),
@@ -173,14 +194,20 @@ class _HeaderToolbar extends StatelessWidget {
     required this.onSelect,
     required this.modelMeta,
     required this.codeMeta,
+    this.hasPbr = false,
+    this.pbrCount = 0,
     this.onOpenSidePanel,
+    this.onMagicTexture,
   });
 
   final _PreviewTab active;
   final ValueChanged<_PreviewTab> onSelect;
   final String modelMeta;
   final String codeMeta;
+  final bool hasPbr;
+  final int pbrCount;
   final VoidCallback? onOpenSidePanel;
+  final VoidCallback? onMagicTexture;
 
   @override
   Widget build(BuildContext context) {
@@ -229,15 +256,35 @@ class _HeaderToolbar extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: kLilac, height: 1),
             ),
           ),
+          if (hasPbr) ...[
+            const SizedBox(width: 6),
+            _Tab(
+              label: 'PBR',
+              active: active == _PreviewTab.pbr,
+              onTap: () => onSelect(_PreviewTab.pbr),
+              icon: const Text(
+                '✦',
+                style: TextStyle(fontSize: 11, color: kPink, height: 1),
+              ),
+            ),
+          ],
           const Spacer(),
-          Text(
-            switch (active) {
-              _PreviewTab.model => modelMeta,
-              _PreviewTab.code => codeMeta,
-              _PreviewTab.uv => 'UV ATLAS',
-            },
-            style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.5),
+          Flexible(
+            child: Text(
+              switch (active) {
+                _PreviewTab.model => modelMeta,
+                _PreviewTab.code => codeMeta,
+                _PreviewTab.uv => 'UV ATLAS',
+                _PreviewTab.pbr => '$pbrCount MAPS',
+              },
+              overflow: TextOverflow.ellipsis,
+              style: kSilkscreen(9, color: kInkMuted, letterSpacing: 0.5),
+            ),
           ),
+          if (onMagicTexture != null) ...[
+            const SizedBox(width: 8),
+            _MagicTextureButton(onTap: onMagicTexture!),
+          ],
           if (onOpenSidePanel != null && active == _PreviewTab.code) ...[
             const SizedBox(width: 8),
             _EscalateButton(label: '⇲ SIDE', onTap: onOpenSidePanel!),
@@ -269,6 +316,44 @@ class _EscalateButton extends StatelessWidget {
           ],
         ),
         child: Text(label, style: kSilkscreen(9, color: kInk, letterSpacing: 0.4)),
+      ),
+    );
+  }
+}
+
+class _MagicTextureButton extends StatelessWidget {
+  const _MagicTextureButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'PBR-texture this model',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: kLilacBg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: kInk, width: 1.5),
+            boxShadow: const [
+              BoxShadow(color: kInk, offset: Offset(1, 1), blurRadius: 0),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('✨', style: TextStyle(fontSize: 10, height: 1)),
+              const SizedBox(width: 4),
+              Text(
+                'TEXTURE',
+                style: kSilkscreen(9, color: kInk, letterSpacing: 0.4),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

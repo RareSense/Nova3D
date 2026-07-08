@@ -6,6 +6,7 @@ import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/data/chat_service.dart';
 import 'package:nova3d_frontend/features/chat/data/conversation_local_source.dart';
@@ -162,6 +163,20 @@ class MessagesNotifier
     extends AutoDisposeFamilyAsyncNotifier<ChatMessagesState, String> {
   bool _busy = false;
 
+  // Workflow ids this notifier instance is already polling (via an active send
+  // or a resume). A workflow is polled at most once per instance, so a
+  // remote-snapshot-triggered resume can never start a duplicate poller.
+  final Set<String> _pollingWorkflowIds = {};
+
+  // Source generation message ids with an in-flight texture run, so a double
+  // click / re-entrancy cannot launch two texture workflows for one model.
+  final Set<String> _texturingSources = {};
+
+  // A run cannot exceed the workflow runtime cap (7200s). A message still
+  // "in progress" older than this on load is from a dead run and is settled
+  // immediately rather than resumed.
+  static const Duration _maxWorkflowLifetime = Duration(hours: 2, minutes: 30);
+
   // Stores a seeded state if seed() is called before build() completes.
   // build() checks this after the async load and returns it instead of [].
   ChatMessagesState? _pendingSeed;
@@ -288,8 +303,45 @@ class MessagesNotifier
               m.modelUrl == null,
         )
         .toList();
+    bool isTexture(MessageModel m) =>
+        m.messageType == 'texture' || m.operation == 'texture_3d';
+
     for (final msg in active) {
       final workflowId = msg.workflowId!;
+      // Idempotency: never start a second poller for a workflow already being
+      // polled by this instance (a live send, or an earlier resume pass).
+      if (!_pollingWorkflowIds.add(workflowId)) continue;
+
+      // A run cannot outlive the workflow runtime cap. A message still marked
+      // "in progress" older than that is a leftover from a dead run (e.g. the
+      // tab was closed mid-run) — settle it as failed on load instead of
+      // resuming a poll, so it never lingers as an endlessly-spinning card.
+      if (DateTime.now().difference(msg.createdAt) > _maxWorkflowLifetime) {
+        _upsert(
+          msg.copyWith(
+            text: isTexture(msg)
+                ? 'This texturing run did not finish. Reopen ✨ Texture to try again.'
+                : 'This run did not finish. Please try again.',
+            isStreaming: false,
+            clearRetryRequest: true,
+          ),
+          immediateRemote: true,
+        );
+        continue;
+      }
+
+      if (isTexture(msg)) {
+        _upsert(
+          msg.copyWith(
+            text: 'Checking texturing status...',
+            isStreaming: true,
+            clearRetryRequest: true,
+          ),
+        );
+        _resumeTexturing(msg);
+        continue;
+      }
+
       _upsert(
         msg.copyWith(
           text: 'Checking generation status...',
@@ -524,9 +576,13 @@ class MessagesNotifier
     required DateTime assistantCreatedAt,
     String? modelOptionId,
     String? modelLabel,
+    bool isResume = false,
   }) {
     return cad.runWorkflow(
       workflowId,
+      // A resumed workflow already existed, so "not found" means it closed —
+      // fail fast instead of the long fresh-start grace.
+      startupGraceRetries: isResume ? CadService.resumeStartupGraceRetries : null,
       onProgress: (status) => _upsert(
         MessageModel(
           id: assistantId,
@@ -558,6 +614,7 @@ class MessagesNotifier
         assistantCreatedAt: assistantCreatedAt,
         modelOptionId: modelOptionId,
         modelLabel: modelLabel,
+        isResume: true,
       );
       final failed = result.failed || result.glbUrl == null;
       _upsert(
@@ -721,6 +778,218 @@ class MessagesNotifier
     );
     state = AsyncValue.data(ChatMessagesState(messages: updated, loaded: true));
     _save(updated, immediateRemote: true);
+  }
+
+  // ── Texturing ──────────────────────────────────────────────────────────────
+  // Runs `texture_3d_v2` against a specific generation's ORIGINAL geometry
+  // ([sourceMessage.modelArtifact] + [sourceMessage.codeArtifact]) — never an
+  // AI-edited derivative. Creates its own request/result message pair, polls
+  // like a generation, and renders the textured result in the same window.
+  // Independent of `_busy`: it uses per-source and per-workflow guards so it can
+  // coexist with generation without races, and never blocks new generations.
+
+  Future<void> startTexturing({
+    required MessageModel sourceMessage,
+    required TextureRequest request,
+  }) async {
+    final glbArtifact = sourceMessage.modelArtifact;
+    final codeArtifact = sourceMessage.codeArtifact;
+    if (glbArtifact == null || codeArtifact == null) return;
+    // Reentrancy guard: one in-flight texture run per source model.
+    if (!_texturingSources.add(sourceMessage.id)) return;
+
+    final now = DateTime.now();
+    final workflowId = CadService.createWorkflowId();
+    _pollingWorkflowIds.add(workflowId);
+    final assistantId = 'texture-$workflowId';
+    final promptText = request.hasPrompt ? request.prompt.trim() : null;
+
+    // Chatting-app UX: a user request bubble + an assistant progress bubble.
+    // The assistant carries the source code artifact from the start so a resume
+    // after reload can pass it through to the textured result (texturing emits
+    // no new program of its own).
+    final userMessage = MessageModel(
+      id: 'texture-user-$workflowId',
+      role: MessageRole.user,
+      text: promptText ?? 'Add texture to this model',
+      createdAt: now,
+      messageType: 'texture',
+      imageDataUrls: request.hasReferenceImage
+          ? [request.referenceImageDataUrl!]
+          : const [],
+    );
+    final assistantCreatedAt = now.add(const Duration(milliseconds: 1));
+    final assistantMessage = MessageModel(
+      id: assistantId,
+      role: MessageRole.assistant,
+      text: 'Starting texturing…',
+      createdAt: assistantCreatedAt,
+      isStreaming: true,
+      workflowId: workflowId,
+      codeArtifact: codeArtifact,
+      operation: 'texture_3d',
+      messageType: 'texture',
+      instructionPrompt: promptText,
+    );
+    final updated = [..._messages, userMessage, assistantMessage];
+    state = AsyncValue.data(ChatMessagesState(messages: updated, loaded: true));
+    _save(updated);
+
+    await _runTexturing(
+      request: request,
+      glbArtifact: glbArtifact,
+      codeArtifact: codeArtifact,
+      sourceMessageId: sourceMessage.id,
+      base: assistantMessage,
+      workflowId: workflowId,
+    );
+  }
+
+  Future<void> _runTexturing({
+    required TextureRequest request,
+    required Map<String, dynamic> glbArtifact,
+    required Map<String, dynamic> codeArtifact,
+    required String sourceMessageId,
+    required MessageModel base,
+    required String workflowId,
+  }) async {
+    final cad = ref.read(cadServiceProvider);
+    try {
+      // Phase 1 — start. A failure here means the workflow never launched, so
+      // the failed message carries NO workflowId: resume must not poll a
+      // workflow that does not exist (which would 404-loop forever).
+      final String startedWorkflowId;
+      try {
+        startedWorkflowId = await cad.startTexture(
+          glbArtifact: glbArtifact,
+          codeArtifact: codeArtifact,
+          request: request,
+          workflowId: workflowId,
+          conversationId: arg,
+        );
+      } on CadException catch (e) {
+        _upsert(
+          _startFailureMessage(base, _failureText(e.message)),
+          immediateRemote: true,
+        );
+        return;
+      }
+
+      // Phase 2 — poll. The workflow exists now, so the message keeps its id;
+      // a poll failure is terminal (the workflow itself failed) and resume can
+      // safely re-check it without looping.
+      _pollingWorkflowIds.add(startedWorkflowId);
+      _upsert(
+        base.copyWith(
+          text: 'Texturing your model…',
+          isStreaming: true,
+          workflowId: startedWorkflowId,
+        ),
+      );
+
+      final result = await cad.runTextureWorkflow(
+        startedWorkflowId,
+        onProgress: (status) => _upsert(
+          base.copyWith(
+            text: status.progressLabel,
+            isStreaming: true,
+            workflowId: startedWorkflowId,
+          ),
+        ),
+      );
+
+      final failed = result.failed || result.glbUrl == null;
+      _upsert(
+        base.copyWith(
+          text: failed
+              ? _failureText(result.errorMessage)
+              : 'Your textured model is ready.',
+          isStreaming: false,
+          workflowId: startedWorkflowId,
+          modelUrl: result.glbUrl,
+          modelArtifact: result.modelArtifact,
+          sourceModelUrl: result.glbUrl,
+          textureAssets: result.assets.map((a) => a.toJson()).toList(),
+        ),
+        immediateRemote: true,
+      );
+    } on CadException catch (e) {
+      _upsert(
+        base.copyWith(text: _failureText(e.message), isStreaming: false),
+        immediateRemote: true,
+      );
+    } catch (_) {
+      _upsert(
+        base.copyWith(
+          text: 'Failed to texture model. Please try again.',
+          isStreaming: false,
+        ),
+        immediateRemote: true,
+      );
+    } finally {
+      // Allow re-texturing this model once the run settles (success or failure).
+      _texturingSources.remove(sourceMessageId);
+    }
+  }
+
+  // A start-phase failure message: same texture identity as [base] but with NO
+  // workflowId, so resume never tries to poll a workflow that never launched.
+  MessageModel _startFailureMessage(MessageModel base, String text) =>
+      MessageModel(
+        id: base.id,
+        role: MessageRole.assistant,
+        text: text,
+        createdAt: base.createdAt,
+        isStreaming: false,
+        codeArtifact: base.codeArtifact,
+        operation: 'texture_3d',
+        messageType: 'texture',
+        instructionPrompt: base.instructionPrompt,
+      );
+
+  // Resumes an in-progress texture message after a reload. Polls the same
+  // workflow and passes the source code artifact (carried on the message) into
+  // the finished result so the CODE / UV tabs keep working.
+  Future<void> _resumeTexturing(MessageModel msg) async {
+    final cad = ref.read(cadServiceProvider);
+    final workflowId = msg.workflowId!;
+    final code = msg.codeArtifact;
+    try {
+      final result = await cad.runTextureWorkflow(
+        workflowId,
+        startupGraceRetries: CadService.resumeStartupGraceRetries,
+        onProgress: (status) =>
+            _upsert(msg.copyWith(text: status.progressLabel, isStreaming: true)),
+      );
+      final failed = result.failed || result.glbUrl == null;
+      _upsert(
+        msg.copyWith(
+          text: failed
+              ? _failureText(result.errorMessage)
+              : 'Your textured model is ready.',
+          isStreaming: false,
+          modelUrl: result.glbUrl,
+          modelArtifact: result.modelArtifact,
+          codeArtifact: code,
+          sourceModelUrl: result.glbUrl,
+          textureAssets: result.assets.map((a) => a.toJson()).toList(),
+        ),
+        immediateRemote: true,
+      );
+    } on CadException catch (e) {
+      _upsert(
+        msg.copyWith(text: _failureText(e.message), isStreaming: false),
+        immediateRemote: true,
+      );
+    } catch (_) {
+      _upsert(
+        msg.copyWith(
+          text: 'Failed to texture model. Please try again.',
+          isStreaming: false,
+        ),
+        immediateRemote: true,
+      );
+    }
   }
 
   void _upsert(MessageModel msg, {bool immediateRemote = false}) {

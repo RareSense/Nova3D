@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Showcase mode: set the class before paint so the reduced read-only UI shows
+     from the first frame (no flash of the full editor rail while main.js loads). -->
+<script>try{if(new URLSearchParams(location.search).get('showcase')==='1')document.documentElement.classList.add('nova-showcase');}catch(e){}</script>
 <script type="importmap">
 {
   "imports": {

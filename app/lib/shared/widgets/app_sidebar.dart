@@ -121,6 +121,12 @@ class AppSidebar extends ConsumerWidget {
 
           // Bottom nav
           _SidebarNavItem(
+            icon: Icons.auto_awesome_outlined,
+            label: 'Showcase',
+            isActive: currentLocation == '/showcase',
+            onTap: () => context.go('/showcase'),
+          ),
+          _SidebarNavItem(
             icon: Icons.workspace_premium_outlined,
             label: 'Subscription',
             isActive: currentLocation == '/subscription',

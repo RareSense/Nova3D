@@ -4,11 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/api_keys/state/api_key_provider.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_request.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_result.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/presentation/widgets/generation_progress_card.dart';
+import 'package:nova3d_frontend/features/chat/presentation/widgets/magic_texture_dialog.dart';
 import 'package:nova3d_frontend/features/chat/state/chat_provider.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
+import 'package:nova3d_frontend/shared/services/viewer_pointer_guard.dart';
 import 'package:nova3d_frontend/shared/widgets/generation_preview.dart';
 import 'package:nova3d_frontend/shared/widgets/nova_cube.dart';
 
@@ -28,6 +33,47 @@ class MessageBubble extends ConsumerWidget {
   final VoidCallback? onOpenSidePanel;
 
   bool get _isUser => message.role == MessageRole.user;
+
+  bool get _isTextureMessage =>
+      message.operation == 'texture_3d' || message.messageType == 'texture';
+
+  // Magic Texture is offered only on an ORIGINAL generation window that still
+  // carries both source artifacts — never on an AI-edited, articulated, or
+  // already-textured message (those have a non-initial [operation]).
+  bool _canTexture(String? conversationId) =>
+      conversationId != null &&
+      (message.operation == null ||
+          message.operation == 'initial_generation') &&
+      message.modelArtifact != null &&
+      message.codeArtifact != null;
+
+  Future<void> _startMagicTexture(
+    BuildContext context,
+    WidgetRef ref,
+    MessageModel message,
+    String conversationId,
+  ) async {
+    // Capture the notifier before any await so we never touch a disposed ref.
+    final notifier = ref.read(messagesProvider(conversationId).notifier);
+    final savedKeys = await ref.read(apiKeyServiceProvider).loadValidKeys();
+    if (!context.mounted) return;
+    // The viewer iframe swallows pointer events across its region on web, which
+    // would make the dialog's controls unresponsive where they overlap it.
+    // Disable iframe pointer capture for the dialog's lifetime.
+    setViewerIframesInteractive(false);
+    final TextureRequest? request;
+    try {
+      request = await showDialog<TextureRequest>(
+        context: context,
+        builder: (_) =>
+            MagicTextureDialog(initialGeminiKey: savedKeys['gemini'] ?? ''),
+      );
+    } finally {
+      setViewerIframesInteractive(true);
+    }
+    if (request == null) return;
+    await notifier.startTexturing(sourceMessage: message, request: request);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,8 +96,18 @@ class MessageBubble extends ConsumerWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
+                if (_isUser && _isTextureMessage) ...[
+                  const _TextureRequestBadge(),
+                  const SizedBox(height: 6),
+                ],
                 if (!_isUser && message.isStreaming)
-                  GenerationProgressCard(statusText: message.text)
+                  GenerationProgressCard(
+                    statusText: message.text,
+                    title: _isTextureMessage ? 'texturing' : 'generating',
+                    modelLabel: _isTextureMessage
+                        ? 'Gemini'
+                        : message.modelLabel,
+                  )
                 else if (message.text.isNotEmpty)
                   _BubbleContent(message: message, isUser: _isUser),
                 if (message.allImageDataUrls.isNotEmpty) ...[
@@ -99,6 +155,17 @@ class MessageBubble extends ConsumerWidget {
                             }
                           : null,
                       onOpenSidePanel: onOpenSidePanel,
+                      onMagicTexture: _canTexture(conversationId)
+                          ? () => _startMagicTexture(
+                              context,
+                              ref,
+                              message,
+                              conversationId!,
+                            )
+                          : null,
+                      textureAssets: message.textureAssets
+                          .map(TextureAsset.fromJson)
+                          .toList(),
                     ),
                   ),
                 ],
@@ -353,6 +420,34 @@ class _RetryButton extends StatelessWidget {
           ],
         ),
       ),
+    ),
+  );
+}
+
+class _TextureRequestBadge extends StatelessWidget {
+  const _TextureRequestBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: kLilacBg,
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: kInk, width: 1.5),
+      boxShadow: const [
+        BoxShadow(color: kInk, offset: Offset(1, 1), blurRadius: 0),
+      ],
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('✨', style: TextStyle(fontSize: 10, height: 1)),
+        const SizedBox(width: 4),
+        Text(
+          'TEXTURE REQUEST',
+          style: kSilkscreen(8, color: kInk, letterSpacing: 0.4),
+        ),
+      ],
     ),
   );
 }

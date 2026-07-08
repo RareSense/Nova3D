@@ -23,6 +23,9 @@ class MessageModel {
   // Shown as a thumbnail in the user bubble.
   final String? imageDataUrl;
   final List<String> imageDataUrls;
+  // Downloadable PBR assets (maps/atlases/materials) from a texture run, each a
+  // JSON map {folder, name, url, label}. Powers the PBR tab in the result view.
+  final List<Map<String, dynamic>> textureAssets;
   // Non-null on failed assistant messages — enables the retry button.
   final GenerationRequest? retryRequest;
 
@@ -46,6 +49,7 @@ class MessageModel {
     this.instructionPrompt,
     this.imageDataUrl,
     this.imageDataUrls = const [],
+    this.textureAssets = const [],
     this.retryRequest,
   });
 
@@ -73,6 +77,7 @@ class MessageModel {
     String? instructionPrompt,
     String? imageDataUrl,
     List<String>? imageDataUrls,
+    List<Map<String, dynamic>>? textureAssets,
     GenerationRequest? retryRequest,
     bool clearRetryRequest = false,
   }) => MessageModel(
@@ -95,6 +100,7 @@ class MessageModel {
     instructionPrompt: instructionPrompt ?? this.instructionPrompt,
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
     imageDataUrls: imageDataUrls ?? this.imageDataUrls,
+    textureAssets: textureAssets ?? this.textureAssets,
     retryRequest: clearRetryRequest
         ? null
         : (retryRequest ?? this.retryRequest),
@@ -133,6 +139,7 @@ class MessageModel {
       if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
       if (images.isNotEmpty) 'image_data_url': images.first,
       if (images.isNotEmpty) 'image_data_urls': images,
+      if (textureAssets.isNotEmpty) 'texture_assets': textureAssets,
     };
   }
 
@@ -156,6 +163,7 @@ class MessageModel {
     instructionPrompt: json['instruction_prompt'] as String?,
     imageDataUrl: json['image_data_url'] as String?,
     imageDataUrls: _asStringList(json['image_data_urls']),
+    textureAssets: _asStringMapList(json['texture_assets']),
   );
 
   // ── Remote API response ───────────────────────────────────────────────────

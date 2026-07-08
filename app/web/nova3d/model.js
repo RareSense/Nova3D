@@ -30,6 +30,7 @@ import {
   METAL_FACTORIES,
   GEM_PRESETS,
 } from '@nova/materials.js';
+import { colorizeIfUncolored } from '@nova/showcase_colorize.js';
 import { syncHistoryUi } from '@nova/history.js';
 import { resetExplode } from '@nova/explode.js';
 
@@ -135,6 +136,11 @@ export function loadGLB(url, options = {}) {
       state.modelGroup.position.set(0,0,0); state.modelGroup.scale.setScalar(1); state.modelGroup.rotation.set(0,0,0);
       model.traverse(child => { if (child.isMesh && child.geometry) { child.castShadow = true; child.receiveShadow = true; } });
       applyRenderProfileToObject(model);
+      // Showcase only: a model with no colour at all (untextured, no vertex
+      // colours, default material) is colour-coded per part so it doesn't read
+      // as a grey blob. Gated to the public showcase embed; the in-app editor is
+      // unaffected.
+      if (document.documentElement.classList.contains('nova-showcase')) colorizeIfUncolored(model);
       state.modelGroup.add(model);
       model.traverse(child => {
         if (!child.isMesh || !child.geometry) return;

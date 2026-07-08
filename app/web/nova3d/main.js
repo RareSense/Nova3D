@@ -183,6 +183,10 @@ document.addEventListener('DOMContentLoaded', () => {
   buildBgSwatches();
 
   const params = new URLSearchParams(window.location.search);
+  // Showcase mode: the public gallery embeds this editor read-only. Hide the
+  // AI-edit tools (they need the generation backend, absent in the showcase);
+  // all viewing tools (display modes, explode, parts, transform, download) stay.
+  if (params.get('showcase') === '1') document.body.classList.add('nova-showcase');
   state.viewerId = params.get('viewerId') || state.viewerId;
   state.stateKey = params.get('stateKey') || params.get('glb') || state.viewerId;
   // Also check sessionStorage: if the iframe was reloaded by the browser

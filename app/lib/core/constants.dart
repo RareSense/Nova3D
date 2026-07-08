@@ -21,6 +21,15 @@ const String kRegenerate3dPartWorkflow = 'regenerate_3d_part';
 const String kAdd3dPartWorkflow = 'add_3d_part';
 const String kArticulate3dModelWorkflow = 'articulate_3d_model';
 const String kGenerateUvMapsWorkflow = 'generate_uv_maps';
+const String kTexture3dWorkflow = 'texture_3d_v2';
+
+// Public showcase manifest (a static JSON on a public bucket). Read-only; the
+// app never writes it. Set at build time, e.g.
+// --dart-define=SHOWCASE_MANIFEST_URL=https://<acct>.blob.core.windows.net/showcase/showcase.json
+const String kShowcaseManifestUrl = String.fromEnvironment(
+  'SHOWCASE_MANIFEST_URL',
+  defaultValue: '',
+);
 const int kMaxReferenceImageBytes = 8 * 1024 * 1024;
 const int kMaxReferenceImageCount = 3;
 const int kMaxReferenceImageDimension = 512;
