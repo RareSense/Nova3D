@@ -24,11 +24,16 @@ const String kGenerateUvMapsWorkflow = 'generate_uv_maps';
 const String kTexture3dWorkflow = 'texture_3d_v2';
 
 // Public showcase manifest (a static JSON on a public bucket). Read-only; the
-// app never writes it. Set at build time, e.g.
+// app never writes it. The default points at Nova3D's public showcase bucket so
+// the hosted build works with no extra config. This is only a public read URL
+// (the account name already appears in every anonymously-served blob URL) — it
+// is NOT a credential; the account key lives solely in gitignored publish tools.
+// Self-hosters can point elsewhere at build time, e.g.
 // --dart-define=SHOWCASE_MANIFEST_URL=https://<acct>.blob.core.windows.net/showcase/showcase.json
 const String kShowcaseManifestUrl = String.fromEnvironment(
   'SHOWCASE_MANIFEST_URL',
-  defaultValue: '',
+  defaultValue:
+      'https://nova3dshowcase.blob.core.windows.net/showcase/showcase.json',
 );
 const int kMaxReferenceImageBytes = 8 * 1024 * 1024;
 const int kMaxReferenceImageCount = 3;
