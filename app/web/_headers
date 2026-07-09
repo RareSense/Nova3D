@@ -1,0 +1,24 @@
+# Cloudflare Pages headers (copied verbatim into build/web at `flutter build web`).
+#
+# The files below are hand-authored and served at STABLE, unhashed URLs (unlike
+# Flutter's own content-hashed bundle, which is safe to cache forever). Left on
+# the Pages default (~4h cache) they get masked for returning visitors after a
+# deploy — that is why reference-image chips showed on localhost (never cached)
+# but not in production until the cache expired. "no-cache" still permits a
+# conditional request (304 when unchanged), so freshness costs almost no bytes.
+#
+# Scoped by explicit path so Flutter's hashed assets and service worker keep
+# their default long-lived caching untouched.
+
+/showcase/*
+  Cache-Control: no-cache
+/showcase_gallery.html
+  Cache-Control: no-cache
+/showcase_admin/*
+  Cache-Control: no-cache
+/showcase_demo/*
+  Cache-Control: no-cache
+/nova3d/*
+  Cache-Control: no-cache
+/nova3d_viewer.html
+  Cache-Control: no-cache

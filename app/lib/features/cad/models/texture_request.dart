@@ -25,7 +25,17 @@ enum TextureResolution {
   final int pixels;
 
   String get label => token;
+
+  /// The default flash image model is capped at 1K by its route (the server
+  /// clamps larger requests). TRUE 2K/4K painting requires the explicit
+  /// pro-image tier — without it the selector only upscales 1K paint into a
+  /// larger atlas. Costs more per image call; the dialog says so.
+  bool get needsProImageTier => this != TextureResolution.k1;
 }
+
+/// Explicit tier for native ≥2K paint calls (see the toolkit's
+/// `nova3d_texture_paint` profile).
+const String kProImagePaintTier = 'gemini_3_pro_image_google';
 
 class TextureRequest {
   const TextureRequest({
@@ -63,6 +73,7 @@ class TextureRequest {
     'texture_atlas_size': resolution.pixels,
     'paint_image_size': resolution.token,
     'pbr_texture_size': resolution.pixels,
+    if (resolution.needsProImageTier) 'paint_image_tier': kProImagePaintTier,
     if (hasPrompt) 'texture_description': prompt.trim(),
     if (hasReferenceImage)
       'reference_image_artifact': referenceImageDataUrl!.trim(),

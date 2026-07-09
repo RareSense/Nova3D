@@ -628,7 +628,7 @@ class CadService {
       onProgress: onProgress,
     );
 
-    while (true) {
+    for (var attempt = 1; ; attempt++) {
       try {
         final resp = await _dio.get(
           '/result/$workflowId',
@@ -637,7 +637,14 @@ class CadService {
         return TextureResult.fromResultJson(resp.data as Map<String, dynamic>);
       } on DioException catch (e) {
         final ex = CadException(_errorMessage(e));
-        if (!_isRecoverableWorkflowLookupError(ex)) throw ex;
+        // The workflow is already terminal here, so /result errors can only be
+        // transient — or permanent for a run that closed by raising. Bounded
+        // retries keep the transient case working without the permanent case
+        // polling forever.
+        if (!_isRecoverableWorkflowLookupError(ex) ||
+            attempt >= _maxResultFetchRetries) {
+          throw ex;
+        }
         onProgress?.call(
           WorkflowStatus(
             workflowId: workflowId,
@@ -698,6 +705,11 @@ class CadService {
   // the run has already closed, not that it is still starting.
   static const _maxStartupLookupRetries = 40;
   static const resumeStartupGraceRetries = 2;
+
+  // /result retries after the workflow is already terminal (≈ 1 minute). A run
+  // that closed by raising never yields a /result — without a bound the fetch
+  // loop would poll forever (the state-…718200000 stuck-UI bug, second half).
+  static const _maxResultFetchRetries = 20;
 
   /// Polls `/status` every 3s until the workflow reaches a terminal state, then
   /// returns so the caller can fetch `/result`. Throws [CadException] on budget
@@ -771,11 +783,15 @@ class CadService {
       onProgress: onProgress,
     );
 
-    while (true) {
+    for (var attempt = 1; ; attempt++) {
       try {
         return await getResult(workflowId);
       } on CadException catch (e) {
-        if (!_isRecoverableWorkflowLookupError(e)) rethrow;
+        // Terminal workflow: bounded retries (see runTextureWorkflow).
+        if (!_isRecoverableWorkflowLookupError(e) ||
+            attempt >= _maxResultFetchRetries) {
+          rethrow;
+        }
         onProgress?.call(
           WorkflowStatus(
             workflowId: workflowId,

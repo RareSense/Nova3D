@@ -207,6 +207,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       .read(messagesProvider(widget.conversationId).notifier)
                       .retry(message.id)
                 : null,
+            onDelete: message.isStreaming
+                ? null
+                : () => ref
+                      .read(messagesProvider(widget.conversationId).notifier)
+                      .deleteMessage(message.id),
             onOpenSidePanel: !narrowColumn && message.codeArtifact != null
                 ? () => _openSidePanel(message)
                 : null,
@@ -218,7 +223,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   List<MessageModel> _visibleMessages(List<MessageModel> messages) => messages
       .where(
-        (message) => !_isPersistedAiEditVersion(message) || message.isStreaming,
+        (message) =>
+            !message.isDeleted &&
+            (!_isPersistedAiEditVersion(message) || message.isStreaming),
       )
       .toList(growable: false);
 
@@ -242,6 +249,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final modelUrl = message.modelUrl;
       final workflowId = message.workflowId;
       if (message.role != MessageRole.assistant ||
+          message.isDeleted ||
           modelUrl == null ||
           modelUrl.isEmpty ||
           workflowId == null ||

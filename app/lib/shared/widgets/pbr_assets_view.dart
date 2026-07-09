@@ -3,11 +3,13 @@ import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/cad/models/texture_result.dart';
 import 'package:nova3d_frontend/shared/services/texture_assets_downloader.dart';
 
-/// The PBR tab: previews every asset a texture run returned (maps + atlases +
-/// material spec) and downloads them all as one folder-structured zip.
+/// The PBR tab: previews every asset a texture run returned (textured GLB,
+/// PBR maps, per-tile albedo/relief deliverables, atlases, UV layouts, and
+/// the settings manifest) and downloads them all as one folder-structured zip.
 ///
-/// Assets are already resolved URLs carried on the message, so this view needs
-/// no polling or provider — it renders directly and packages on demand.
+/// Assets are already resolved URLs (or inline text) carried on the message,
+/// so this view needs no polling or provider — it renders directly and
+/// packages on demand.
 class PbrAssetsView extends StatefulWidget {
   const PbrAssetsView({super.key, required this.assets});
 

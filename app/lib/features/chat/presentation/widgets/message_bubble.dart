@@ -22,12 +22,17 @@ class MessageBubble extends ConsumerWidget {
     super.key,
     required this.message,
     this.onRetry,
+    this.onDelete,
     this.conversationId,
     this.assetVersions = const [],
     this.onOpenSidePanel,
   });
   final MessageModel message;
   final VoidCallback? onRetry;
+
+  /// Soft-deletes this message (hidden everywhere, kept in the DB). Null hides
+  /// the affordance (pending previews, streaming messages).
+  final VoidCallback? onDelete;
   final String? conversationId;
   final List<AssetVersion> assetVersions;
   final VoidCallback? onOpenSidePanel;
@@ -81,7 +86,10 @@ class MessageBubble extends ConsumerWidget {
         ref.watch(byokGenerationModelOptionsProvider).valueOrNull ?? const [];
     final currentVersion = assetVersions.isNotEmpty ? assetVersions.last : null;
 
-    return Padding(
+    return _DeletableRegion(
+      onDelete: onDelete,
+      alignEnd: _isUser,
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,6 +197,123 @@ class MessageBubble extends ConsumerWidget {
           ),
           if (_isUser) ...[const SizedBox(width: 10), _Avatar(isUser: true)],
         ],
+      ),
+      ),
+    );
+  }
+}
+
+/// Hover-revealed (desktop) / long-press (touch) delete for one message.
+/// Deleting soft-deletes: the message disappears from the chat but stays in
+/// the database. Confirmation guards against slips; the viewer iframes are
+/// made non-interactive for the dialog's lifetime (they swallow pointer
+/// events where they overlap it on web).
+class _DeletableRegion extends StatefulWidget {
+  const _DeletableRegion({
+    required this.child,
+    required this.alignEnd,
+    this.onDelete,
+  });
+
+  final Widget child;
+  final bool alignEnd;
+  final VoidCallback? onDelete;
+
+  @override
+  State<_DeletableRegion> createState() => _DeletableRegionState();
+}
+
+class _DeletableRegionState extends State<_DeletableRegion> {
+  bool _hovered = false;
+
+  Future<void> _confirmDelete() async {
+    final onDelete = widget.onDelete;
+    if (onDelete == null) return;
+    setViewerIframesInteractive(false);
+    final bool? confirmed;
+    try {
+      confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: kCream,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: kInk, width: 1.5),
+          ),
+          title: const Text(
+            'Delete this message?',
+            style: TextStyle(color: kInk, fontSize: 16),
+          ),
+          content: const Text(
+            'It will disappear from this chat. This cannot be undone.',
+            style: TextStyle(color: kInkSoft, fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel', style: TextStyle(color: kInkSoft)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Color(0xFFD84C6F)),
+              ),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      setViewerIframesInteractive(true);
+    }
+    if (confirmed == true) onDelete();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.onDelete == null) return widget.child;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onLongPress: _confirmDelete,
+        child: Stack(
+          children: [
+            widget.child,
+            Positioned(
+              top: 0,
+              left: widget.alignEnd ? 0 : null,
+              right: widget.alignEnd ? null : 0,
+              child: AnimatedOpacity(
+                opacity: _hovered ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                child: IgnorePointer(
+                  ignoring: !_hovered,
+                  child: Tooltip(
+                    message: 'Delete message',
+                    child: InkWell(
+                      onTap: _confirmDelete,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: kCream,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: kInk, width: 1),
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 14,
+                          color: kInkSoft,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

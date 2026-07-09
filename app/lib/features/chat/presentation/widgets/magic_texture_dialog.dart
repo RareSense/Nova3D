@@ -153,6 +153,13 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
               _label('RESOLUTION'),
               const SizedBox(height: 6),
               _resolutionRow(),
+              const SizedBox(height: 4),
+              Text(
+                _resolution.needsProImageTier
+                    ? '2K/4K paints natively on the pro image model — higher quality, higher per-image cost.'
+                    : '1K paints on the fast image model.',
+                style: kSilkscreen(8, color: kInkMuted, letterSpacing: 0.3),
+              ),
               const SizedBox(height: 16),
 
               _label('GEMINI API KEY'),

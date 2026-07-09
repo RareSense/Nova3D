@@ -270,7 +270,13 @@ class MessagesNotifier
     for (final message in remote) {
       final existing = byId[message.id];
       if (existing == null || !existing.isStreaming) {
-        byId[message.id] = message;
+        // Deletion is monotonic and may not have reached the remote snapshot
+        // yet (the snapshot push is debounced) — a stale remote copy must
+        // never resurrect a message the user already deleted.
+        byId[message.id] =
+            (existing != null && existing.isDeleted && !message.isDeleted)
+            ? message.copyWith(deletedAt: existing.deletedAt)
+            : message;
       }
     }
     final merged = byId.values.toList()
@@ -286,7 +292,8 @@ class MessagesNotifier
           a[i].workflowId != b[i].workflowId ||
           a[i].operation != b[i].operation ||
           a[i].messageType != b[i].messageType ||
-          a[i].sourceModelUrl != b[i].sourceModelUrl) {
+          a[i].sourceModelUrl != b[i].sourceModelUrl ||
+          a[i].deletedAt != b[i].deletedAt) {
         return false;
       }
     }
@@ -298,6 +305,7 @@ class MessagesNotifier
         .where(
           (m) =>
               m.role == MessageRole.assistant &&
+              !m.isDeleted &&
               m.workflowId != null &&
               m.workflowId!.isNotEmpty &&
               m.modelUrl == null,
@@ -687,6 +695,18 @@ class MessagesNotifier
 
   String _insufficientCreditsText(int required, int available) =>
       'This model needs $required credits, but you have $available available. Buy more credits at /subscription and try again.';
+
+  /// Soft-deletes a message: it stays in the local store and the remote DB
+  /// (`deleted_at` in its content) but is never rendered again. Streaming
+  /// messages cannot be deleted (the UI hides the action; this guards direct
+  /// calls too) so an active poller never updates an invisible bubble.
+  void deleteMessage(String messageId) {
+    final idx = _messages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    final msg = _messages[idx];
+    if (msg.isStreaming || msg.isDeleted) return;
+    _upsert(msg.copyWith(deletedAt: DateTime.now()), immediateRemote: true);
+  }
 
   Future<void> retry(String failedMessageId) async {
     if (_busy) return;

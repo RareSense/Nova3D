@@ -23,9 +23,14 @@ class MessageModel {
   // Shown as a thumbnail in the user bubble.
   final String? imageDataUrl;
   final List<String> imageDataUrls;
-  // Downloadable PBR assets (maps/atlases/materials) from a texture run, each a
-  // JSON map {folder, name, url, label}. Powers the PBR tab in the result view.
+  // Downloadable assets (GLB/maps/tiles/atlases/UV layouts/settings) from a
+  // texture run, each a JSON map {folder, name, url, content?, label}. Powers
+  // the PBR tab in the result view.
   final List<Map<String, dynamic>> textureAssets;
+  // Soft delete: a deleted message stays in every store (local + remote DB)
+  // but is never rendered. Monotonic — there is no undelete path, which is
+  // what makes the remote-merge rule safe (deletion always wins).
+  final DateTime? deletedAt;
   // Non-null on failed assistant messages — enables the retry button.
   final GenerationRequest? retryRequest;
 
@@ -50,8 +55,11 @@ class MessageModel {
     this.imageDataUrl,
     this.imageDataUrls = const [],
     this.textureAssets = const [],
+    this.deletedAt,
     this.retryRequest,
   });
+
+  bool get isDeleted => deletedAt != null;
 
   List<String> get allImageDataUrls {
     if (imageDataUrls.isNotEmpty) return imageDataUrls;
@@ -78,6 +86,7 @@ class MessageModel {
     String? imageDataUrl,
     List<String>? imageDataUrls,
     List<Map<String, dynamic>>? textureAssets,
+    DateTime? deletedAt,
     GenerationRequest? retryRequest,
     bool clearRetryRequest = false,
   }) => MessageModel(
@@ -101,6 +110,8 @@ class MessageModel {
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
     imageDataUrls: imageDataUrls ?? this.imageDataUrls,
     textureAssets: textureAssets ?? this.textureAssets,
+    // Deletion is monotonic, so null never needs to overwrite a value here.
+    deletedAt: deletedAt ?? this.deletedAt,
     retryRequest: clearRetryRequest
         ? null
         : (retryRequest ?? this.retryRequest),
@@ -140,6 +151,7 @@ class MessageModel {
       if (images.isNotEmpty) 'image_data_url': images.first,
       if (images.isNotEmpty) 'image_data_urls': images,
       if (textureAssets.isNotEmpty) 'texture_assets': textureAssets,
+      if (deletedAt != null) 'deleted_at': deletedAt!.toIso8601String(),
     };
   }
 
@@ -164,6 +176,7 @@ class MessageModel {
     imageDataUrl: json['image_data_url'] as String?,
     imageDataUrls: _asStringList(json['image_data_urls']),
     textureAssets: _asStringMapList(json['texture_assets']),
+    deletedAt: DateTime.tryParse((json['deleted_at'] as String?) ?? ''),
   );
 
   // ── Remote API response ───────────────────────────────────────────────────

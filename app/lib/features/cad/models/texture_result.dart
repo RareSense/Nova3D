@@ -1,21 +1,28 @@
-/// One downloadable PBR asset returned by `texture_3d_v2` (a map, atlas, or the
-/// material spec). [folder] groups it inside the download zip; [name] is the
-/// file name within that folder.
+import 'dart:convert';
+
+/// One downloadable asset from a `texture_3d_v2` run: the textured GLB, a PBR
+/// map, a per-tile deliverable, an atlas, a UV layout, or the inline
+/// settings manifest. [folder] groups it inside the download zip; [name] is
+/// the file name within that folder. Exactly one of [url] (remote fetch) or
+/// [content] (inline text, e.g. settings.json) is non-empty.
 class TextureAsset {
   const TextureAsset({
     required this.folder,
     required this.name,
-    required this.url,
+    this.url = '',
+    this.content,
     this.label,
   });
 
-  final String folder; // '' | 'maps' | 'atlases'
+  final String folder; // '' | 'maps' | 'tiles/albedo' | 'tiles/relief' | 'atlases' | 'uv'
   final String name; // e.g. 'albedo.png'
-  final String url; // signed download URL
+  final String url; // signed download URL ('' for inline assets)
+  final String? content; // inline text body (settings.json)
   final String? label; // human label for the UI (falls back to [name])
 
   String get zipPath => folder.isEmpty ? name : '$folder/$name';
   String get displayLabel => label ?? name;
+  bool get isInline => content != null;
   bool get isImage {
     final lower = name.toLowerCase();
     return lower.endsWith('.png') ||
@@ -28,6 +35,7 @@ class TextureAsset {
     'folder': folder,
     'name': name,
     'url': url,
+    if (content != null) 'content': content,
     if (label != null) 'label': label,
   };
 
@@ -35,6 +43,7 @@ class TextureAsset {
     folder: (j['folder'] as String?) ?? '',
     name: (j['name'] as String?) ?? 'asset',
     url: (j['url'] as String?) ?? '',
+    content: j['content'] as String?,
     label: j['label'] as String?,
   );
 }
@@ -95,10 +104,32 @@ class TextureResult {
     );
   }
 
-  /// Collects the PBR maps, atlases, and material spec from the success payload
-  /// into a flat, folder-grouped asset list (download order).
+  /// Collects everything a 3D artist can use from the success payload into a
+  /// flat, folder-grouped asset list (download order):
+  ///
+  ///   model.glb            the textured model
+  ///   maps/                the 6 derived PBR maps
+  ///   tiles/albedo/        the generated image for each painted cell
+  ///   tiles/relief/        the generated height tile for each painted cell
+  ///   atlases/             assembled painted + relief atlases
+  ///   uv/                  layout raster/labeled/SVG + full UV wireframe
+  ///   settings.json        the exact pipeline settings the run used
+  ///
+  /// Internal pipeline artifacts (material spec, batch maps, prompts, masks)
+  /// are deliberately NOT exposed — they are workflow internals, not assets.
   static List<TextureAsset> _extractAssets(Map<String, dynamic> success) {
     final assets = <TextureAsset>[];
+
+    void addUrl(String folder, String name, Object? artifact, String label) {
+      final url = _artifactUrl(artifact);
+      if (url != null) {
+        assets.add(
+          TextureAsset(folder: folder, name: name, url: url, label: label),
+        );
+      }
+    }
+
+    addUrl('', 'model.glb', success['glb_artifact'], 'Textured model');
 
     // PBR maps: pbr_derive.map_artifacts → { albedo|height|normal|roughness|
     // metallic|ao : <artifact> }. Fixed order so the UI reads consistently.
@@ -114,45 +145,97 @@ class TextureResult {
     final seen = <String>{};
     for (final name in [...mapOrder, ...maps.keys]) {
       if (name.isEmpty || !seen.add(name)) continue;
-      final url = _artifactUrl(maps[name]);
-      if (url == null) continue;
-      assets.add(
-        TextureAsset(
-          folder: 'maps',
-          name: '$name.png',
-          url: url,
-          label: '${name[0].toUpperCase()}${name.substring(1)} map',
-        ),
+      addUrl(
+        'maps',
+        '$name.png',
+        maps[name],
+        '${name[0].toUpperCase()}${name.substring(1)} map',
       );
     }
 
-    // Atlases (painted colour + relief), if present.
-    void addAtlas(String key, String file, String label) {
-      final url = _artifactUrl(success[key]);
-      if (url != null) {
-        assets.add(
-          TextureAsset(folder: 'atlases', name: file, url: url, label: label),
-        );
+    // Per-tile deliverables: one generated albedo (and relief, when the relief
+    // pass ran) image per painted cell, keyed by cell id.
+    void addTiles(String key, String folder, String labelPrefix) {
+      final tiles = _asStringMap(success[key]) ?? const {};
+      for (final cell in tiles.keys.toList()..sort()) {
+        addUrl(folder, '${_fileSafe(cell)}.png', tiles[cell], '$labelPrefix · $cell');
       }
     }
 
-    addAtlas('painted_atlas_artifact', 'painted_atlas.png', 'Painted atlas');
-    addAtlas('relief_atlas_artifact', 'relief_atlas.png', 'Relief atlas');
+    addTiles('tile_artifacts', 'tiles/albedo', 'Tile');
+    addTiles('relief_tile_artifacts', 'tiles/relief', 'Relief');
 
-    // Material spec (glTF material definitions).
-    final materialsUrl = _artifactUrl(success['materials_artifact']);
-    if (materialsUrl != null) {
+    addUrl(
+      'atlases',
+      'painted_atlas.png',
+      success['painted_atlas_artifact'],
+      'Painted atlas',
+    );
+    addUrl(
+      'atlases',
+      'relief_atlas.png',
+      success['relief_atlas_artifact'],
+      'Relief atlas',
+    );
+
+    // UV layout: where each part lives on the atlas, plus the full wireframe
+    // (island outlines + internal mesh edges) — the retexture/paint-over map.
+    addUrl('uv', 'layout.png', success['layout_png_artifact'], 'UV layout');
+    addUrl(
+      'uv',
+      'layout_labeled.png',
+      success['layout_labeled_png_artifact'],
+      'UV layout (labeled)',
+    );
+    addUrl(
+      'uv',
+      'layout.svg',
+      success['layout_svg_artifact'],
+      'UV layout (SVG)',
+    );
+    addUrl(
+      'uv',
+      'uv_wireframe.png',
+      success['uv_wireframe_artifact'],
+      'UV wireframe',
+    );
+
+    final settings = _settingsJson(success);
+    if (settings != null) {
       assets.add(
         TextureAsset(
           folder: '',
-          name: 'materials.json',
-          url: materialsUrl,
-          label: 'Material spec',
+          name: 'settings.json',
+          content: settings,
+          label: 'Pipeline settings',
         ),
       );
     }
 
     return assets;
+  }
+
+  /// The pipeline settings that shaped these assets, straight from the run's
+  /// own diagnostics (seam bake repeat/margin, PBR derive sizes and modes,
+  /// batch layout) — what an artist needs to reproduce or match the bake.
+  static String? _settingsJson(Map<String, dynamic> success) {
+    final settings = <String, dynamic>{
+      if (success['seam_diagnostics'] is Map)
+        'seam_bake': success['seam_diagnostics'],
+      if (success['pbr_diagnostics'] is Map)
+        'pbr_derive': success['pbr_diagnostics'],
+      if (success['assemble_diagnostics'] is Map)
+        'paint_batches': success['assemble_diagnostics'],
+      if (success['batch_count'] != null)
+        'paint_batch_count': success['batch_count'],
+    };
+    if (settings.isEmpty) return null;
+    return const JsonEncoder.withIndent('  ').convert(settings);
+  }
+
+  static String _fileSafe(String name) {
+    final safe = name.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
+    return safe.isEmpty ? 'tile' : safe;
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

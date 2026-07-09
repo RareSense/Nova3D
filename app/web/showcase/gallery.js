@@ -60,17 +60,29 @@ function makeCamera() {
   return cam;
 }
 
-function fitModel(root, camera) {
-  const box = new THREE.Box3().setFromObject(root);
+// Centre the model at the origin, normalise its size, and wrap it in a pivot.
+// The pivot is what we scale and rotate, so rotation orbits the true geometric
+// centre. Rotating the model node directly (with an unscaled position offset on
+// the same node) left off-centre models — e.g. "The Impossible Machine", whose
+// bounding box sits ~16 units above origin — scaled out of frame → blank tile.
+// Returns the pivot to add to the scene and spin.
+function fitModel(gltfScene, camera) {
+  gltfScene.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(gltfScene);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  root.position.sub(center);
-  root.scale.setScalar(1.6 / maxDim);
+
+  gltfScene.position.sub(center);       // geometry centred on the pivot's origin
+  const pivot = new THREE.Group();
+  pivot.add(gltfScene);
+  pivot.scale.setScalar(1.6 / maxDim);  // same on-screen size for every model
+
   const dist = 1.6 / (2 * Math.tan((camera.fov * Math.PI) / 180 / 2));
   camera.position.set(0, 0.15, dist * 1.5);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
+  return pivot;
 }
 
 function disposeObject(obj) {
@@ -93,8 +105,7 @@ function loadCardModel(card) {
     (gltf) => {
       card.loading = false;
       if (card.disposed) { disposeObject(gltf.scene); return; }
-      card.model = gltf.scene;
-      fitModel(card.model, card.camera);
+      card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
       colorizeIfUncolored(card.model); // untextured/colourless → colour-coded
       card.scene.add(card.model);
       card.loaded = true;
