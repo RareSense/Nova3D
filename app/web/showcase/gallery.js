@@ -145,6 +145,19 @@ function createCard(entry) {
   if (entry.prompt) promptEl.textContent = entry.prompt; else promptEl.remove();
 
   const stage = el.querySelector('.stage');
+
+  // Reference-image input(s), if any: a picture-in-picture chip in the corner.
+  const refs = (entry.reference_images || []).filter(Boolean);
+  if (refs.length) {
+    const chip = document.createElement('div');
+    chip.className = 'ref-chip';
+    chip.title = refs.length > 1 ? `${refs.length} reference images` : 'Reference image';
+    chip.innerHTML =
+      `<img src="${encodeURI(refs[0])}" alt="input" loading="lazy" decoding="async"` +
+      ` onerror="this.closest('.ref-chip').remove()">` +
+      (refs.length > 1 ? `<span class="ref-count">+${refs.length - 1}</span>` : '');
+    stage.appendChild(chip);
+  }
   const card = {
     entry, el, stage, spin: el.querySelector('.spin'),
     scene: buildScene(), camera: makeCamera(), model: null,
