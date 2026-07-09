@@ -29,10 +29,40 @@ function eachMaterial(material, fn) {
   });
 }
 
+// Wireframe is drawn as a line overlay on top of the shaded mesh (not via
+// material.wireframe, which replaces the surface with wires in the object's
+// own color and leaves transparent materials looking opaque). The shaded
+// surface stays visible and topology lines render above it in a neutral color.
+const wireframeLineMat = new THREE.LineBasicMaterial({
+  color: 0x111111, transparent: true, opacity: 0.85
+});
+
+function setWireframeOverlay(entry, enabled) {
+  if (enabled) {
+    if (entry.wireframeOverlay) return;
+    const lines = new THREE.LineSegments(
+      new THREE.WireframeGeometry(entry.mesh.geometry), wireframeLineMat
+    );
+    lines.raycast = () => {};          // never intercept picking
+    lines.renderOrder = 1;
+    lines.userData.isWireframeOverlay = true;
+    entry.mesh.add(lines);
+    entry.wireframeOverlay = lines;
+  } else if (entry.wireframeOverlay) {
+    entry.mesh.remove(entry.wireframeOverlay);
+    entry.wireframeOverlay.geometry.dispose();
+    entry.wireframeOverlay = null;
+  }
+}
+
 function syncDisplayFlags(material) {
   eachMaterial(material, mat => {
-    mat.wireframe = state.displayState.wireframe;
+    mat.wireframe = false;   // legacy snapshots may carry wireframe:true
     mat.flatShading = state.displayState.flatShading;
+    // Push the shaded surface back slightly so overlay lines never z-fight it.
+    mat.polygonOffset = state.displayState.wireframe;
+    mat.polygonOffsetFactor = 1;
+    mat.polygonOffsetUnits = 1;
     mat.needsUpdate = true;
   });
 }
@@ -49,6 +79,7 @@ export function applyMaterialDisplayMode() {
     const material = materialForDisplay(entry);
     entry.originalMaterial = material;
     syncDisplayFlags(material);
+    setWireframeOverlay(entry, state.displayState.wireframe);
     if (!state.selectedMeshIndices.has(idx) && entry.mesh.material !== highlightMat) {
       entry.mesh.material = material;
     }
