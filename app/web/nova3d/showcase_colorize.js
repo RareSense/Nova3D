@@ -1,13 +1,32 @@
 import * as THREE from 'three';
 
-// Color-code a model that ships NO colour at all — no textures, no COLOR_0
-// vertex colours, and only the glTF default (white / fully-metallic) material.
-// Such a model would otherwise render as a grey metallic blob; giving each part
-// a distinct colour makes an untextured generation read as a clean, structured
-// model. Any model that already carries colour (textures, vertex colours, or a
-// tinted material) is left completely untouched.
+// Color-code a model that ships no REAL colour — no textures, no tinted
+// materials, and no chromatic vertex colours. Such a model would otherwise
+// render as a grey blob; giving each part a distinct colour makes an
+// untextured generation read as a clean, structured model.
+//
+// An ACHROMATIC COLOR_0 attribute (r≈g≈b on every vertex) does NOT count as
+// colour: the pipeline bakes ambient-occlusion into vertex colours, which is
+// pure shading. Those meshes still get per-part colours; when the AO layer is
+// present it multiplies into the tint (colour + baked depth), and meshes with
+// no colour attribute at all get the plain flat tint.
+// Any model that carries real colour is left completely untouched.
 //
 // Returns true if it recoloured, false if the model was left as-is.
+
+function attributeIsChromatic(attr) {
+  const count = attr.count;
+  const stride = Math.max(1, Math.floor(count / 200));
+  const denorm = attr.normalized && attr.array && attr.array.BYTES_PER_ELEMENT === 1 ? 255 : 1;
+  for (let i = 0; i < count; i += stride) {
+    let r = attr.getX(i), g = attr.getY(i), b = attr.getZ(i);
+    if (denorm !== 1 && (r > 1 || g > 1 || b > 1)) { r /= denorm; g /= denorm; b /= denorm; }
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx - mn > 0.04) return true;   // real hue, not grayscale shading
+  }
+  return false;
+}
+
 export function colorizeIfUncolored(root) {
   if (!root) return false;
   const meshes = [];
@@ -17,10 +36,10 @@ export function colorizeIfUncolored(root) {
     if (!n.isMesh) return;
     meshes.push(n);
     const attrs = n.geometry && n.geometry.attributes;
-    if (attrs && attrs.color) hasColour = true;
+    if (attrs && attrs.color && attributeIsChromatic(attrs.color)) hasColour = true;
     for (const m of Array.isArray(n.material) ? n.material : [n.material]) {
       if (!m) continue;
-      if (m.map || m.emissiveMap || m.vertexColors) hasColour = true;
+      if (m.map || m.emissiveMap) hasColour = true;
       const c = m.color;
       // A non-near-white base colour means the author tinted this part.
       if (c && !(c.r > 0.92 && c.g > 0.92 && c.b > 0.92)) hasColour = true;
@@ -30,9 +49,18 @@ export function colorizeIfUncolored(root) {
   if (hasColour || !meshes.length) return false;
 
   // Distinct hues via the golden-ratio increment so neighbours never collide.
+  // vertexColors only when the mesh actually carries the (achromatic AO)
+  // attribute — it multiplies the baked shading into the tint. Meshes without
+  // it get the plain flat tint.
   meshes.forEach((mesh, i) => {
     const color = new THREE.Color().setHSL((i * 0.61803398875) % 1, 0.55, 0.62);
-    mesh.material = new THREE.MeshStandardMaterial({ color, metalness: 0.0, roughness: 0.65 });
+    const attrs = mesh.geometry && mesh.geometry.attributes;
+    mesh.material = new THREE.MeshStandardMaterial({
+      color,
+      metalness: 0.0,
+      roughness: 0.65,
+      vertexColors: !!(attrs && attrs.color),
+    });
   });
   return true;
 }
