@@ -237,16 +237,23 @@ const detailEl = document.getElementById('detail');
 const detailEditor = document.getElementById('detailEditor');
 const detailCode = document.getElementById('detailCode');
 const detailInputs = document.getElementById('detailInputs');
+const detailPbr = document.getElementById('detailPbr');
+const tabPbr = document.getElementById('tabPbr');
+
+// Preferred PBR map order (chat-preview parity); unknown names sort after.
+const MAP_ORDER = ['albedo', 'normal', 'roughness', 'metallic', 'ao', 'height'];
 const dlGlb = document.getElementById('dlGlb');
 const dlCode = document.getElementById('dlCode');
+const dlZip = document.getElementById('dlZip');
 const txBtn = document.getElementById('txBtn');
 let currentEntry = null;
 
 // The Texture action needs the Nova3D app as a host to receive the request and
 // open the texturing conversation. A standalone/public gallery has no parent
-// window, so the button only appears when embedded in an iframe.
+// window, so the button only appears when embedded in an iframe. It is also
+// hidden on texture entries — their glb is already textured, so re-texturing it
+// would condition the pipeline on the wrong (painted) renders.
 const EMBEDDED = !!(window.parent && window.parent !== window);
-if (EMBEDDED) txBtn.style.display = '';
 
 // Texturing is fetched server-side, so both artifacts must be absolute http(s)
 // URLs (relative dev URLs cannot be resolved by the backend).
@@ -263,7 +270,48 @@ function openDetail(entry) {
   setDetailTab('model');
   dlGlb.disabled = !entry.glb_url;
   dlCode.disabled = !entry.code_url;
+  dlZip.style.display = entry.maps_zip_url ? '' : 'none';
+  const texEntry = entry.kind === 'texture';
+  txBtn.style.display = EMBEDDED && !texEntry ? '' : 'none';
   if (EMBEDDED) txBtn.disabled = !canTexture(entry);
+
+  // PBR tab: the full artist deliverable set, grouped by folder in the same
+  // order as the app's chat preview. Entries published before the assets list
+  // existed fall back to their flat maps dict.
+  let assets = Array.isArray(entry.assets) ? entry.assets.filter((a) => a && a.url) : [];
+  if (!assets.length && entry.maps && typeof entry.maps === 'object') {
+    assets = Object.keys(entry.maps)
+      .sort((a, b) => {
+        const ia = MAP_ORDER.indexOf(a), ib = MAP_ORDER.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+      })
+      .map((n) => ({folder: 'maps', name: `${n}.png`, url: entry.maps[n],
+                    label: `${n[0].toUpperCase()}${n.slice(1)} map`}));
+  }
+  tabPbr.style.display = assets.length ? '' : 'none';
+  detailPbr.innerHTML = '';
+  if (assets.length) {
+    const SECTIONS = [
+      ['maps', 'PBR MAPS'], ['tiles/albedo', 'TILES · ALBEDO'],
+      ['tiles/relief', 'TILES · RELIEF'], ['atlases', 'ATLASES'],
+      ['uv', 'UV LAYOUTS'], ['', 'PIPELINE'],
+    ];
+    const known = new Set(SECTIONS.map(([f]) => f));
+    for (const a of assets) if (!known.has(a.folder || '')) SECTIONS.push([a.folder, a.folder.toUpperCase()]);
+    for (const [folder, heading] of SECTIONS) {
+      const group = assets.filter((a) => (a.folder || '') === folder);
+      if (!group.length) continue;
+      const cards = group.map((a) => {
+        const label = escapeHtml(a.label || a.name);
+        const isImage = /\.(png|jpe?g|webp|svg)$/i.test(a.name || '');
+        const inner = isImage
+          ? `<img src="${encodeURI(a.url)}" alt="${label}" loading="lazy" decoding="async">`
+          : `<a class="file" href="${encodeURI(a.url)}" target="_blank" rel="noopener">{ } ${escapeHtml(a.name)}</a>`;
+        return `<figure>${inner}<figcaption>${label}</figcaption></figure>`;
+      }).join('');
+      detailPbr.insertAdjacentHTML('beforeend', `<h3>${heading}</h3><div class="maps">${cards}</div>`);
+    }
+  }
 
   // MODEL → the real editor in showcase mode (AI-edit tools hidden), this glb.
   detailEditor.src = entry.glb_url
@@ -276,6 +324,9 @@ function openDetail(entry) {
   const add = (label, html) => detailInputs.insertAdjacentHTML('beforeend', `<h3>${label}</h3>${html}`);
   add('Model', `<p>${escapeHtml(entry.model || 'Nova3D')}</p>`);
   if (entry.prompt) add('Prompt', `<p>${escapeHtml(entry.prompt)}</p>`);
+  if (entry.kind === 'texture' && entry.workflow_id) {
+    add('Texture run', `<p>${escapeHtml(entry.workflow_id)}</p>`);
+  }
   const refs = (entry.reference_images || []).filter(Boolean);
   if (refs.length) add('Reference images',
     `<div class="refs">${refs.map((u) => `<img src="${encodeURI(u)}" alt="reference">`).join('')}</div>`);
@@ -302,6 +353,7 @@ function setDetailTab(tab) {
   detailEditor.style.display = tab === 'model' ? 'block' : 'none';
   detailCode.style.display = tab === 'code' ? 'block' : 'none';
   detailInputs.style.display = tab === 'inputs' ? 'block' : 'none';
+  detailPbr.style.display = tab === 'pbr' ? 'block' : 'none';
 }
 
 document.getElementById('detailClose').addEventListener('click', closeDetail);
@@ -329,6 +381,11 @@ dlGlb.addEventListener('click', () => {
 });
 dlCode.addEventListener('click', () => {
   if (currentEntry?.code_url) downloadUrl(currentEntry.code_url, safeName(currentEntry.title, 'py'));
+});
+dlZip.addEventListener('click', () => {
+  if (currentEntry?.maps_zip_url) {
+    downloadUrl(currentEntry.maps_zip_url, safeName(currentEntry.title + '_maps', 'zip'));
+  }
 });
 
 // ── Texture (embedded only): hand the model to the Nova3D app ─────────────────
@@ -370,31 +427,52 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ── Boot ─────────────────────────────────────────────────────────────────────
+// ── Boot + catalog tabs (generations | textures) ─────────────────────────────
+// Generations read the ?manifest= URL as before; textures read the sibling
+// `textures.json` blob in the same container, derived from that URL. Each tab
+// keeps its fetched entries cached; switching disposes the mounted cards and
+// mounts the other list into the same shared-renderer grid.
 function manifestUrl() {
   const p = new URLSearchParams(location.search).get('manifest');
   return p && p.trim() ? p.trim() : null;
 }
 
-async function boot() {
+function texturesManifestUrl() {
   const url = manifestUrl();
-  if (!url) { statusEl.textContent = 'No showcase configured.'; return; }
-  let data;
-  try {
-    const resp = await fetch(url, { cache: 'no-store' });
-    if (!resp.ok) throw new Error(String(resp.status));
-    data = await resp.json();
-  } catch (_) {
-    statusEl.textContent = 'Could not load the showcase.';
+  if (!url) return null;
+  if (/showcase\.json/.test(url)) return url.replace(/showcase\.json/, 'textures.json');
+  return url.replace(/\/[^/?#]*(\?.*)?$/, '/textures.json$1');
+}
+
+let io = null;
+let renderLoopStarted = false;
+const catalogs = { generations: null, textures: null }; // fetched entry caches
+let activeCat = 'generations';
+
+function disposeCards() {
+  if (io) { io.disconnect(); io = null; }
+  for (const card of cards) {
+    card.disposed = true;
+    if (card.model) { card.scene.remove(card.model); disposeObject(card.model); card.model = null; }
+    card.el.remove();
+  }
+  cards.length = 0;
+}
+
+function mountEntries(entries, noun) {
+  disposeCards();
+  if (!entries.length) {
+    statusEl.style.display = '';
+    statusEl.textContent = noun === 'texture'
+      ? 'No textures published yet.'
+      : 'The showcase is empty.';
+    countEl.textContent = '';
     return;
   }
-  const entries = Array.isArray(data?.entries) ? data.entries : [];
-  if (!entries.length) { statusEl.textContent = 'The showcase is empty.'; return; }
-
   statusEl.style.display = 'none';
-  countEl.textContent = `${entries.length} model${entries.length === 1 ? '' : 's'}`;
+  countEl.textContent = `${entries.length} ${noun}${entries.length === 1 ? '' : 's'}`;
 
-  const io = new IntersectionObserver((batches) => {
+  io = new IntersectionObserver((batches) => {
     for (const b of batches) {
       const card = b.target._card;
       if (!card) continue;
@@ -412,7 +490,48 @@ async function boot() {
     io.observe(card.el);
   }
 
-  requestAnimationFrame(renderLoop);
+  if (!renderLoopStarted) {
+    renderLoopStarted = true;
+    requestAnimationFrame(renderLoop);
+  }
 }
 
-boot();
+async function fetchEntries(url) {
+  const resp = await fetch(url, { cache: 'no-store' });
+  if (!resp.ok) throw new Error(String(resp.status));
+  const data = await resp.json();
+  return Array.isArray(data?.entries) ? data.entries : [];
+}
+
+async function showCatalog(cat) {
+  activeCat = cat;
+  document.querySelectorAll('.cat-tab').forEach((t) =>
+    t.classList.toggle('active', t.dataset.cat === cat));
+  const noun = cat === 'textures' ? 'texture' : 'model';
+
+  if (catalogs[cat]) { mountEntries(catalogs[cat], noun); return; }
+
+  disposeCards();
+  countEl.textContent = '';
+  statusEl.style.display = '';
+  statusEl.textContent = 'Loading showcase…';
+
+  const url = cat === 'textures' ? texturesManifestUrl() : manifestUrl();
+  if (!url) { statusEl.textContent = 'No showcase configured.'; return; }
+  let entries;
+  try {
+    entries = await fetchEntries(url);
+  } catch (_) {
+    // A missing textures.json just means nothing is published yet.
+    entries = cat === 'textures' ? [] : null;
+    if (entries === null) { statusEl.textContent = 'Could not load the showcase.'; return; }
+  }
+  if (cat === 'textures') for (const e of entries) e.kind = e.kind || 'texture';
+  catalogs[cat] = entries;
+  if (activeCat === cat) mountEntries(entries, noun);
+}
+
+document.querySelectorAll('.cat-tab').forEach((t) =>
+  t.addEventListener('click', () => { if (t.dataset.cat !== activeCat) showCatalog(t.dataset.cat); }));
+
+showCatalog('generations');

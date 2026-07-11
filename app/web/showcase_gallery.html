@@ -54,7 +54,11 @@
     padding:12px 18px; background:rgba(255,251,244,.92); backdrop-filter:blur(6px);
     border-bottom:1.5px solid var(--line); }
   .header h1 { font-size:14px; margin:0; letter-spacing:.5px; }
-  .header .count { font-size:11px; color:var(--muted); }
+  .header .count { font-size:11px; color:var(--muted); margin-left:auto; }
+  /* Catalog tabs: generations vs published textures. Same look as detail tabs. */
+  .cat-tab { font-size:11px; padding:6px 12px; border-radius:8px; border:1.5px solid transparent;
+    cursor:pointer; letter-spacing:.4px; user-select:none; }
+  .cat-tab.active { border-color:var(--ink); background:#fff; box-shadow:2px 2px 0 var(--ink); }
   .empty, .loading { text-align:center; color:var(--muted); padding:60px 20px; font-size:13px; }
 
   /* Fullscreen detail overlay */
@@ -82,6 +86,22 @@
     font-family:'JetBrains Mono', ui-monospace, monospace; font-size:12px; line-height:1.5;
     background:#1e1b2e; color:#e6e1f5; white-space:pre; display:none; }
   #detailInputs { position:absolute; inset:0; overflow:auto; padding:20px; display:none; }
+  /* PBR maps pane: labeled preview cards, chat-preview style. */
+  #detailPbr { position:absolute; inset:0; overflow:auto; padding:20px; display:none; }
+  #detailPbr .maps { display:flex; gap:14px; flex-wrap:wrap; }
+  #detailPbr figure { margin:0; width:200px; }
+  #detailPbr img { width:200px; height:200px; object-fit:cover; display:block; background:
+    repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+    border:1.5px solid var(--ink); border-radius:10px; box-shadow:2px 2px 0 var(--ink); }
+  #detailPbr figcaption { font-size:10px; letter-spacing:.5px; color:var(--soft);
+    text-transform:uppercase; margin-top:6px; text-align:center; }
+  #detailPbr h3 { font-size:11px; letter-spacing:.6px; color:var(--soft); margin:18px 0 10px;
+    text-transform:uppercase; }
+  #detailPbr h3:first-child { margin-top:0; }
+  #detailPbr .file { display:flex; align-items:center; justify-content:center; width:200px; height:200px;
+    border:1.5px solid var(--ink); border-radius:10px; box-shadow:2px 2px 0 var(--ink);
+    background:#fff; color:var(--ink); font-size:12px; text-decoration:none;
+    font-family:ui-monospace, monospace; }
   #detailInputs h3 { font-size:11px; letter-spacing:.6px; color:var(--soft); margin:0 0 6px; text-transform:uppercase; }
   #detailInputs p { margin:0 0 16px; font-size:14px; line-height:1.5; }
   #detailInputs .refs { display:flex; gap:10px; flex-wrap:wrap; }
@@ -91,7 +111,12 @@
 </head>
 <body>
 <div id="scroll">
-  <div class="header"><h1>✦ NOVA3D SHOWCASE</h1><span class="count" id="count"></span></div>
+  <div class="header">
+    <h1>✦ NOVA3D SHOWCASE</h1>
+    <div class="cat-tab active" data-cat="generations">◆ GENERATIONS</div>
+    <div class="cat-tab" data-cat="textures">✨ TEXTURES</div>
+    <span class="count" id="count"></span>
+  </div>
   <div id="grid"></div>
   <div class="loading" id="status">Loading showcase…</div>
 </div>
@@ -103,10 +128,12 @@
       <div class="tab active" data-tab="model">◆ MODEL</div>
       <div class="tab" data-tab="code">&lt;/&gt; CODE</div>
       <div class="tab" data-tab="inputs">✎ INPUTS</div>
+      <div class="tab" data-tab="pbr" id="tabPbr" style="display:none">◇ PBR</div>
       <div class="head-right">
         <button class="dl-btn tx-btn" id="txBtn" title="Texture this model" style="display:none">✨ Texture</button>
         <button class="dl-btn" id="dlGlb" title="Download GLB">⬇ GLB</button>
         <button class="dl-btn" id="dlCode" title="Download code">⬇ .py</button>
+        <button class="dl-btn" id="dlZip" title="Download PBR maps (zip)" style="display:none">⬇ Maps</button>
         <button class="detail-close" id="detailClose" title="Close">✕</button>
       </div>
     </div>
@@ -114,6 +141,7 @@
       <iframe id="detailEditor" title="Model editor" allow="fullscreen"></iframe>
       <pre id="detailCode">Loading code…</pre>
       <div id="detailInputs"></div>
+      <div id="detailPbr"></div>
     </div>
   </div>
 </div>
