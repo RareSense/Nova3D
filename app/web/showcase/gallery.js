@@ -204,7 +204,12 @@ function createCard(entry) {
 
 // ── Render loop (scissor per visible tile) ───────────────────────────────────
 let last = performance.now();
+// Paused while the host app shows a modal over us (texturing hand-off): the tiles
+// are hidden behind it anyway, and a live WebGL loop on the shared browser thread
+// makes the host's text input janky. We keep the RAF alive so it resumes cleanly.
+let renderPaused = false;
 function renderLoop(now) {
+  if (renderPaused) { last = now; requestAnimationFrame(renderLoop); return; }
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
@@ -234,7 +239,23 @@ const detailCode = document.getElementById('detailCode');
 const detailInputs = document.getElementById('detailInputs');
 const dlGlb = document.getElementById('dlGlb');
 const dlCode = document.getElementById('dlCode');
+const txBtn = document.getElementById('txBtn');
 let currentEntry = null;
+
+// The Texture action needs the Nova3D app as a host to receive the request and
+// open the texturing conversation. A standalone/public gallery has no parent
+// window, so the button only appears when embedded in an iframe.
+const EMBEDDED = !!(window.parent && window.parent !== window);
+if (EMBEDDED) txBtn.style.display = '';
+
+// Texturing is fetched server-side, so both artifacts must be absolute http(s)
+// URLs (relative dev URLs cannot be resolved by the backend).
+function isAbsoluteHttp(u) {
+  return typeof u === 'string' && (u.startsWith('https://') || u.startsWith('http://'));
+}
+function canTexture(entry) {
+  return EMBEDDED && !!entry && isAbsoluteHttp(entry.glb_url) && isAbsoluteHttp(entry.code_url);
+}
 
 function openDetail(entry) {
   currentEntry = entry;
@@ -242,6 +263,7 @@ function openDetail(entry) {
   setDetailTab('model');
   dlGlb.disabled = !entry.glb_url;
   dlCode.disabled = !entry.code_url;
+  if (EMBEDDED) txBtn.disabled = !canTexture(entry);
 
   // MODEL → the real editor in showcase mode (AI-edit tools hidden), this glb.
   detailEditor.src = entry.glb_url
@@ -272,6 +294,7 @@ function openDetail(entry) {
 function closeDetail() {
   detailEl.classList.remove('open');
   detailEditor.src = 'about:blank'; // free the editor + its WebGL context
+  renderPaused = false; // in case a texture hand-off paused us
 }
 
 function setDetailTab(tab) {
@@ -306,6 +329,40 @@ dlGlb.addEventListener('click', () => {
 });
 dlCode.addEventListener('click', () => {
   if (currentEntry?.code_url) downloadUrl(currentEntry.code_url, safeName(currentEntry.title, 'py'));
+});
+
+// ── Texture (embedded only): hand the model to the Nova3D app ─────────────────
+// Posts the model's public URLs to the host app, which gates sign-in and opens
+// a new texturing conversation. We send only public URLs + a title; the host
+// validates before acting.
+let txPosting = false;
+txBtn.addEventListener('click', () => {
+  if (txPosting || txBtn.disabled || !canTexture(currentEntry)) return;
+  txPosting = true;
+  txBtn.disabled = true;
+  // Free the shared browser thread + keyboard focus for the host's dialog: pause
+  // our render loop and hand focus back to the parent window. Focus staying in
+  // this iframe leaves the dialog's inputs untypeable; a live render loop makes
+  // typing janky.
+  renderPaused = true;
+  txBtn.blur();
+  try { window.parent.focus(); } catch (_) { /* cross-origin: host also blurs */ }
+  window.parent.postMessage({
+    type: 'nova3d-showcase-texture',
+    entry: {
+      id: currentEntry.id || '',
+      title: currentEntry.title || 'Showcase model',
+      glb_url: currentEntry.glb_url || '',
+      code_url: currentEntry.code_url || '',
+    },
+  }, '*');
+  // The host normally navigates away (unmounting this gallery). If it doesn't
+  // (e.g. the user cancels the texture dialog), re-enable + resume rendering.
+  setTimeout(() => {
+    txPosting = false;
+    renderPaused = false;
+    if (currentEntry) txBtn.disabled = !canTexture(currentEntry);
+  }, 2500);
 });
 
 function escapeHtml(s) {

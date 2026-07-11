@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:js_interop';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:web/web.dart' as web;
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/showcase/presentation/showcase_gallery_view.dart';
+import 'package:nova3d_frontend/features/showcase/presentation/showcase_texture_controller.dart';
+import 'package:nova3d_frontend/features/showcase/state/showcase_texture_intent.dart';
 
 /// Public, no-login gallery of hand-picked models. Read-only: it embeds the
 /// standalone Three.js gallery pointed at the public manifest URL. Curation
@@ -22,6 +28,7 @@ class ShowcasePage extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
+            const _ShowcaseTextureBridge(),
             _Header(signedIn: signedIn),
             Expanded(
               child: kShowcaseManifestUrl.trim().isEmpty
@@ -106,4 +113,116 @@ class _Empty extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Invisible listener that receives the showcase iframe's `postMessage` when a
+/// visitor presses "Texture" on a model, and turns it into either an immediate
+/// texture flow (signed in) or a stash-then-sign-in (signed out). Mounted only
+/// while the showcase is on screen — exactly when such a message can arrive —
+/// and torn down (subscription cancelled) as soon as the flow navigates away.
+class _ShowcaseTextureBridge extends ConsumerStatefulWidget {
+  const _ShowcaseTextureBridge();
+
+  @override
+  ConsumerState<_ShowcaseTextureBridge> createState() =>
+      _ShowcaseTextureBridgeState();
+}
+
+class _ShowcaseTextureBridgeState
+    extends ConsumerState<_ShowcaseTextureBridge> {
+  StreamSubscription<web.MessageEvent>? _sub;
+  bool _handling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sub = web.window.onMessage.listen(_onMessage);
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _onMessage(web.MessageEvent event) {
+    final data = event.data?.dartify();
+    if (data is! Map) return;
+    if (data['type'] != 'nova3d-showcase-texture') return;
+    final entry = data['entry'];
+    if (entry is! Map) return;
+
+    final glbUrl = (entry['glb_url'] ?? '').toString().trim();
+    final codeUrl = (entry['code_url'] ?? '').toString().trim();
+    // Texturing fetches both server-side, so only absolute http(s) URLs work
+    // (the prod showcase serves absolute blob URLs; relative dev URLs cannot be
+    // resolved by the backend). Silently ignore anything else.
+    if (!_isAbsoluteHttp(glbUrl) || !_isAbsoluteHttp(codeUrl)) return;
+
+    _handleIntent(
+      ShowcaseTextureIntent(
+        id: (entry['id'] ?? '').toString(),
+        title: _cleanTitle((entry['title'] ?? '').toString()),
+        glbUrl: glbUrl,
+        codeUrl: codeUrl,
+      ),
+    );
+  }
+
+  Future<void> _handleIntent(ShowcaseTextureIntent intent) async {
+    if (_handling || !mounted) return;
+    // The Texture button lives INSIDE the showcase iframe, so the browser's
+    // keyboard focus is trapped there. Return it to the host document before we
+    // open anything, or the texture dialog (signed in) or the sign-in form
+    // (signed out) can be clicked but not typed into on web.
+    _returnFocusToHost();
+    final signedIn = ref.read(authProvider).valueOrNull != null;
+    if (!signedIn) {
+      // Remember the request across the sign-in round trip, then gate.
+      ref.read(pendingShowcaseTextureProvider.notifier).set(intent);
+      context.go('/signin');
+      return;
+    }
+    _handling = true;
+    try {
+      await launchShowcaseTexture(ref, context, intent);
+    } finally {
+      if (mounted) _handling = false;
+    }
+  }
+
+  // Moves keyboard focus out of the (currently focused) showcase iframe back to
+  // the host window, so Flutter text fields opened on top can receive input.
+  void _returnFocusToHost() {
+    final active = web.document.activeElement;
+    if (active != null && active.isA<web.HTMLElement>()) {
+      (active as web.HTMLElement).blur();
+    }
+    web.window.focus();
+    // Blurring alone parks DOM focus on <body>, which is OUTSIDE the Flutter
+    // view. The engine's anti-focus-stealing guard then refuses to move DOM
+    // focus into its hidden text input, so dialog text fields show a caret but
+    // ignore every keystroke. Hand DOM focus to the Flutter view host element
+    // so the engine owns the focus again before the dialog opens.
+    final host =
+        web.document.querySelector('flutter-view') ??
+        web.document.querySelector('flt-glass-pane');
+    if (host != null && host.isA<web.HTMLElement>()) {
+      final el = host as web.HTMLElement;
+      if (el.getAttribute('tabindex') == null) el.tabIndex = -1;
+      el.focus();
+    }
+  }
+
+  static bool _isAbsoluteHttp(String url) =>
+      url.startsWith('https://') || url.startsWith('http://');
+
+  static String _cleanTitle(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 'Showcase model';
+    return trimmed.length > 80 ? trimmed.substring(0, 80) : trimmed;
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

@@ -1,27 +1,37 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_image.dart';
 import 'package:nova3d_frontend/features/cad/models/texture_request.dart';
+import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/cad/utils/reference_image_processor.dart';
+import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
 
 /// Collects inputs for a `texture_3d_v2` run: an optional prompt and/or
 /// reference image, a target resolution, and the Gemini key the pipeline uses.
 ///
+/// The key is optional: without one the run is hosted and charged in Nova3D
+/// credits, so the dialog shows the credit price (from `/credits/estimate`)
+/// against the user's balance and blocks submission when it can't be covered.
+/// With a key the run is BYOK and free of credits.
+///
 /// Returns a [TextureRequest] via `Navigator.pop`, or `null` if cancelled.
 /// The source geometry is supplied by the caller (the original generation
 /// message), not by this dialog.
-class MagicTextureDialog extends StatefulWidget {
+class MagicTextureDialog extends ConsumerStatefulWidget {
   const MagicTextureDialog({super.key, this.initialGeminiKey = ''});
 
   /// Pre-filled from the user's saved Gemini key, if any.
   final String initialGeminiKey;
 
   @override
-  State<MagicTextureDialog> createState() => _MagicTextureDialogState();
+  ConsumerState<MagicTextureDialog> createState() =>
+      _MagicTextureDialogState();
 }
 
-class _MagicTextureDialogState extends State<MagicTextureDialog> {
+class _MagicTextureDialogState extends ConsumerState<MagicTextureDialog> {
   final _promptCtrl = TextEditingController();
   late final TextEditingController _keyCtrl;
   TextureResolution _resolution = TextureResolution.k2;
@@ -30,10 +40,31 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
   bool _picking = false;
   String? _error;
 
+  /// Hosted (keyless) credit price from `/credits/estimate`; null while
+  /// loading or if the estimate failed (the chat provider re-checks
+  /// authoritatively at launch, so this stays a UX hint, never the only gate).
+  int? _hostedCreditCost;
+
   @override
   void initState() {
     super.initState();
     _keyCtrl = TextEditingController(text: widget.initialGeminiKey);
+    // The cost hint depends on whether the key field is blank.
+    _keyCtrl.addListener(() => setState(() {}));
+    Future.microtask(() async {
+      // Fresh balance for the hint + gate.
+      await ref.read(billingProvider.notifier).refreshWallet();
+      try {
+        final estimate = await ref
+            .read(cadServiceProvider)
+            .estimateTextureCredits();
+        if (mounted) {
+          setState(() => _hostedCreditCost = estimate.authorizedBudget);
+        }
+      } on CadException {
+        // Leave the hint generic; the launch-time preflight still gates.
+      }
+    });
   }
 
   @override
@@ -70,15 +101,30 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
     }
   }
 
+  /// Available credits, when the wallet has loaded.
+  int? get _available => ref.read(billingProvider).wallet?.available;
+
+  /// True when a keyless run is priced and the balance is known to fall short.
+  bool get _insufficientForHosted {
+    final cost = _hostedCreditCost;
+    final available = _available;
+    return cost != null && available != null && available < cost;
+  }
+
   void _submit() {
     final prompt = _promptCtrl.text.trim();
     final key = _keyCtrl.text.trim();
-    if (key.isEmpty) {
-      setState(() => _error = 'A Gemini API key is required to texture.');
-      return;
-    }
     if (prompt.isEmpty && _image == null) {
       setState(() => _error = 'Add a prompt, a reference image, or both.');
+      return;
+    }
+    if (key.isEmpty && _insufficientForHosted) {
+      setState(
+        () => _error =
+            'Texturing without an API key needs $_hostedCreditCost credits, '
+            'but you have $_available available. Buy more credits at '
+            '/subscription or add your own Gemini key.',
+      );
       return;
     }
     Navigator.of(context).pop(
@@ -132,6 +178,7 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
               _fieldBox(
                 child: TextField(
                   controller: _promptCtrl,
+                  autofocus: true,
                   minLines: 2,
                   maxLines: 4,
                   style: const TextStyle(color: kInk, fontSize: 14),
@@ -156,13 +203,16 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
               const SizedBox(height: 4),
               Text(
                 _resolution.needsProImageTier
-                    ? '2K/4K paints natively on the pro image model — higher quality, higher per-image cost.'
+                    ? '2K/4K paints natively on the pro image model for higher '
+                          'quality. The Nova3D credit price is the same at every '
+                          'resolution; only your own Google key is billed more '
+                          'per image.'
                     : '1K paints on the fast image model.',
                 style: kSilkscreen(8, color: kInkMuted, letterSpacing: 0.3),
               ),
               const SizedBox(height: 16),
 
-              _label('GEMINI API KEY'),
+              _label('GEMINI API KEY  (optional)'),
               const SizedBox(height: 6),
               _fieldBox(
                 child: TextField(
@@ -172,7 +222,7 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
                   decoration: InputDecoration(
                     isCollapsed: true,
                     border: InputBorder.none,
-                    hintText: 'Google AI (Gemini) key',
+                    hintText: 'Google AI (Gemini) key — optional',
                     hintStyle: const TextStyle(color: kInkMuted, fontSize: 14),
                     suffixIcon: IconButton(
                       onPressed: () =>
@@ -189,9 +239,15 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
                   ),
                 ),
               ),
+              const SizedBox(height: 6),
+              _creditCostLine(),
               const SizedBox(height: 4),
               Text(
-                'Texturing runs on Gemini. Saved keys prefill here.',
+                'No key needed — leave blank and texturing is paid with '
+                'Nova3D credits. Add your own Google AI (Gemini) key to skip '
+                'credits: it must be a PAID key with billing on and at least '
+                '\$5 of credit; free-tier keys are rejected by the image '
+                'model.',
                 style: kSilkscreen(8, color: kInkMuted, letterSpacing: 0.3),
               ),
 
@@ -227,6 +283,37 @@ class _MagicTextureDialogState extends State<MagicTextureDialog> {
 
   Widget _label(String text) =>
       Text(text, style: kSilkscreen(9, color: kInkSoft, letterSpacing: 0.5));
+
+  /// One-line credit price hint that tracks the key field: BYOK is free of
+  /// credits; hosted shows the estimated price against the current balance and
+  /// turns warning-red when the balance can't cover it.
+  Widget _creditCostLine() {
+    final hasKey = _keyCtrl.text.trim().isNotEmpty;
+    final wallet = ref.watch(billingProvider).wallet;
+    if (hasKey) {
+      return Text(
+        'Using your key — no Nova3D credits are charged.',
+        style: kSilkscreen(8, color: kInkMuted, letterSpacing: 0.3),
+      );
+    }
+    final cost = _hostedCreditCost;
+    final available = wallet?.available;
+    final short = _insufficientForHosted;
+    final text = cost == null
+        ? 'Without a key, texturing is charged in Nova3D credits.'
+        : available == null
+        ? 'Without a key, texturing uses $cost credits.'
+        : 'Without a key, texturing uses $cost credits — you have '
+              '$available available.';
+    return Text(
+      text,
+      style: kSilkscreen(
+        8,
+        color: short ? const Color(0xFFD84C6F) : kInkSoft,
+        letterSpacing: 0.3,
+      ),
+    );
+  }
 
   Widget _fieldBox({required Widget child}) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

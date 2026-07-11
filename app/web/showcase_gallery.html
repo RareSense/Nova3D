@@ -71,6 +71,9 @@
   .dl-btn { font-size:11px; letter-spacing:.3px; padding:6px 10px; border:1.5px solid var(--ink);
     border-radius:8px; background:#fff; cursor:pointer; box-shadow:2px 2px 0 var(--ink); color:var(--ink); }
   .dl-btn:disabled { opacity:.45; cursor:default; box-shadow:none; }
+  /* Texture action — only shown when the gallery is embedded in the Nova3D app
+     (a standalone/public gallery has no host to receive the request). */
+  .tx-btn { background:var(--lilac); font-weight:600; }
   .detail-close { border:1.5px solid var(--ink); background:#fff; border-radius:8px;
     width:30px; height:30px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); font-size:15px; }
   .detail-body { position:relative; flex:1; min-height:0; }
@@ -101,6 +104,7 @@
       <div class="tab" data-tab="code">&lt;/&gt; CODE</div>
       <div class="tab" data-tab="inputs">✎ INPUTS</div>
       <div class="head-right">
+        <button class="dl-btn tx-btn" id="txBtn" title="Texture this model" style="display:none">✨ Texture</button>
         <button class="dl-btn" id="dlGlb" title="Download GLB">⬇ GLB</button>
         <button class="dl-btn" id="dlCode" title="Download code">⬇ .py</button>
         <button class="detail-close" id="detailClose" title="Close">✕</button>

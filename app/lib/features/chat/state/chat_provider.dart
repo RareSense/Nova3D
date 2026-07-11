@@ -6,6 +6,7 @@ import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
+import 'package:nova3d_frontend/features/cad/models/texture_draft.dart';
 import 'package:nova3d_frontend/features/cad/models/texture_request.dart';
 import 'package:nova3d_frontend/features/cad/state/cad_provider.dart';
 import 'package:nova3d_frontend/features/chat/data/chat_service.dart';
@@ -142,6 +143,37 @@ class GenerationDraftsNotifier
 final generationDraftsProvider =
     NotifierProvider<GenerationDraftsNotifier, Map<String, GenerationRequest>>(
       GenerationDraftsNotifier.new,
+    );
+
+// ── Texture draft ───────────────────────────────────────────────────────────
+// Hands a showcase-originated texture run off to the chat page, exactly like
+// [GenerationDraftsNotifier] does for generations: the launcher stashes a draft
+// keyed by the new conversation id, then [ChatPage] takes it once on mount and
+// starts the run. Keyed by conversation id because each texture run gets its own
+// fresh conversation, so there is never more than one draft per key.
+
+class TextureDraftsNotifier extends Notifier<Map<String, TextureDraft>> {
+  @override
+  Map<String, TextureDraft> build() {
+    // Reset drafts whenever the authenticated user changes (login/logout).
+    ref.watch(authProvider);
+    return {};
+  }
+
+  void put(String conversationId, TextureDraft draft) =>
+      state = {...state, conversationId: draft};
+
+  TextureDraft? take(String conversationId) {
+    final draft = state[conversationId];
+    if (draft == null) return null;
+    state = Map.from(state)..remove(conversationId);
+    return draft;
+  }
+}
+
+final textureDraftsProvider =
+    NotifierProvider<TextureDraftsNotifier, Map<String, TextureDraft>>(
+      TextureDraftsNotifier.new,
     );
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -693,6 +725,43 @@ class MessagesNotifier
     await ref.read(billingProvider.notifier).refreshWallet();
   }
 
+  /// Texture twin of [_ensurePaidCreditBudget]: hosted (keyless) texture runs
+  /// are charged a workflow-level credit price, so they must clear the same
+  /// balance gate before launch. BYOK runs (caller key present) cost 0 credits
+  /// and skip the check entirely, like BYOK generations do.
+  Future<void> _ensureTextureCreditBudget(
+    TextureRequest request,
+    CadService cad,
+  ) async {
+    if (request.hasGeminiApiKey) return;
+
+    final estimate = await cad.estimateTextureCredits();
+    final required = estimate.authorizedBudget;
+    final wallet = await ref.read(billingProvider.notifier).refreshWallet();
+    final available =
+        wallet?.available ?? ref.read(billingProvider).wallet?.available;
+    if (available == null) {
+      throw CadException(
+        'Nova3D could not confirm your credit balance. Refresh credits or open /subscription, then try again.',
+      );
+    }
+    if (available < required) {
+      throw CadException(
+        'Texturing without an API key needs $required credits, but you have '
+        '$available available. Buy more credits at /subscription or add your '
+        'own Gemini key, then try again.',
+      );
+    }
+  }
+
+  /// Texture twin of [_refreshWalletForPaid]: hosted runs hold credits at
+  /// launch and settle at completion, so the wallet refreshes at both moments;
+  /// BYOK runs never touch the wallet.
+  Future<void> _refreshWalletForTexture(TextureRequest request) async {
+    if (request.hasGeminiApiKey) return;
+    await ref.read(billingProvider.notifier).refreshWallet();
+  }
+
   String _insufficientCreditsText(int required, int available) =>
       'This model needs $required credits, but you have $available available. Buy more credits at /subscription and try again.';
 
@@ -815,8 +884,44 @@ class MessagesNotifier
     final glbArtifact = sourceMessage.modelArtifact;
     final codeArtifact = sourceMessage.codeArtifact;
     if (glbArtifact == null || codeArtifact == null) return;
+    await _beginTexturing(
+      request: request,
+      glbArtifact: glbArtifact,
+      codeArtifact: codeArtifact,
+      sourceId: sourceMessage.id,
+    );
+  }
+
+  // Runs `texture_3d_v2` against an EXTERNAL source model (a showcase entry)
+  // supplied as artifact refs rather than a chat message. Identical pipeline to
+  // [startTexturing]; the reentrancy key is the caller-supplied [sourceId]
+  // (e.g. `showcase-<entryId>`). Because each showcase texture run gets its own
+  // conversation — hence its own notifier instance — this never contends with
+  // another run.
+  Future<void> startTexturingFromArtifacts({
+    required TextureRequest request,
+    required Map<String, dynamic> glbArtifact,
+    required Map<String, dynamic> codeArtifact,
+    required String sourceId,
+  }) => _beginTexturing(
+    request: request,
+    glbArtifact: glbArtifact,
+    codeArtifact: codeArtifact,
+    sourceId: sourceId,
+  );
+
+  // Shared launch core: creates the user/assistant bubble pair and starts the
+  // poll. Both the chat-message ([startTexturing]) and external-model
+  // ([startTexturingFromArtifacts]) entry points funnel through here so the two
+  // paths stay byte-for-byte consistent.
+  Future<void> _beginTexturing({
+    required TextureRequest request,
+    required Map<String, dynamic> glbArtifact,
+    required Map<String, dynamic> codeArtifact,
+    required String sourceId,
+  }) async {
     // Reentrancy guard: one in-flight texture run per source model.
-    if (!_texturingSources.add(sourceMessage.id)) return;
+    if (!_texturingSources.add(sourceId)) return;
 
     final now = DateTime.now();
     final workflowId = CadService.createWorkflowId();
@@ -859,7 +964,7 @@ class MessagesNotifier
       request: request,
       glbArtifact: glbArtifact,
       codeArtifact: codeArtifact,
-      sourceMessageId: sourceMessage.id,
+      sourceMessageId: sourceId,
       base: assistantMessage,
       workflowId: workflowId,
     );
@@ -878,8 +983,11 @@ class MessagesNotifier
       // Phase 1 — start. A failure here means the workflow never launched, so
       // the failed message carries NO workflowId: resume must not poll a
       // workflow that does not exist (which would 404-loop forever).
+      // Hosted (keyless) runs must clear the credit-balance gate first,
+      // exactly like paid generations.
       final String startedWorkflowId;
       try {
+        await _ensureTextureCreditBudget(request, cad);
         startedWorkflowId = await cad.startTexture(
           glbArtifact: glbArtifact,
           codeArtifact: codeArtifact,
@@ -898,6 +1006,7 @@ class MessagesNotifier
       // Phase 2 — poll. The workflow exists now, so the message keeps its id;
       // a poll failure is terminal (the workflow itself failed) and resume can
       // safely re-check it without looping.
+      await _refreshWalletForTexture(request); // show the credit hold
       _pollingWorkflowIds.add(startedWorkflowId);
       _upsert(
         base.copyWith(
@@ -947,6 +1056,9 @@ class MessagesNotifier
         immediateRemote: true,
       );
     } finally {
+      // Settlement moves the wallet (charge on success, hold release on
+      // failure) — refresh so the UI shows it, mirroring paid generations.
+      await _refreshWalletForTexture(request);
       // Allow re-texturing this model once the run settles (success or failure).
       _texturingSources.remove(sourceMessageId);
     }

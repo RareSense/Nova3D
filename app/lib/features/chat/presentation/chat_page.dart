@@ -39,6 +39,22 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ref
             .read(messagesProvider(widget.conversationId).notifier)
             .sendGeneration(draft);
+        return;
+      }
+      // A showcase-originated texture run handed off as a draft: start it once,
+      // here, so the messages provider stays alive under this page.
+      final textureDraft = ref
+          .read(textureDraftsProvider.notifier)
+          .take(widget.conversationId);
+      if (textureDraft != null) {
+        ref
+            .read(messagesProvider(widget.conversationId).notifier)
+            .startTexturingFromArtifacts(
+              request: textureDraft.request,
+              glbArtifact: textureDraft.glbArtifact,
+              codeArtifact: textureDraft.codeArtifact,
+              sourceId: textureDraft.sourceId,
+            );
       }
     });
   }

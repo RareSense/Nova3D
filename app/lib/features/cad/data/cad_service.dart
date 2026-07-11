@@ -155,6 +155,34 @@ class CadService {
     }
   }
 
+  /// Preflight estimate for a HOSTED (no caller key) `texture_3d_v2` run.
+  ///
+  /// Sends the same key-absent `pricing_context` the run itself will match
+  /// (`gemini_api_key: ''`), so the returned hold equals the workflow-level
+  /// hosted price from the tenant billing policy. BYOK runs (key provided)
+  /// cost 0 credits and must skip this call — mirroring how BYOK generations
+  /// skip [estimateGenerationCredits].
+  Future<GenerationCreditEstimate> estimateTextureCredits() async {
+    try {
+      final resp = await _dio.post(
+        '/credits/estimate',
+        data: {
+          'workflow_name': kTexture3dWorkflow,
+          'num_variations': 1,
+          'pricing_context': {'gemini_api_key': ''},
+        },
+        options: await _authOptions(),
+      );
+      return GenerationCreditEstimate.fromJson(
+        resp.data as Map<String, dynamic>,
+      );
+    } on AuthException catch (e) {
+      throw CadException(e.message);
+    } on DioException catch (e) {
+      throw CadException(_errorMessage(e));
+    }
+  }
+
   Future<String> startGeneration(
     GenerationRequest request, {
     String? workflowId,
@@ -558,12 +586,14 @@ class CadService {
   }
 
   // ── Texturing ────────────────────────────────────────────────────────────
-  // PBR-textures an existing generation via `texture_3d_v2`. Independent of the
-  // generation/edit paths: it never runs the Nova3D credit preflight (the
-  // pipeline is Gemini BYOK — a caller key is always sent) and it targets the
-  // ORIGINAL generation's geometry via its `glb_artifact` + `code_artifact`,
-  // never an AI-edited derivative. Kept separate so the generation path stays
-  // byte-for-byte unchanged.
+  // PBR-textures an existing generation via `texture_3d_v2`. The Gemini key is
+  // optional: with a caller key the run is BYOK and costs 0 credits; without
+  // one it runs on Nova3D's key and the tenant billing policy charges a
+  // workflow-level credit price (see [estimateTextureCredits] — the credit
+  // preflight lives in the chat provider, mirroring paid generations). It
+  // targets the ORIGINAL generation's geometry via its `glb_artifact` +
+  // `code_artifact`, never an AI-edited derivative. Kept separate so the
+  // generation path stays byte-for-byte unchanged.
 
   static const _textureReturnNodes = <String>[
     'final_textured',

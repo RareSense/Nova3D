@@ -53,12 +53,16 @@ class TextureRequest {
 
   final TextureResolution resolution;
 
-  /// Gemini (Google) key used at every provider call in the pipeline.
+  /// Gemini (Google) key used at every provider call in the pipeline. Optional:
+  /// when blank, the payload omits it and the hosted backend falls back to its
+  /// own provider key.
   final String geminiApiKey;
 
   bool get hasPrompt => prompt.trim().isNotEmpty;
 
   bool get hasReferenceImage => (referenceImageDataUrl ?? '').trim().isNotEmpty;
+
+  bool get hasGeminiApiKey => geminiApiKey.trim().isNotEmpty;
 
   /// Root payload fields for `POST /run/state/texture_3d_v2`. Only fields the
   /// user actually provided are included; everything else falls back to the
@@ -69,7 +73,7 @@ class TextureRequest {
   }) => {
     'glb_artifact': glbArtifact,
     'code_artifact': codeArtifact,
-    'gemini_api_key': geminiApiKey.trim(),
+    if (hasGeminiApiKey) 'gemini_api_key': geminiApiKey.trim(),
     'texture_atlas_size': resolution.pixels,
     'paint_image_size': resolution.token,
     'pbr_texture_size': resolution.pixels,

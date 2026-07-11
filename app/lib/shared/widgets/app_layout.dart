@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/theme.dart';
+import 'package:nova3d_frontend/features/showcase/presentation/showcase_texture_controller.dart';
 import 'package:nova3d_frontend/shared/widgets/app_sidebar.dart';
 import 'package:nova3d_frontend/shared/widgets/credit_balance_pill.dart';
 import 'package:nova3d_frontend/shared/widgets/grid_background.dart';
@@ -12,6 +13,12 @@ class AppLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wraps the shell so a showcase texture request stashed before sign-in
+    // resumes automatically once the user lands back inside the app.
+    return ShowcaseTextureResumer(child: _buildLayout(context));
+  }
+
+  Widget _buildLayout(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final showSidebar = width >= kSidebarBreakpoint;
 
