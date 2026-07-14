@@ -29,11 +29,34 @@ void main() {
     expect(
       options.where((option) => option.isPaidCredit).map((option) => option.id),
       orderedEquals([
+        'credits_claude_fable_5_anthropic',
         'credits_claude_opus_4_8_anthropic',
+        'credits_claude_sonnet_5_anthropic',
         'credits_claude_sonnet_4_6_anthropic',
+        'credits_gpt_5_6_sol_openrouter',
         'credits_gpt_5_5_openrouter',
+        'credits_gpt_5_6_terra_openrouter',
+        'credits_gpt_5_6_luna_openrouter',
         'credits_gemini_3_1_pro_google',
       ]),
+    );
+    expect(
+      {
+        for (final option
+            in options.where((option) => option.isPaidCredit))
+          option.id: option.creditCost,
+      },
+      equals({
+        'credits_claude_fable_5_anthropic': 60,
+        'credits_claude_opus_4_8_anthropic': 25,
+        'credits_claude_sonnet_5_anthropic': 18,
+        'credits_claude_sonnet_4_6_anthropic': 15,
+        'credits_gpt_5_6_sol_openrouter': 30,
+        'credits_gpt_5_5_openrouter': 28,
+        'credits_gpt_5_6_terra_openrouter': 18,
+        'credits_gpt_5_6_luna_openrouter': 10,
+        'credits_gemini_3_1_pro_google': 12,
+      }),
     );
     expect(
       options
@@ -42,7 +65,12 @@ void main() {
       unorderedEquals([
         'anthropic',
         'anthropic',
+        'anthropic',
+        'anthropic',
         'openai',
+        'openrouter',
+        'openrouter',
+        'openrouter',
         'openrouter',
         'openrouter',
         'openrouter',
@@ -56,9 +84,15 @@ void main() {
           option.id: '${option.llm}:${option.codeLlmTier}',
       },
       equals({
+        'anthropic_claude_fable_5': 'claude-fable:claude_fable_5_anthropic',
+        'anthropic_claude_sonnet_5':
+            'claude-sonnet-5:claude_sonnet_5_anthropic',
         'anthropic_claude_sonnet': 'claude-sonnet:claude_sonnet_4_6_anthropic',
         'anthropic_claude_opus_4_8': 'claude-opus:claude_opus_4_8_anthropic',
         'openai_gpt55': 'gpt55:gpt_5_5_openai',
+        'openrouter_gpt56_sol': 'gpt56-sol:gpt_5_6_sol_openrouter',
+        'openrouter_gpt56_terra': 'gpt56-terra:gpt_5_6_terra_openrouter',
+        'openrouter_gpt56_luna': 'gpt56-luna:gpt_5_6_luna_openrouter',
         'openrouter_gpt55': 'gpt55:gpt_5_5_openrouter',
         'openrouter_gemini': 'gemini:gemini_3_1_pro_openrouter',
         'openrouter_claude_sonnet':
