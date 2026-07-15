@@ -523,7 +523,10 @@ async function showCatalog(cat) {
     t.classList.toggle('active', t.dataset.cat === cat));
   const noun = cat === 'textures' ? 'texture' : cat === 'rings' ? 'ring' : 'model';
 
-  if (catalogs[cat]) { mountEntries(catalogs[cat], noun); return; }
+  // Cache non-empty catalogs only: an empty tab should re-fetch so a
+  // newly-published entry (e.g. a first ring) shows on tab revisit, not
+  // only after a full page reload.
+  if (catalogs[cat] && catalogs[cat].length) { mountEntries(catalogs[cat], noun); return; }
 
   disposeCards();
   countEl.textContent = '';
