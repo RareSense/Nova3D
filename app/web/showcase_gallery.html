@@ -147,6 +147,11 @@
   </div>
 </div>
 
-<script type="module" src="./showcase/gallery.js"></script>
+<!-- Versioned src: gallery.js is served with a long browser cache (max-age=14400)
+     because the _headers no-cache rule does not apply on the live host. The HTML
+     itself always revalidates, so bumping ?v= guarantees browsers pick up new JS
+     instead of running a stale copy against a newer page (which silently made the
+     RINGS tab render generations). Bump this whenever gallery.js changes. -->
+<script type="module" src="./showcase/gallery.js?v=2"></script>
 </body>
 </html>
