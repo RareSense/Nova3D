@@ -108,7 +108,7 @@ void main() {
       GenerationModelOption.paidCreditOptions
           .where((option) => option.badgeLabel != null)
           .map((option) => '${option.compactLabel}:${option.badgeLabel}'),
-      orderedEquals(['GPT-5.5:Recommended', 'Gemini 3.1 Pro:Fastest']),
+      orderedEquals(['Claude Fable 5:Recommended', 'Gemini 3.1 Pro:Fastest']),
     );
     expect(
       GenerationModelOption.findById(options, null)?.id,

@@ -59,7 +59,7 @@ class GenerationModelOption {
 
   String? get badgeLabel {
     if (!isPaidCredit) return null;
-    if (codeLlmTier == 'gpt_5_5_openrouter') return 'Recommended';
+    if (codeLlmTier == 'claude_fable_5_anthropic') return 'Recommended';
     if (codeLlmTier == 'gemini_3_1_pro_google') return 'Fastest';
     return null;
   }

@@ -438,15 +438,27 @@ function manifestUrl() {
 }
 
 function texturesManifestUrl() {
+  return siblingManifestUrl('textures.json');
+}
+
+// Rings are generation-shaped entries (glb + code) published to a sibling
+// `rings.json` in the same public container, from the ring-only skill.
+function ringsManifestUrl() {
+  return siblingManifestUrl('rings.json');
+}
+
+// Derive a sibling manifest (textures.json / rings.json) from the generations
+// manifest URL, preserving any query string.
+function siblingManifestUrl(name) {
   const url = manifestUrl();
   if (!url) return null;
-  if (/showcase\.json/.test(url)) return url.replace(/showcase\.json/, 'textures.json');
-  return url.replace(/\/[^/?#]*(\?.*)?$/, '/textures.json$1');
+  if (/showcase\.json/.test(url)) return url.replace(/showcase\.json/, name);
+  return url.replace(/\/[^/?#]*(\?.*)?$/, `/${name}$1`);
 }
 
 let io = null;
 let renderLoopStarted = false;
-const catalogs = { generations: null, textures: null }; // fetched entry caches
+const catalogs = { generations: null, textures: null, rings: null }; // fetched entry caches
 let activeCat = 'generations';
 
 function disposeCards() {
@@ -465,7 +477,9 @@ function mountEntries(entries, noun) {
     statusEl.style.display = '';
     statusEl.textContent = noun === 'texture'
       ? 'No textures published yet.'
-      : 'The showcase is empty.';
+      : noun === 'ring'
+        ? 'No rings published yet.'
+        : 'The showcase is empty.';
     countEl.textContent = '';
     return;
   }
@@ -507,7 +521,7 @@ async function showCatalog(cat) {
   activeCat = cat;
   document.querySelectorAll('.cat-tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.cat === cat));
-  const noun = cat === 'textures' ? 'texture' : 'model';
+  const noun = cat === 'textures' ? 'texture' : cat === 'rings' ? 'ring' : 'model';
 
   if (catalogs[cat]) { mountEntries(catalogs[cat], noun); return; }
 
@@ -516,14 +530,16 @@ async function showCatalog(cat) {
   statusEl.style.display = '';
   statusEl.textContent = 'Loading showcase…';
 
-  const url = cat === 'textures' ? texturesManifestUrl() : manifestUrl();
+  const url = cat === 'textures' ? texturesManifestUrl()
+    : cat === 'rings' ? ringsManifestUrl()
+    : manifestUrl();
   if (!url) { statusEl.textContent = 'No showcase configured.'; return; }
   let entries;
   try {
     entries = await fetchEntries(url);
   } catch (_) {
-    // A missing textures.json just means nothing is published yet.
-    entries = cat === 'textures' ? [] : null;
+    // A missing textures.json / rings.json just means nothing is published yet.
+    entries = cat === 'generations' ? null : [];
     if (entries === null) { statusEl.textContent = 'Could not load the showcase.'; return; }
   }
   if (cat === 'textures') for (const e of entries) e.kind = e.kind || 'texture';
