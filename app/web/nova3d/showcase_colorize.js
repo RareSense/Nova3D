@@ -59,9 +59,11 @@ export function colorizeIfUncolored(root, opts = {}) {
   if (!meshes.length) return false;
   if (!force && hasColour) return false;
 
-  // Pastel = high lightness, gentle saturation (sits well on the gallery's
-  // lilac→pink→cream backdrop). Default = the original slightly deeper coding.
-  if (opts.pastel) applyColorCoding(meshes, 0.50, 0.80);
+  // opts.pastel selects the rings palette: vivid, saturated Rhino/CAD-style
+  // part-coding (medium lightness) — reads as clean solid colours, not the
+  // washed-out pastels it replaced. Default = the original slightly deeper
+  // coding for uncoloured generations.
+  if (opts.pastel) applyColorCoding(meshes, 0.75, 0.52);
   else applyColorCoding(meshes, 0.55, 0.62);
   return true;
 }

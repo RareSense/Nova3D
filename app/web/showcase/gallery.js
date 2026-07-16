@@ -14,7 +14,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js';
+// Versioned import: ES `import` specifiers don't inherit the <script ?v=>, so
+// bump this in lockstep with the script tag whenever showcase_colorize.js
+// changes, otherwise browsers keep a stale cached copy of it.
+import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js?v=5';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
