@@ -48,12 +48,32 @@ export function colorizeIfUncolored(root) {
 
   if (hasColour || !meshes.length) return false;
 
-  // Distinct hues via the golden-ratio increment so neighbours never collide.
-  // vertexColors only when the mesh actually carries the (achromatic AO)
-  // attribute — it multiplies the baked shading into the tint. Meshes without
-  // it get the plain flat tint.
+  applyColorCoding(meshes, 0.55, 0.62);
+  return true;
+}
+
+// Force per-part colour-coding on EVERY mesh, ignoring the model's own
+// materials — used for the rings tab, where we deliberately show FORM and part
+// decomposition in soft pastels instead of the gold / pearl / gem materials the
+// ring code produced. Unlike colorizeIfUncolored this always recolours.
+export function colorizePastel(root) {
+  if (!root) return false;
+  const meshes = [];
+  root.traverse((n) => { if (n.isMesh) meshes.push(n); });
+  if (!meshes.length) return false;
+  // Pastel = high lightness, gentle saturation. Sits well on the gallery's
+  // lilac→pink→cream backdrop.
+  applyColorCoding(meshes, 0.50, 0.80);
+  return true;
+}
+
+// Distinct hues via the golden-ratio increment so neighbours never collide.
+// vertexColors only when the mesh actually carries the (achromatic AO)
+// attribute — it multiplies the baked shading into the tint. Meshes without
+// it get the plain flat tint.
+function applyColorCoding(meshes, saturation, lightness) {
   meshes.forEach((mesh, i) => {
-    const color = new THREE.Color().setHSL((i * 0.61803398875) % 1, 0.55, 0.62);
+    const color = new THREE.Color().setHSL((i * 0.61803398875) % 1, saturation, lightness);
     const attrs = mesh.geometry && mesh.geometry.attributes;
     mesh.material = new THREE.MeshStandardMaterial({
       color,
@@ -62,5 +82,4 @@ export function colorizeIfUncolored(root) {
       vertexColors: !!(attrs && attrs.color),
     });
   });
-  return true;
 }

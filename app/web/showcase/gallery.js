@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js';
+import { colorizeIfUncolored, colorizePastel } from '../nova3d/showcase_colorize.js';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
@@ -106,7 +106,10 @@ function loadCardModel(card) {
       card.loading = false;
       if (card.disposed) { disposeObject(gltf.scene); return; }
       card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
-      colorizeIfUncolored(card.model); // untextured/colourless → colour-coded
+      // Rings: always show soft pastel part-coding instead of their gold/pearl/
+      // gem materials. Everything else: colour-code only if it ships no colour.
+      if (card.entry.kind === 'ring') colorizePastel(card.model);
+      else colorizeIfUncolored(card.model);
       card.scene.add(card.model);
       card.loaded = true;
       card.spin.style.display = 'none';
@@ -314,9 +317,12 @@ function openDetail(entry) {
   }
 
   // MODEL → the real editor in showcase mode (AI-edit tools hidden), this glb.
+  // Rings carry &pastel=1 so the editor shows the same soft part-coding as the
+  // grid tile instead of the gold/pearl/gem materials.
   detailEditor.src = entry.glb_url
     ? `/nova3d_viewer.html?showcase=1&mode=editor&stateKey=${encodeURIComponent('showcase-' + (entry.id || ''))}`
       + `&glb=${encodeURIComponent(entry.glb_url)}`
+      + (entry.kind === 'ring' ? '&pastel=1' : '')
     : 'about:blank';
 
   // INPUTS
@@ -546,6 +552,7 @@ async function showCatalog(cat) {
     if (entries === null) { statusEl.textContent = 'Could not load the showcase.'; return; }
   }
   if (cat === 'textures') for (const e of entries) e.kind = e.kind || 'texture';
+  if (cat === 'rings') for (const e of entries) e.kind = e.kind || 'ring';
   catalogs[cat] = entries;
   if (activeCat === cat) mountEntries(entries, noun);
 }

@@ -30,7 +30,7 @@ import {
   METAL_FACTORIES,
   GEM_PRESETS,
 } from '@nova/materials.js';
-import { colorizeIfUncolored } from '@nova/showcase_colorize.js';
+import { colorizeIfUncolored, colorizePastel } from '@nova/showcase_colorize.js';
 import { syncHistoryUi } from '@nova/history.js';
 import { resetExplode } from '@nova/explode.js';
 
@@ -140,7 +140,12 @@ export function loadGLB(url, options = {}) {
       // colours, default material) is colour-coded per part so it doesn't read
       // as a grey blob. Gated to the public showcase embed; the in-app editor is
       // unaffected.
-      if (document.documentElement.classList.contains('nova-showcase')) colorizeIfUncolored(model);
+      if (document.documentElement.classList.contains('nova-showcase')) {
+        // Rings pass ?pastel=1 → force soft pastel part-coding (matching the
+        // grid tile) instead of their gold/pearl/gem materials.
+        if (new URLSearchParams(location.search).get('pastel') === '1') colorizePastel(model);
+        else colorizeIfUncolored(model);
+      }
       state.modelGroup.add(model);
       model.traverse(child => {
         if (!child.isMesh || !child.geometry) return;
