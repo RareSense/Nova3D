@@ -23,7 +23,7 @@ import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js?v=5';
 // publish UI and the detail viewer use). Bump ?v= with the file.
 import {
   applyJewelSpec, updateJewelEnv, loadJewelEnv, setJewelRendering,
-} from '../nova3d/jewel_materials.js?v=1';
+} from '../nova3d/jewel_materials.js?v=2';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport

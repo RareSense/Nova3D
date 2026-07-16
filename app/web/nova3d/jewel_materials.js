@@ -120,7 +120,13 @@ export function loadJewelEnv(renderer, onReady) {
 }
 
 // ── Ray-traced faceted gem shader ────────────────────────────────────────────
+// logdepthbuf chunks: the editor renderer uses logarithmicDepthBuffer, and a
+// custom shader that skips them writes plain depth — stones then lose the
+// depth test against the (log-depth) metal around them and vanish. The chunks
+// compile to nothing when the renderer doesn't use log depth.
 const GEM_VERT = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_vertex>
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
 varying mat4 vModelMatrixInverse;
@@ -130,11 +136,13 @@ void main(){
   vNormal=normalize(mat3(modelMatrix)*normal);
   vModelMatrixInverse=inverse(modelMatrix);
   gl_Position=projectionMatrix*viewMatrix*wp;
+  #include <logdepthbuf_vertex>
 }`;
 
 const GEM_FRAG = /* glsl */`
 precision highp isampler2D;
 precision highp usampler2D;
+#include <logdepthbuf_pars_fragment>
 varying vec3 vWorldPosition;
 varying vec3 vNormal;
 varying mat4 vModelMatrixInverse;
@@ -177,6 +185,7 @@ vec3 totalInternalReflection(vec3 incoming,float ior_){
   return normalize((modelMatrix*vec4(rayDirection,0.0)).xyz);
 }
 void main(){
+  #include <logdepthbuf_fragment>
   vec3 viewDirection=normalize(vWorldPosition-cameraPosition);
   vec3 dG=totalInternalReflection(viewDirection,max(ior,1.0));
   vec3 col;
