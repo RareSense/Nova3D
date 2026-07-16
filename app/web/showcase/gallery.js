@@ -560,7 +560,39 @@ async function showCatalog(cat) {
   if (activeCat === cat) mountEntries(entries, noun);
 }
 
-document.querySelectorAll('.cat-tab').forEach((t) =>
-  t.addEventListener('click', () => { if (t.dataset.cat !== activeCat) showCatalog(t.dataset.cat); }));
+// ── Per-tab deep linking ─────────────────────────────────────────────────────
+// Each tab has its own app URL (/showcase, /showcase/textures, /showcase/rings).
+// The gallery lives in an iframe, so the host app owns the address bar: on a tab
+// click we postMessage the new tab OUT so the app can update the URL; the app
+// postMessages a tab IN (e.g. on back/forward or a deep link within the SPA) and
+// we switch without echoing back — that one-way notify keeps the two in sync
+// without a feedback loop. Standalone (no parent) it just reads ?tab= on load.
+const CATS = ['generations', 'textures', 'rings'];
+function validCat(v) { return CATS.includes(v) ? v : null; }
 
-showCatalog('generations');
+function initialCat() {
+  return validCat(new URLSearchParams(location.search).get('tab')) || 'generations';
+}
+
+function notifyParentTab(cat) {
+  if (window.parent && window.parent !== window) {
+    try { window.parent.postMessage({ type: 'nova3d-showcase-tab', tab: cat }, '*'); } catch (_) {}
+  }
+}
+
+document.querySelectorAll('.cat-tab').forEach((t) =>
+  t.addEventListener('click', () => {
+    if (t.dataset.cat === activeCat) return;
+    showCatalog(t.dataset.cat);
+    notifyParentTab(t.dataset.cat); // user-initiated → update the app URL
+  }));
+
+// Host app → gallery: switch tab without notifying back (avoids a loop).
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || d.type !== 'nova3d-showcase-set-tab') return;
+  const cat = validCat(d.tab);
+  if (cat && cat !== activeCat) showCatalog(cat);
+});
+
+showCatalog(initialCat());

@@ -12,16 +12,38 @@ import 'package:nova3d_frontend/features/showcase/presentation/showcase_gallery_
 import 'package:nova3d_frontend/features/showcase/presentation/showcase_texture_controller.dart';
 import 'package:nova3d_frontend/features/showcase/state/showcase_texture_intent.dart';
 
+/// The showcase catalog tabs, each with its own app URL:
+///   /showcase (or /showcase/generations), /showcase/textures, /showcase/rings.
+const Set<String> kShowcaseTabs = {'generations', 'textures', 'rings'};
+
+/// Canonical app path for a tab. `generations` is the clean base `/showcase`.
+String showcaseTabPath(String tab) =>
+    tab == 'generations' ? '/showcase' : '/showcase/$tab';
+
 /// Public, no-login gallery of hand-picked models. Read-only: it embeds the
 /// standalone Three.js gallery pointed at the public manifest URL. Curation
 /// happens entirely off-app (a private publish script writes the manifest +
 /// assets to a public bucket), so there is no write path in the client.
+///
+/// [tab] comes from the route (`/showcase/:tab`); it seeds which catalog opens
+/// and is kept in sync with the embedded gallery both ways (see below).
 class ShowcasePage extends ConsumerWidget {
-  const ShowcasePage({super.key});
+  const ShowcasePage({super.key, this.tab});
+
+  final String? tab;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final signedIn = ref.watch(authProvider).valueOrNull != null;
+    final activeTab = kShowcaseTabs.contains(tab) ? tab! : 'generations';
+
+    // URL → gallery: keep the already-mounted iframe on the tab the URL names
+    // (deep link, back/forward, or any programmatic nav). Idempotent — the
+    // gallery ignores a set-tab for the tab it already shows. Post-frame so the
+    // platform view has mounted before we message it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ShowcaseGalleryView.setTab(kShowcaseManifestUrl, activeTab);
+    });
 
     return Scaffold(
       backgroundColor: kCream,
@@ -33,8 +55,9 @@ class ShowcasePage extends ConsumerWidget {
             Expanded(
               child: kShowcaseManifestUrl.trim().isEmpty
                   ? const _Empty()
-                  : const ShowcaseGalleryView(
+                  : ShowcaseGalleryView(
                       manifestUrl: kShowcaseManifestUrl,
+                      tab: activeTab,
                     ),
             ),
           ],
@@ -148,6 +171,17 @@ class _ShowcaseTextureBridgeState
   void _onMessage(web.MessageEvent event) {
     final data = event.data?.dartify();
     if (data is! Map) return;
+
+    // gallery → URL: a tab click inside the iframe updates the address bar so
+    // each tab is a shareable link and back/forward walk the tabs.
+    if (data['type'] == 'nova3d-showcase-tab') {
+      final tab = (data['tab'] ?? '').toString();
+      if (kShowcaseTabs.contains(tab) && mounted) {
+        context.go(showcaseTabPath(tab));
+      }
+      return;
+    }
+
     if (data['type'] != 'nova3d-showcase-texture') return;
     final entry = data['entry'];
     if (entry is! Map) return;

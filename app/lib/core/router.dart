@@ -77,7 +77,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       };
 
       if (isLoading) return null;
-      if (!isAuthenticated && !publicPaths.contains(path)) return '/signin';
+      // The showcase is public at /showcase and every per-tab sub-path
+      // (/showcase/textures, /showcase/rings, …).
+      final isPublic = publicPaths.contains(path) ||
+          path == '/showcase' ||
+          path.startsWith('/showcase/');
+      if (!isAuthenticated && !isPublic) return '/signin';
       if (isAuthenticated && authEntryPaths.contains(path)) return '/';
       return null;
     },
@@ -126,10 +131,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         pageBuilder: (_, state) =>
             _fadePage(state.pageKey, const McpPurchaseSuccessPage()),
       ),
+      // Showcase: one page, per-tab URLs. A STABLE page key across /showcase
+      // and /showcase/:tab keeps the embedded gallery iframe alive when the
+      // tab changes (no reload of the Three.js grid) — only ShowcasePage's tab
+      // param updates and is messaged into the iframe.
       GoRoute(
         path: '/showcase',
         pageBuilder: (_, state) =>
-            _fadePage(state.pageKey, const ShowcasePage()),
+            _fadePage(const ValueKey('showcase'), const ShowcasePage()),
+      ),
+      GoRoute(
+        path: '/showcase/:tab',
+        pageBuilder: (_, state) => _fadePage(
+          const ValueKey('showcase'),
+          ShowcasePage(tab: state.pathParameters['tab']),
+        ),
       ),
 
       // ── Authenticated shell ──────────────────────────────────────────────
