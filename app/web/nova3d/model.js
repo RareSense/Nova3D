@@ -30,7 +30,7 @@ import {
   METAL_FACTORIES,
   GEM_PRESETS,
 } from '@nova/materials.js';
-import { colorizeIfUncolored, colorizePastel } from '@nova/showcase_colorize.js';
+import { colorizeIfUncolored } from '@nova/showcase_colorize.js';
 import { syncHistoryUi } from '@nova/history.js';
 import { resetExplode } from '@nova/explode.js';
 
@@ -143,8 +143,8 @@ export function loadGLB(url, options = {}) {
       if (document.documentElement.classList.contains('nova-showcase')) {
         // Rings pass ?pastel=1 → force soft pastel part-coding (matching the
         // grid tile) instead of their gold/pearl/gem materials.
-        if (new URLSearchParams(location.search).get('pastel') === '1') colorizePastel(model);
-        else colorizeIfUncolored(model);
+        const pastel = new URLSearchParams(location.search).get('pastel') === '1';
+        colorizeIfUncolored(model, pastel ? { force: true, pastel: true } : {});
       }
       state.modelGroup.add(model);
       model.traverse(child => {

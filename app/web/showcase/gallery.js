@@ -14,7 +14,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { colorizeIfUncolored, colorizePastel } from '../nova3d/showcase_colorize.js';
+import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
@@ -106,10 +106,10 @@ function loadCardModel(card) {
       card.loading = false;
       if (card.disposed) { disposeObject(gltf.scene); return; }
       card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
-      // Rings: always show soft pastel part-coding instead of their gold/pearl/
-      // gem materials. Everything else: colour-code only if it ships no colour.
-      if (card.entry.kind === 'ring') colorizePastel(card.model);
-      else colorizeIfUncolored(card.model);
+      // Rings: force soft pastel part-coding instead of their gold/pearl/gem
+      // materials. Everything else: colour-code only if it ships no colour.
+      colorizeIfUncolored(card.model,
+        card.entry.kind === 'ring' ? { force: true, pastel: true } : {});
       card.scene.add(card.model);
       card.loaded = true;
       card.spin.style.display = 'none';

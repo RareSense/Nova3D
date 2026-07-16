@@ -27,14 +27,24 @@ function attributeIsChromatic(attr) {
   return false;
 }
 
-export function colorizeIfUncolored(root) {
+// opts:
+//   force  — recolour even if the model ships real colour (rings: override the
+//            gold/pearl/gem materials to show FORM/part decomposition).
+//   pastel — use a soft pastel palette (high lightness) instead of the default.
+// Kept as a SINGLE exported function on purpose: callers only ever import this
+// name, so a browser running a stale cached copy of this file degrades
+// gracefully (ignores the new opts) instead of hard-failing an import of a
+// missing symbol — which would take down the whole gallery module.
+export function colorizeIfUncolored(root, opts = {}) {
   if (!root) return false;
+  const force = !!opts.force;
   const meshes = [];
   let hasColour = false;
 
   root.traverse((n) => {
     if (!n.isMesh) return;
     meshes.push(n);
+    if (force) return; // forcing: skip colour detection entirely
     const attrs = n.geometry && n.geometry.attributes;
     if (attrs && attrs.color && attributeIsChromatic(attrs.color)) hasColour = true;
     for (const m of Array.isArray(n.material) ? n.material : [n.material]) {
@@ -46,24 +56,13 @@ export function colorizeIfUncolored(root) {
     }
   });
 
-  if (hasColour || !meshes.length) return false;
-
-  applyColorCoding(meshes, 0.55, 0.62);
-  return true;
-}
-
-// Force per-part colour-coding on EVERY mesh, ignoring the model's own
-// materials — used for the rings tab, where we deliberately show FORM and part
-// decomposition in soft pastels instead of the gold / pearl / gem materials the
-// ring code produced. Unlike colorizeIfUncolored this always recolours.
-export function colorizePastel(root) {
-  if (!root) return false;
-  const meshes = [];
-  root.traverse((n) => { if (n.isMesh) meshes.push(n); });
   if (!meshes.length) return false;
-  // Pastel = high lightness, gentle saturation. Sits well on the gallery's
-  // lilac→pink→cream backdrop.
-  applyColorCoding(meshes, 0.50, 0.80);
+  if (!force && hasColour) return false;
+
+  // Pastel = high lightness, gentle saturation (sits well on the gallery's
+  // lilac→pink→cream backdrop). Default = the original slightly deeper coding.
+  if (opts.pastel) applyColorCoding(meshes, 0.50, 0.80);
+  else applyColorCoding(meshes, 0.55, 0.62);
   return true;
 }
 
