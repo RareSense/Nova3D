@@ -23,6 +23,15 @@ import { applyBgPreset, applyBgCustomColor, DEFAULT_BG_PRESET } from '@nova/bgPr
 
 export const DEFAULT_EXPOSURE = 0.5;
 
+// Jewel mode (?jewel=1): showcase rings published with a materials spec. The
+// scene must match the publish UI exactly — PBR-neutral tone mapping at
+// exposure 1, HDRI-only lighting (the jewel env is applied by model.js when
+// the ring loads via loadJewelEnv → setEnvironmentMap).
+const JEWEL_MODE = (() => {
+  try { return new URLSearchParams(location.search).get('jewel') === '1'; }
+  catch (_) { return false; }
+})();
+
 let _attachTransformToSelection = () => {};
 let _detachProxy = () => {};
 let _pushUndoSnapshot = () => {};
@@ -74,9 +83,11 @@ function buildProceduralEnv() {
 }
 
 function setupEnvironment() {
-  const L1 = new THREE.DirectionalLight(0xffffff, 2);   L1.position.set(3, 5, 3);   state.scene.add(L1);
-  const L2 = new THREE.DirectionalLight(0xffffff, 1);   L2.position.set(-3, 2, -3); state.scene.add(L2);
-  state.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+  if (!JEWEL_MODE) {
+    const L1 = new THREE.DirectionalLight(0xffffff, 2);   L1.position.set(3, 5, 3);   state.scene.add(L1);
+    const L2 = new THREE.DirectionalLight(0xffffff, 1);   L2.position.set(-3, 2, -3); state.scene.add(L2);
+    state.scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.5));
+  }
   const sL = new THREE.DirectionalLight(0xffffff, 0.5); sL.position.set(0, 10, 0);
   sL.castShadow = true; sL.shadow.mapSize.set(1024, 1024);
   sL.shadow.camera.near = .1; sL.shadow.camera.far = 20;
@@ -85,6 +96,10 @@ function setupEnvironment() {
   sL.shadow.bias = -0.003; sL.shadow.radius = 8; state.scene.add(sL);
   const sP = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: .06 }));
   sP.rotation.x = -Math.PI/2; sP.position.y = -1.3; sP.receiveShadow = true; state.scene.add(sP);
+
+  // Jewel mode lights with the jewel module's own studio HDRI (loaded when the
+  // ring model loads) — skip the editor's default environment entirely.
+  if (JEWEL_MODE) return;
 
   new RGBELoader().load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_08_1k.hdr',
@@ -121,8 +136,8 @@ export function init() {
   state.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
   state.renderer.setSize(state.container.clientWidth, state.container.clientHeight);
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  state.renderer.toneMapping         = THREE.ACESFilmicToneMapping;
-  state.renderer.toneMappingExposure = DEFAULT_EXPOSURE;
+  state.renderer.toneMapping         = JEWEL_MODE ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
+  state.renderer.toneMappingExposure = JEWEL_MODE ? 1.0 : DEFAULT_EXPOSURE;
   state.renderer.outputColorSpace    = THREE.SRGBColorSpace;
   state.renderer.shadowMap.enabled   = true;
   state.renderer.shadowMap.type      = THREE.PCFSoftShadowMap;

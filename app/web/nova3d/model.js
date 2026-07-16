@@ -29,8 +29,10 @@ import {
   makeDiamond,
   METAL_FACTORIES,
   GEM_PRESETS,
+  setEnvironmentMap,
 } from '@nova/materials.js';
 import { colorizeIfUncolored } from '@nova/showcase_colorize.js';
+import { applyJewelSpec, updateJewelEnv, loadJewelEnv } from '@nova/jewel_materials.js';
 import { syncHistoryUi } from '@nova/history.js';
 import { resetExplode } from '@nova/explode.js';
 
@@ -56,6 +58,35 @@ function setEntryMaterial(entry, material) {
   entry.sourceMaterial = material;
   entry.originalMaterial = material;
   entry.mesh.material = material;
+}
+
+// ── Jewel mode (showcase rings published with a materials spec) ──────────────
+// Fetches the spec (?materials=<url>, data: URLs included), applies the shared
+// jewelry materials, and re-syncs the mesh-entry bookkeeping so highlight /
+// view-mode toggles restore the jewel materials, not the import-time ones.
+async function applyJewelToModel(model, materialsUrl) {
+  let spec = null;
+  if (materialsUrl) {
+    try { spec = await (await fetch(materialsUrl)).json(); } catch (_) { /* classify-only */ }
+  }
+  const env = loadJewelEnv(state.renderer, (e) => {
+    if (e.pmrem) setEnvironmentMap(e.pmrem);
+    updateJewelEnv(model, { raw: e.raw });
+    syncJewelEntryMaterials(model);
+  });
+  applyJewelSpec(model, spec || {}, { raw: env.raw });
+  syncJewelEntryMaterials(model);
+}
+
+function syncJewelEntryMaterials(model) {
+  const inModel = new Set();
+  model.traverse((n) => { if (n.isMesh) inModel.add(n); });
+  for (const entry of state.loadedMeshes) {
+    if (inModel.has(entry.mesh) && entry.mesh.material !== highlightMat
+        && entry.mesh.material !== entry.originalMaterial) {
+      setEntryMaterial(entry, entry.mesh.material);
+    }
+  }
 }
 
 function disposeMaterial(material) {
@@ -141,10 +172,16 @@ export function loadGLB(url, options = {}) {
       // as a grey blob. Gated to the public showcase embed; the in-app editor is
       // unaffected.
       if (document.documentElement.classList.contains('nova-showcase')) {
-        // Rings pass ?pastel=1 → force soft pastel part-coding (matching the
-        // grid tile) instead of their gold/pearl/gem materials.
-        const pastel = new URLSearchParams(location.search).get('pastel') === '1';
-        colorizeIfUncolored(model, pastel ? { force: true, pastel: true } : {});
+        const q = new URLSearchParams(location.search);
+        if (q.get('jewel') === '1') {
+          // Ring published with a materials spec (?materials=<url>): render the
+          // exact metals/gems chosen at publish time, matching the grid tile.
+          applyJewelToModel(model, q.get('materials') || '');
+        } else {
+          // Rings pass ?pastel=1 → force soft pastel part-coding (matching the
+          // grid tile) instead of their gold/pearl/gem materials.
+          colorizeIfUncolored(model, q.get('pastel') === '1' ? { force: true, pastel: true } : {});
+        }
       }
       state.modelGroup.add(model);
       model.traverse(child => {

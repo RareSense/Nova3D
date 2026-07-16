@@ -18,6 +18,12 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 // bump this in lockstep with the script tag whenever showcase_colorize.js
 // changes, otherwise browsers keep a stale cached copy of it.
 import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js?v=5';
+// Jewelry materials for rings published WITH a materials spec: the tile renders
+// the exact metal/gem/pearl assignment chosen at publish time (same module the
+// publish UI and the detail viewer use). Bump ?v= with the file.
+import {
+  applyJewelSpec, updateJewelEnv, loadJewelEnv, setJewelRendering,
+} from '../nova3d/jewel_materials.js?v=1';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
@@ -47,14 +53,28 @@ window.addEventListener('resize', sizeRenderer);
 // ── Tiles ────────────────────────────────────────────────────────────────────
 const cards = [];
 
-function buildScene() {
+function buildScene(entry) {
   const scene = new THREE.Scene();
+  if (entryHasJewelSpec(entry)) {
+    // Jewel parity: HDRI-only lighting + the same soft key light the publish
+    // UI uses — the studio env swaps in as soon as it has downloaded.
+    const env = loadJewelEnv(renderer);
+    scene.environment = env.pmrem || ENV;
+    const key = new THREE.DirectionalLight(0xffffff, 0.55);
+    key.position.set(1.5, 8, 2);
+    scene.add(key);
+    return scene;
+  }
   scene.environment = ENV;
   const key = new THREE.DirectionalLight(0xffffff, 1.4);
   key.position.set(2, 3, 2);
   scene.add(key);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x554e77, 0.5));
   return scene;
+}
+
+function entryHasJewelSpec(entry) {
+  return entry?.kind === 'ring' && entry.materials && typeof entry.materials === 'object';
 }
 
 function makeCamera() {
@@ -109,10 +129,21 @@ function loadCardModel(card) {
       card.loading = false;
       if (card.disposed) { disposeObject(gltf.scene); return; }
       card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
-      // Rings: force soft pastel part-coding instead of their gold/pearl/gem
-      // materials. Everything else: colour-code only if it ships no colour.
-      colorizeIfUncolored(card.model,
-        card.entry.kind === 'ring' ? { force: true, pastel: true } : {});
+      if (entryHasJewelSpec(card.entry)) {
+        // Ring published with a materials spec: render the exact metals/gems
+        // chosen at publish time (identical to the publish UI + detail view).
+        const env = loadJewelEnv(renderer, (e) => {
+          if (card.disposed || !card.model) return;
+          if (e.pmrem) card.scene.environment = e.pmrem;
+          updateJewelEnv(card.model, { raw: e.raw });
+        });
+        applyJewelSpec(card.model, card.entry.materials, { raw: env.raw });
+      } else {
+        // Legacy rings (no spec): force soft pastel part-coding instead of grey.
+        // Everything else: colour-code only if it ships no colour.
+        colorizeIfUncolored(card.model,
+          card.entry.kind === 'ring' ? { force: true, pastel: true } : {});
+      }
       card.scene.add(card.model);
       card.loaded = true;
       card.spin.style.display = 'none';
@@ -177,7 +208,7 @@ function createCard(entry) {
   }
   const card = {
     entry, el, stage, spin: el.querySelector('.spin'),
-    scene: buildScene(), camera: makeCamera(), model: null,
+    scene: buildScene(entry), camera: makeCamera(), model: null,
     loaded: false, loading: false, near: false, disposed: false,
     rot: { x: 0.1, y: 0.4 }, dragging: false,
   };
@@ -320,12 +351,12 @@ function openDetail(entry) {
   }
 
   // MODEL → the real editor in showcase mode (AI-edit tools hidden), this glb.
-  // Rings carry &pastel=1 so the editor shows the same soft part-coding as the
-  // grid tile instead of the gold/pearl/gem materials.
+  // Rings with a published materials spec open in jewel mode (identical
+  // rendering to the tile + publish UI); legacy rings keep the pastel coding.
   detailEditor.src = entry.glb_url
     ? `/nova3d_viewer.html?showcase=1&mode=editor&stateKey=${encodeURIComponent('showcase-' + (entry.id || ''))}`
       + `&glb=${encodeURIComponent(entry.glb_url)}`
-      + (entry.kind === 'ring' ? '&pastel=1' : '')
+      + ringDetailParams(entry)
     : 'about:blank';
 
   // INPUTS
@@ -349,6 +380,19 @@ function openDetail(entry) {
   } else {
     detailCode.textContent = 'No source code for this entry.';
   }
+}
+
+// Ring detail params: jewel mode needs the materials spec URL. Entries publish
+// a {id}/materials.json blob; if only the inline spec exists, pass it as a
+// data: URL (fetch() resolves those) so the viewer needs no extra endpoint.
+function ringDetailParams(entry) {
+  if (entry.kind !== 'ring') return '';
+  if (entryHasJewelSpec(entry)) {
+    const url = entry.materials_url
+      || ('data:application/json,' + encodeURIComponent(JSON.stringify(entry.materials)));
+    return `&jewel=1&materials=${encodeURIComponent(url)}`;
+  }
+  return '&pastel=1';
 }
 
 function closeDetail() {
@@ -482,6 +526,11 @@ function disposeCards() {
 
 function mountEntries(entries, noun) {
   disposeCards();
+  // Ring tiles use the publish UI's tone mapping (Khronos PBR-neutral) so the
+  // published materials match it exactly; other catalogs keep the default
+  // look. Safe to flip per mount: a mount recreates every card + material.
+  if (noun === 'ring') setJewelRendering(renderer);
+  else { renderer.toneMapping = THREE.NoToneMapping; renderer.toneMappingExposure = 1; }
   if (!entries.length) {
     statusEl.style.display = '';
     statusEl.textContent = noun === 'texture'
