@@ -530,7 +530,9 @@ function mountEntries(entries, noun) {
   // published materials match it exactly; other catalogs keep the default
   // look. Safe to flip per mount: a mount recreates every card + material.
   if (noun === 'ring') setJewelRendering(renderer);
-  else { renderer.toneMapping = THREE.NoToneMapping; renderer.toneMappingExposure = 1; }
+  // Generations/textures: ACES filmic (matches the editor + marketing viewer) so
+  // metallic / clearcoat / glass PBR rolls off instead of clipping to white.
+  else { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0; }
   if (!entries.length) {
     statusEl.style.display = '';
     statusEl.textContent = noun === 'texture'
