@@ -1,0 +1,30 @@
+# Blender extension manifest (Blender 4.2+ / 5.x).
+#
+# This makes the add-on install as a modern *extension* (drag-and-drop the zip
+# onto Blender, or Preferences > Get Extensions > Install from Disk). The legacy
+# `bl_info` block in __init__.py is kept only so the add-on still installs on
+# Blender 3.6–4.1, which predate the extensions system; 4.2+/5.x ignore it.
+schema_version = "1.0.0"
+
+id = "nova3d_blender"
+version = "1.0.1"
+name = "Nova3D — Code-native 3D Generation"
+tagline = "Generate part-structured 3D assets from text prompts"
+maintainer = "RareSense (Nova3D)"
+type = "add-on"
+
+website = "https://nova3d.xyz"
+tags = ["Pipeline", "Import-Export"]
+
+# Minimum Blender that supports extensions. Verified compatible through 5.x —
+# the add-on uses only stable APIs (gltf import, modal timers, image/text
+# datablocks, AddonPreferences) and no third-party Python packages.
+blender_version_min = "4.2.0"
+
+license = ["SPDX:MIT"]
+
+# Declared permissions are shown to the user at install time. We request exactly
+# what the add-on needs and nothing more.
+[permissions]
+network = "Generate 3D models via the hosted Nova3D API."
+files = "Save generated assets (GLB, code, UV maps) to your output folder."
