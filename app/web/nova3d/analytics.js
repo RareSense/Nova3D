@@ -7,9 +7,9 @@
 // forwards them (see `_onWindowMessage` in glb_viewer_web.dart).
 //
 // Session replay is separate from these structured events. rrweb records the
-// same-origin iframe DOM from the parent, while iframe_replay.js relays only
-// WebGL canvas frames into that same parent timeline. It does not initialize a
-// second PostHog client.
+// same-origin iframe DOM from the parent, while iframe_replay.js adds bounded,
+// event-driven WebGL snapshots to that same parent timeline. It does not
+// initialize a second PostHog client or recorder.
 //
 // Everything here is best-effort. A failure to report must never interfere
 // with a modelling action, so every call is wrapped and silently ignored.

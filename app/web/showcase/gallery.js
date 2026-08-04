@@ -39,15 +39,10 @@ const countEl = document.getElementById('count');
 
 // ── Shared renderer + environment ────────────────────────────────────────────
 const canvas = document.getElementById('stageCanvas');
-// PostHog's FPS canvas sampler intentionally clears non-preserved WebGL draw
-// buffers before copying them. The showcase now records inside its iframe (see
-// iframe_replay.js), so preservation is required for visible replay frames.
-// This does not alter DPR, antialiasing, materials, lighting, or live fidelity.
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
   alpha: true,
-  preserveDrawingBuffer: true,
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x000000, 0);
@@ -136,6 +131,7 @@ const cardLoadQueue = [];
 let activeCardLoads = 0;
 let cardLoadsPaused = false;
 let cardLoadPumpScheduled = false;
+let replayFrameRequested = false;
 
 function cardLoadPriority(card) {
   const cardRect = card.stage.getBoundingClientRect();
@@ -247,6 +243,7 @@ function startCardModelLoad(card) {
     card.scene.add(card.model);
     card.loaded = true;
     card.spin.style.display = 'none';
+    replayFrameRequested = true;
     enforceLoadCap();
   }).catch((error) => {
     if (attempt !== card.loadAttempt || card.disposed) return;
@@ -375,6 +372,10 @@ function renderLoop(now) {
     renderer.setScissor(r.left, bottom, w, h);
     if (card.camera.aspect !== w / h) { card.camera.aspect = w / h; card.camera.updateProjectionMatrix(); }
     renderer.render(card.scene, card.camera);
+  }
+  if (replayFrameRequested) {
+    replayFrameRequested = false;
+    window.nova3dReplayCapture?.(canvas, { force: true });
   }
   requestAnimationFrame(renderLoop);
 }

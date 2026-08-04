@@ -246,6 +246,7 @@ export function loadGLB(url, options = {}) {
       }
       saveEditorState();
       state.renderer.render(state.scene, state.camera);
+      window.nova3dReplayCapture?.(state.renderer.domElement, { force: true });
       track('model_load_succeeded', {
         source,
         duration_ms: Math.round(performance.now() - loadStartedAt),
