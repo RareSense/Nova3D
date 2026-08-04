@@ -119,6 +119,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       final cad = ref.read(cadServiceProvider);
       final workflowName = modelOption.workflowName ?? kSketchTo3dPaidWorkflow;
       final readiness = await cad.checkReadinessForWorkflow(workflowName);
+      ref.read(generationReadinessProvider.notifier).accept(readiness);
       if (!readiness.ready) {
         analytics.capture(Ev.generationBlocked, <String, Object?>{
           ...modelOptionProperties(modelOption),
@@ -279,7 +280,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ? const SizedBox.shrink()
                     : Padding(
                         padding: const EdgeInsets.only(bottom: 14),
-                        child: _StatusBanner(message: state.userMessage),
+                        child: _StatusBanner(
+                          message: state.userMessage,
+                          onRetry: () => ref
+                              .read(generationReadinessProvider.notifier)
+                              .retry(),
+                        ),
                       ),
                 loading: () => SizedBox(),
                 // const Padding(
@@ -290,7 +296,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                 // ),
                 error: (error, _) => Padding(
                   padding: const EdgeInsets.only(bottom: 14),
-                  child: _StatusBanner(message: _readinessErrorMessage(error)),
+                  child: _StatusBanner(
+                    message: _readinessErrorMessage(error),
+                    onRetry: () =>
+                        ref.read(generationReadinessProvider.notifier).retry(),
+                  ),
                 ),
               ),
 
@@ -728,8 +738,9 @@ class _GenerateButtonState extends State<_GenerateButton> {
 // ── Status banner ─────────────────────────────────────────────────────────────
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.message});
+  const _StatusBanner({required this.message, this.onRetry});
   final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -740,9 +751,22 @@ class _StatusBanner extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       border: Border.all(color: kButter, width: 1.5),
     ),
-    child: Text(
-      message,
-      style: GoogleFonts.inter(color: kInkSoft, fontSize: 13),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            message,
+            style: GoogleFonts.inter(color: kInkSoft, fontSize: 13),
+          ),
+        ),
+        if (onRetry != null) ...[
+          const SizedBox(width: 12),
+          TextButton(
+            onPressed: onRetry,
+            child: Text('Retry', style: kSilkscreen(10, color: kInk)),
+          ),
+        ],
+      ],
     ),
   );
 }

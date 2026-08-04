@@ -53,6 +53,11 @@ class Analytics {
   void init() {
     if (_initialized) return;
     if (!kIsWeb) return;
+    // PerformanceNavigationTiming retains the original URL even after
+    // history.replaceState(). Do not initialize PostHog on a document that
+    // arrived with URL credentials; OAuth completes with a clean hard
+    // navigation, where analytics starts normally.
+    if (posthogSensitiveAnalyticsStartup) return;
     if (kPostHogKey.isEmpty) {
       // Expected for forks / self-hosters. Debug-only note; never a warning.
       if (kDebugMode) {

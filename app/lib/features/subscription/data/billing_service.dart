@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:nova3d_frontend/core/network/transient_retry.dart';
 import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
 import 'package:nova3d_frontend/features/subscription/models/billing_models.dart';
 
@@ -100,9 +101,9 @@ class BillingService {
 
   Future<BillingWallet> getWallet() async {
     try {
-      final response = await _apiDio.get(
-        '/credits/balance/me',
-        options: await _authOptions(),
+      final options = await _authOptions();
+      final response = await retryIdempotentDio(
+        () => _apiDio.get('/credits/balance/me', options: options),
       );
       final data = response.data;
       if (data is Map) {

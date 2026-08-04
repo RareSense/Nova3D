@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/core/errors.dart';
+import 'package:nova3d_frontend/core/network/transient_retry.dart';
 import 'package:nova3d_frontend/features/api_keys/data/api_key_service.dart';
 import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
@@ -114,9 +115,9 @@ class CadService {
     String workflowName,
   ) async {
     try {
-      final resp = await _dio.get(
-        '/workflow/readiness/$workflowName',
-        options: await _authOptions(),
+      final options = await _authOptions();
+      final resp = await retryIdempotentDio(
+        () => _dio.get('/workflow/readiness/$workflowName', options: options),
       );
       return GenerationReadiness.fromJson(resp.data as Map<String, dynamic>);
     } on AuthException catch (e) {

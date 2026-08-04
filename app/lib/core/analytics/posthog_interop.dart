@@ -95,6 +95,16 @@ JSFunction? get posthogNetworkRequestMask {
   return value as JSFunction;
 }
 
+/// True when this document was opened with a query string or fragment that may
+/// contain an OAuth, checkout, or MCP credential. The marker is set by the
+/// first inline script in web/index.html, before navigation timing is observed.
+bool get posthogSensitiveAnalyticsStartup {
+  final value = globalContext.getProperty<JSAny?>(
+    'nova3dSensitiveAnalyticsStartup'.toJS,
+  );
+  return value != null && value.isA<JSBoolean>() && (value as JSBoolean).toDart;
+}
+
 /// A real JS `Error`, so PostHog's error tracking can group and symbolicate it.
 ///
 /// Dart exceptions are not JS Errors; passing a plain string to

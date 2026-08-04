@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
@@ -42,25 +41,30 @@ class _OAuthCallbackPageState extends ConsumerState<OAuthCallbackPage> {
     final error = params['error'];
 
     if (error != null) {
-      if (mounted) context.go('/signin?error=${Uri.encodeComponent(error)}');
+      _openCleanDocument('signin?error=${Uri.encodeComponent(error)}');
       return;
     }
 
     if (token == null || token.isEmpty) {
-      if (mounted) context.go('/signin?error=no_token');
+      _openCleanDocument('signin?error=no_token');
       return;
     }
 
     try {
       await ref.read(authProvider.notifier).handleOAuthCallback(token);
       final mcpContext = McpBrowserContext.read();
-      if (mounted) {
-        context.go(mcpContext != null ? '/mcp/complete' : '/');
-      }
+      _openCleanDocument(mcpContext != null ? 'mcp/complete' : '');
     } catch (e, st) {
       debugPrint('[OAuthCallback] auth failed: $e\n$st');
-      if (mounted) context.go('/signin?error=auth_failed');
+      _openCleanDocument('signin?error=auth_failed');
     }
+  }
+
+  void _openCleanDocument(String relativeRoute) {
+    if (!mounted) return;
+    final baseHref = web.document.querySelector('base')?.getAttribute('href');
+    final baseUri = Uri.base.resolve(baseHref ?? '/');
+    web.window.location.replace(baseUri.resolve(relativeRoute).toString());
   }
 
   @override

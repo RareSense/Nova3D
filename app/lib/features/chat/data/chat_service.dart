@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:nova3d_frontend/core/constants.dart';
+import 'package:nova3d_frontend/core/network/transient_retry.dart';
 import 'package:nova3d_frontend/features/auth/data/auth_service.dart';
 import 'package:nova3d_frontend/features/chat/data/chat_snapshot_codec.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
@@ -44,10 +45,17 @@ class ChatService {
     int offset = 0,
   }) async {
     final headers = await _authHeaders();
-    final resp = await _dio.get(
-      '/conversations',
-      queryParameters: {'kind': 'generation', 'limit': limit, 'offset': offset},
-      options: Options(headers: headers),
+    final options = Options(headers: headers);
+    final resp = await retryIdempotentDio(
+      () => _dio.get(
+        '/conversations',
+        queryParameters: {
+          'kind': 'generation',
+          'limit': limit,
+          'offset': offset,
+        },
+        options: options,
+      ),
     );
     final list = _items(resp.data);
     return list

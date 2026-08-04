@@ -17,9 +17,37 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Nova3D client application.">
+
+  <!-- Mark sensitive entry URLs before any third-party script can inspect the
+       initial navigation timing. OAuth fragments are handed to Flutter through
+       sessionStorage and removed from the address bar immediately. -->
+  <script>
+    (function () {
+      var hasSensitiveStartupUrl = Boolean(window.location.search || window.location.hash);
+      window.nova3dSensitiveAnalyticsStartup = hasSensitiveStartupUrl;
+
+      var isOAuthCallback = /(?:^|\/)oauth-callback\/?$/.test(window.location.pathname);
+      var oauthFragment = window.location.hash.replace(/^#/, '');
+      if (!oauthFragment || (!isOAuthCallback && !oauthFragment.includes('access_token='))) return;
+
+      window.nova3dOAuthCredentialStartup = true;
+      try {
+        window.sessionStorage.setItem('_nova3d_oauth', oauthFragment);
+        window.history.replaceState(
+          null,
+          '',
+          window.location.pathname + window.location.search
+        );
+      } catch (_) {
+        // Flutter's startup sanitizer remains the fallback when storage or
+        // History API access is blocked by the browser.
+      }
+    })();
+  </script>
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -35,7 +63,16 @@
 
   <!-- model-viewer: lightweight 3D preview used by the UV-maps tab to show the
        checker-textured GLB. Loaded async so it never blocks app startup. -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+  <script>
+    // No third-party runtime executes while an OAuth credential is waiting for
+    // Flutter to consume it. The callback immediately reloads a clean URL.
+    if (!window.nova3dOAuthCredentialStartup) {
+      var modelViewerScript = document.createElement('script');
+      modelViewerScript.type = 'module';
+      modelViewerScript.src = 'https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js';
+      document.head.appendChild(modelViewerScript);
+    }
+  </script>
 
   <!-- ── PostHog loader ──────────────────────────────────────────────────────
        Loads the posthog-js LIBRARY ONLY. There is deliberately no init() and
