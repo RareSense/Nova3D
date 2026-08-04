@@ -5,6 +5,7 @@
 // reflects status on the toolbar button — it never produces an asset version.
 
 import { state } from '@nova/state.js';
+import { track } from '@nova/analytics.js';
 
 let _activeUvRequestId = '';
 
@@ -41,6 +42,11 @@ export function requestUvMaps() {
   _activeUvRequestId = `uv-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   setUvBusy(true);
   showUvStatus('Generating UV maps…');
+  track('uv_maps_requested', {
+    atlas_mode: 'budget',
+    mesh_count: state.loadedMeshes.length,
+    source: 'viewer',
+  });
   try {
     window.parent?.postMessage({
       type: 'nova3d-uv-request',

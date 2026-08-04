@@ -18,6 +18,9 @@ import 'package:nova3d_frontend/features/subscription/state/billing_provider.dar
 import 'package:nova3d_frontend/features/home/presentation/widgets/suggestion_pills.dart';
 import 'package:nova3d_frontend/shared/widgets/generation_model_label.dart';
 import 'package:nova3d_frontend/shared/widgets/image_attachment_chip.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
+import 'package:nova3d_frontend/features/cad/data/generation_analytics.dart';
 
 const _genericReadinessError =
     'The generation service is unavailable right now. Please try again shortly.';
@@ -106,12 +109,22 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
     if (!request.hasText && !request.hasImage) return;
 
+    analytics.capture(Ev.generationRequested, <String, Object?>{
+      ...generationRequestProperties(request),
+      Pr.surface: Surface.home,
+    });
+
     setState(() => _creating = true);
     try {
       final cad = ref.read(cadServiceProvider);
       final workflowName = modelOption.workflowName ?? kSketchTo3dPaidWorkflow;
       final readiness = await cad.checkReadinessForWorkflow(workflowName);
       if (!readiness.ready) {
+        analytics.capture(Ev.generationBlocked, <String, Object?>{
+          ...modelOptionProperties(modelOption),
+          Pr.reason: readiness.reason ?? 'not_ready',
+          Pr.surface: Surface.home,
+        });
         _showInlineMessage(readiness.userMessage);
         return;
       }
@@ -124,8 +137,15 @@ class _HomePageState extends ConsumerState<HomePage> {
       ref.read(messagesProvider(conv.id).notifier).seed(request);
       if (mounted) context.go('/chat/${conv.id}');
     } on CadException catch (e) {
+      analytics.capture(Ev.generationBlocked, <String, Object?>{
+        ...modelOptionProperties(modelOption),
+        Pr.reason: 'preflight_failed',
+        Pr.errorMessage: e.message,
+        Pr.surface: Surface.home,
+      });
       _showInlineMessage(e.message);
-    } catch (_) {
+    } catch (e, st) {
+      analytics.captureException(e, st, context: 'home_generation_preflight');
       _showInlineMessage(_genericReadinessError);
     } finally {
       if (mounted) setState(() => _creating = false);

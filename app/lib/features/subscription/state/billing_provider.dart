@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/subscription/data/billing_service.dart';
 import 'package:nova3d_frontend/features/subscription/models/billing_models.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
 export 'package:nova3d_frontend/features/subscription/data/billing_service.dart'
     show BillingCheckoutSource;
 
@@ -126,6 +128,18 @@ class BillingNotifier extends Notifier<BillingState> {
     try {
       final verification = await _service.verifyCheckout(trimmed);
       final wallet = await _service.getWallet();
+      // Fires only on a verified, fulfilled checkout — the authoritative
+      // revenue signal, not the click that opened Stripe.
+      if (verification.fulfilled) {
+        analytics.capture(Ev.paymentSucceeded, <String, Object?>{
+          Pr.credits: verification.creditsAdded,
+          Pr.creditsAvailable: wallet.available,
+        });
+        analytics.setPersonProperties(<String, Object?>{
+          'credits_balance': wallet.balance,
+          'has_purchased': true,
+        });
+      }
       final notice = verification.fulfilled
           ? '${verification.creditsAdded} credits added to your account.'
           : 'Payment is still pending. Refresh shortly to update credits.';
@@ -146,6 +160,15 @@ class BillingNotifier extends Notifier<BillingState> {
     BillingCheckoutSource source = BillingCheckoutSource.web,
   }) async {
     if (state.checkoutTierId != null) return null;
+    analytics.capture(Ev.checkoutStarted, <String, Object?>{
+      Pr.plan: tier.tierId,
+      'tier_name': tier.name,
+      'tier_type': tier.type,
+      Pr.credits: tier.credits,
+      // `.name` matches the wire values ('web' / 'mcp') the service sends; the
+      // extension that defines `.value` is private to billing_service.dart.
+      Pr.source: source.name,
+    });
     state = state.copyWith(checkoutTierId: tier.tierId, clearError: true);
     try {
       final url = await _service.createCheckout(tier.tierId, source: source);

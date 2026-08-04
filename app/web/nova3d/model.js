@@ -35,6 +35,7 @@ import { colorizeIfUncolored } from '@nova/showcase_colorize.js';
 import { applyJewelSpec, updateJewelEnv, loadJewelEnv } from '@nova/jewel_materials.js';
 import { syncHistoryUi } from '@nova/history.js';
 import { resetExplode } from '@nova/explode.js';
+import { track } from '@nova/analytics.js';
 
 // ── Cross-module callback hooks ──────────────────────────────────────────────
 let _refreshMeshUi      = () => {};
@@ -230,6 +231,7 @@ export function clearModel() {
 
 // ── GLB export ───────────────────────────────────────────────────────────────
 export function downloadCurrentGLB() {
+  track('model_downloaded', { format: 'glb', mesh_count: state.loadedMeshes.length, source: 'viewer' });
   if (!state.modelGroup || !state.modelGroup.children.length) return;
   const exporter = new GLTFExporter();
   exporter.parse(
@@ -254,6 +256,7 @@ export function downloadCurrentGLB() {
 
 // ── Mesh operations ──────────────────────────────────────────────────────────
 export function deleteSelected() {
+  track('editor_tool_used', { tool: 'delete', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (!state.selectedMeshIndices.size) return;
   pushUndoSnapshot('delete'); _detachProxy(); state.transformControls.detach();
   const idxs = [...state.selectedMeshIndices].sort((a,b) => b - a);
@@ -288,6 +291,7 @@ export function mirrorSelection(axis) {
 }
 
 export function mergeSelected() {
+  track('editor_tool_used', { tool: 'merge', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (state.selectedMeshIndices.size < 2) return; pushUndoSnapshot('merge');
   const idxs = [...state.selectedMeshIndices].sort((a,b) => a - b), geoms = [];
   idxs.forEach(i => { const m = state.loadedMeshes[i].mesh; const g = m.geometry.clone(); m.updateMatrixWorld(true); g.applyMatrix4(m.matrixWorld); geoms.push(g); });
@@ -331,6 +335,7 @@ export function recalcNormals() {
 }
 
 export function separateByLooseParts() {
+  track('editor_tool_used', { tool: 'separate_loose_parts', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (state.selectedMeshIndices.size !== 1) return;
   pushUndoSnapshot('separate');
   const idx = [...state.selectedMeshIndices][0], entry = state.loadedMeshes[idx];
@@ -383,6 +388,7 @@ function subdivideGeometryOnce(geometry) {
 }
 
 export function subdivideSelected(iters = 1) {
+  track('editor_tool_used', { tool: 'subdivide', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (!state.selectedMeshIndices.size) return; pushUndoSnapshot('subdivide');
   state.selectedMeshIndices.forEach(i => {
     try {
@@ -402,6 +408,7 @@ export function subdivideSelected(iters = 1) {
 }
 
 export function smoothSelected(iters = 3) {
+  track('editor_tool_used', { tool: 'smooth', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (!state.selectedMeshIndices.size) return; pushUndoSnapshot('smooth');
   state.selectedMeshIndices.forEach(i => {
     const geo = state.loadedMeshes[i].mesh.geometry, pos = geo.attributes.position, idx = geo.index; if (!idx) return;
@@ -422,6 +429,7 @@ export function smoothSelected(iters = 3) {
 }
 
 export function decimateSelected(ratio = 0.5) {
+  track('editor_tool_used', { tool: 'decimate', selected_mesh_count: state.selectedMeshIndices.size, mesh_count: state.loadedMeshes.length });
   if (!state.selectedMeshIndices.size) return; pushUndoSnapshot('decimate');
   state.selectedMeshIndices.forEach(i => {
     const geo = state.loadedMeshes[i].mesh.geometry, idx = geo.index; if (!idx) return;
@@ -450,6 +458,7 @@ export function applyMirrorModifier(axis) {
 
 // ── Materials ────────────────────────────────────────────────────────────────
 export function applyMaterialPreset(name) {
+  track('material_applied', { preset: name, selected_mesh_count: state.selectedMeshIndices.size });
   if (!state.selectedMeshIndices.size) return; pushUndoSnapshot('material');
   state.selectedMeshIndices.forEach(i => {
     const entry = state.loadedMeshes[i]; let mat;

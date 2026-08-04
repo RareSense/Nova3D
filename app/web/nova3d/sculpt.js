@@ -7,9 +7,11 @@ import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { pushUndoSnapshot } from '@nova/history.js';
 import { setMode } from '@nova/scene.js';
+import { track } from '@nova/analytics.js';
 
 export function toggleSculptMode() {
   state.sculptMode = !state.sculptMode;
+  track('editor_tool_used', { tool: 'sculpt_mode', enabled: state.sculptMode });
   const btn = document.getElementById('sculptModeBtn');
   if (state.sculptMode) {
     if (btn) { btn.textContent = 'Disable Sculpt Mode'; btn.style.borderColor = '#0f0'; btn.style.color = '#0f0'; }
@@ -23,6 +25,7 @@ export function toggleSculptMode() {
 }
 
 export function setSculptTool(tool) {
+  track('editor_tool_used', { tool: 'sculpt_brush', mode: tool });
   state.sculptTool = tool;
   document.querySelectorAll('#flySculpt .fo-btn').forEach(b => b.classList.remove('active-tool'));
   const el = document.getElementById('sculpt' + tool[0].toUpperCase() + tool.slice(1));

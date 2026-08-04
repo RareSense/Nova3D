@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:nova3d_frontend/features/api_keys/data/api_key_local_source.dart';
 import 'package:nova3d_frontend/features/api_keys/data/api_key_service.dart';
 import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
 final apiKeyLocalSourceProvider =
     Provider<ApiKeyLocalSource>((_) => ApiKeyLocalSource());
 
@@ -42,6 +44,12 @@ class ApiKeysNotifier extends Notifier<ApiKeysState> {
       clearValidating: true,
       message: result.message,
     );
+    // Provider identity only. The key itself never leaves this method, and
+    // Analytics._scrub would redact it even if a future edit tried.
+    analytics.capture(
+      result.isValid ? Ev.apiKeySaved : Ev.apiKeyValidationFailed,
+      <String, Object?>{Pr.provider: provider.id},
+    );
   }
 
   Future<void> clear(AiProvider provider) async {
@@ -52,5 +60,8 @@ class ApiKeysNotifier extends Notifier<ApiKeysState> {
       keys: updated,
       message: '${provider.label} key removed.',
     );
+    analytics.capture(Ev.apiKeyRemoved, <String, Object?>{
+      Pr.provider: provider.id,
+    });
   }
 }

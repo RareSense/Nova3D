@@ -37,6 +37,7 @@
 import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { jointDisplayName, jointSafeName, jointUnit, jointPrecision } from '@nova/util.js';
+import { trackThrottled } from '@nova/analytics.js';
 
 let _saveEditorState = () => {};
 export function setSaveEditorState(fn) { _saveEditorState = typeof fn === 'function' ? fn : (() => {}); }
@@ -210,6 +211,12 @@ export function renderJointSliders() {
     slider.addEventListener('input', e => {
       const value = parseFloat(e.target.value);
       state.jointSliderValues[joint.name] = value;
+      trackThrottled(`joint-${joint.name}`, 'articulation_joint_moved', {
+        joint_name: joint.name,
+        joint_kind: joint.kind,
+        axis: joint.axis,
+        value,
+      });
       updateJointValueUi(joint, value);
       if (state.jointAutoPreviewSet.has(joint.name)) {
         disableJointAutoPreview(joint.name);
@@ -319,6 +326,12 @@ export function renderArticulationDetail() {
   slider?.addEventListener('input', e => {
     const next = parseFloat(e.target.value);
     state.jointSliderValues[joint.name] = next;
+    trackThrottled(`joint-${joint.name}`, 'articulation_joint_moved', {
+      joint_name: joint.name,
+      joint_kind: joint.kind,
+      axis: joint.axis,
+      value: next,
+    });
     updateJointValueUi(joint, next);
     if (state.jointAutoPreviewSet.has(joint.name)) {
       disableJointAutoPreview(joint.name);

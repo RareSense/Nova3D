@@ -7,6 +7,7 @@ import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
 import { pushUndoSnapshot } from '@nova/history.js';
 import { applyRenderProfileToMaterial, highlightMat } from '@nova/materials.js';
+import { track } from '@nova/analytics.js';
 
 const xrayMaterial = new THREE.MeshStandardMaterial({
   color:0x00ffff, transparent:true, opacity:0.18, depthWrite:false, side:THREE.DoubleSide
@@ -100,6 +101,7 @@ function setViewMode(mode) {
 }
 
 export function toggleWireframe() {
+  track('display_mode_changed', { mode: 'wireframe' });
   pushUndoSnapshot('wireframe');
   state.displayState.wireframe = !state.displayState.wireframe;
   applyMaterialDisplayMode();
@@ -107,6 +109,7 @@ export function toggleWireframe() {
 }
 
 export function toggleFlatShading() {
+  track('display_mode_changed', { mode: 'flat_shading' });
   pushUndoSnapshot('flat-shading');
   state.displayState.flatShading = !state.displayState.flatShading;
   selectedOrAll().forEach(i => {
@@ -119,14 +122,17 @@ export function toggleFlatShading() {
 }
 
 export function toggleXray() {
+  track('display_mode_changed', { mode: 'xray' });
   setViewMode('xray');
 }
 
 export function toggleClay() {
+  track('display_mode_changed', { mode: 'clay' });
   setViewMode('clay');
 }
 
 export function toggleBoundingBox() {
+  track('display_mode_changed', { mode: 'bounding_box' });
   state.displayState.boundingBox = !state.displayState.boundingBox;
   state.boxHelpers.forEach(h => state.scene.remove(h)); state.boxHelpers = [];
   if (state.displayState.boundingBox) {
@@ -139,6 +145,7 @@ export function toggleBoundingBox() {
 }
 
 export function toggleNormals() {
+  track('display_mode_changed', { mode: 'normals' });
   setViewMode('normals');
 }
 

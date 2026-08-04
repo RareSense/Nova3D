@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_router_observer.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nova3d_frontend/features/auth/presentation/forgot_password_page.dart';
@@ -206,7 +207,11 @@ final routerProvider = Provider<GoRouter>((ref) {
     ),
   );
 
+  // Manual pageviews + the session-replay guard for key-bearing screens.
+  final detachAnalytics = attachAnalyticsToRouter(router);
+
   ref.onDispose(() {
+    detachAnalytics();
     router.dispose();
     notifier.dispose();
   });

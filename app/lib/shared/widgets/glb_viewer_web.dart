@@ -4,6 +4,8 @@ import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
@@ -97,6 +99,14 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     // the iframe so the chat-preview slot gets a fresh viewer — matching the
     // remount semantics of toggling between the MODEL and CODE tabs.
     _windowMessageSub = web.window.onMessage.listen(_onWindowMessage);
+    analytics.capture(Ev.viewerOpened, <String, Object?>{
+      Pr.workflowId: widget.sourceWorkflowId,
+      Pr.versionCount: widget.assetVersions.length,
+      Pr.jointCount: widget.joints.length,
+      // Whether the editor has the source script — AI edits are impossible
+      // without it, so this separates "chose not to edit" from "could not".
+      'has_code_artifact': widget.codeArtifact != null,
+    });
   }
 
   // Builds a fresh iframe, viewType, and viewerId, and re-registers both the
@@ -127,9 +137,44 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   void _onWindowMessage(web.MessageEvent event) {
     final raw = event.data?.dartify();
     if (raw is! Map) return;
-    if (raw['type'] != 'nova3d-viewer-disposed') return;
+    // Both branches filter on viewerId: several viewers can be mounted at once
+    // (chat preview + fullscreen), and every one of them receives every
+    // window message. Without the filter each editor event would be captured
+    // once per mounted viewer.
     if (raw['viewerId'] != _viewerId) return;
-    _rebuildAfterDisposal();
+
+    switch (raw['type']) {
+      case 'nova3d-viewer-disposed':
+        _rebuildAfterDisposal();
+      case 'nova3d-analytics':
+        _forwardViewerAnalytics(raw);
+    }
+  }
+
+  /// Forwards a structured event from the Three.js editor to PostHog.
+  ///
+  /// The iframe has no PostHog client of its own — see web/nova3d/analytics.js
+  /// for why. Everything arriving here is untrusted input from a postMessage,
+  /// so the event name is validated against the taxonomy allowlist and the
+  /// properties go through the same scrubbing as any other capture.
+  void _forwardViewerAnalytics(Map<Object?, Object?> raw) {
+    final event = raw['event'];
+    if (event is! String || !kViewerEvents.contains(event)) return;
+
+    final properties = <String, Object?>{Pr.surface: Surface.viewer};
+    final incoming = raw['properties'];
+    if (incoming is Map) {
+      for (final entry in incoming.entries) {
+        final key = entry.key;
+        if (key is String) properties[key] = entry.value;
+      }
+    }
+    // Stamp the run this editor session belongs to, so editor activity joins
+    // back to the generation that produced the model.
+    if (widget.sourceWorkflowId != null) {
+      properties.putIfAbsent(Pr.workflowId, () => widget.sourceWorkflowId);
+    }
+    analytics.capture(event, properties);
   }
 
   // The host has already removed our iframe from the DOM. Release any blob

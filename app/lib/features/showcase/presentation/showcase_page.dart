@@ -11,6 +11,8 @@ import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/showcase/presentation/showcase_gallery_view.dart';
 import 'package:nova3d_frontend/features/showcase/presentation/showcase_texture_controller.dart';
 import 'package:nova3d_frontend/features/showcase/state/showcase_texture_intent.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
 
 /// The showcase catalog tabs, each with its own app URL:
 ///   /showcase (or /showcase/generations), /showcase/textures, /showcase/rings.
@@ -177,6 +179,9 @@ class _ShowcaseTextureBridgeState
     if (data['type'] == 'nova3d-showcase-tab') {
       final tab = (data['tab'] ?? '').toString();
       if (kShowcaseTabs.contains(tab) && mounted) {
+        analytics.capture(Ev.showcaseTabChanged, <String, Object?>{
+          Pr.showcaseTab: tab,
+        });
         context.go(showcaseTabPath(tab));
       }
       return;

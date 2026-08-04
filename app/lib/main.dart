@@ -1,12 +1,50 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_provider.dart';
 import 'package:nova3d_frontend/core/router.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:web/web.dart' as web;
 
+/// Routes uncaught Flutter + platform errors into PostHog error tracking.
+///
+/// Installed before `runApp` so a crash during first build is still reported.
+/// Both handlers delegate to the original behaviour first: analytics must
+/// observe failures, never swallow them (a swallowed error would vanish from
+/// the browser console and make local debugging worse).
+void _installErrorHandlers() {
+  final previousOnError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    previousOnError?.call(details);
+    analytics.captureException(
+      details.exception,
+      details.stack,
+      context: details.library ?? 'flutter',
+      handled: false,
+    );
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    analytics.captureException(
+      error,
+      stack,
+      context: 'platform_dispatcher',
+      handled: false,
+    );
+    // false = keep propagating to the default handler / console.
+    return false;
+  };
+}
+
 void main() {
+  // Analytics first: session replay should cover as much of the session as
+  // possible, and the error handlers below need it live.
+  analytics.init();
+  _installErrorHandlers();
+
   // Resolve Inter/VT323/Silkscreen from the bundled asset fonts (declared
   // in pubspec.yaml) instead of fetching from fonts.gstatic.com at runtime.
   // Eliminates the first-frame font swap that runtime fetching causes.
@@ -42,6 +80,8 @@ class Nova3DApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Keeps PostHog identity in step with auth state for the app's lifetime.
+    ref.watch(analyticsIdentityProvider);
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(

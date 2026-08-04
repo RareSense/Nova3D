@@ -46,6 +46,7 @@ export const state = {
   redoHistory: [],
 
   // ── AI edit ──────────────────────────────────────────────────────────────
+  activeEditStartedAt: null,   // ms epoch; measures AI-edit wall time
   currentCodeArtifact: null,
   currentModelUrl: null,
   currentSourceModelUrl: '',

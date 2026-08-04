@@ -56,6 +56,7 @@ import {
   highlightMat,
 } from '@nova/materials.js';
 import {
+import { track } from '@nova/analytics.js';
   captureJointNodes,
   objectParentJointName,
   bindArticulatedJoints,
@@ -326,6 +327,7 @@ export function restoreSnapshot(snap, options = {}) {
 }
 
 export function popUndo() {
+  track('undo_used', { depth: state.undoHistory.length });
   if (!state.undoHistory.length) {
     if (state.aiVersionIndex > 0) switchAiVersion(state.aiVersionIndex - 1);
     return;
@@ -342,6 +344,7 @@ export function popUndo() {
 }
 
 export function popRedo() {
+  track('redo_used', { depth: state.undoHistory.length });
   if (!state.redoHistory.length) {
     if (state.aiVersionIndex >= 0 && state.aiVersionIndex < state.aiVersions.length - 1) {
       switchAiVersion(state.aiVersionIndex + 1);
@@ -408,6 +411,7 @@ export function syncHistoryUi() {
 }
 
 export function switchAiVersion(index) {
+  track('version_switched', { version_index: index, from_index: state.aiVersionIndex, version_count: (state.assetVersions || []).length });
   if (!Number.isInteger(index) || index < 0 || index >= state.aiVersions.length) return;
   const version = state.aiVersions[index];
   state.aiVersionIndex = index;

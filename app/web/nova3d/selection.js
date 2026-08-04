@@ -13,6 +13,7 @@ import { state } from '@nova/state.js';
 import { iconSvg } from '@nova/util.js';
 import { highlightMat } from '@nova/materials.js';
 import { pushUndoSnapshot } from '@nova/history.js';
+import { trackThrottled } from '@nova/analytics.js';
 
 let _isFullUi = () => true;
 export function setSelectionHooks({ isFullUi } = {}) {
@@ -21,6 +22,13 @@ export function setSelectionHooks({ isFullUi } = {}) {
 
 // ── Mesh list ────────────────────────────────────────────────────────────────
 export function updateMeshList(options = {}) {
+  // Throttled: selection updates fire per click and per marquee frame.
+  trackThrottled('mesh_selected', 'mesh_selected', {
+    selected_mesh_count: state.selectedMeshIndices.size,
+    selected_mesh_names: [...state.selectedMeshIndices]
+      .map(i => state.loadedMeshes[i]?.name).filter(Boolean).slice(0, 20),
+    mesh_count: state.loadedMeshes.length,
+  });
   const list   = document.getElementById('meshList');
   const search = document.getElementById('meshSearch').value.toLowerCase();
   if (!state.loadedMeshes.length) {

@@ -12,6 +12,7 @@ import { bindArticulatedJoints, stopJointAutoPreviewForEdit } from '@nova/articu
 import { pushUndoSnapshot } from '@nova/history.js';
 import { loadGLB } from '@nova/model.js';
 import { closeFlyouts } from '@nova/ui/flyouts.js';
+import { track } from '@nova/analytics.js';
 
 export function selectedPartType() {
   if (!state.selectedMeshIndices.size) return 'selected part';
@@ -265,6 +266,16 @@ function requestAiEdit(operation, description, partType = '') {
   showSectionStatus(operation, operation === 'add_3d_part'
     ? 'Starting add-part edit...'
     : (isArticulation ? 'Starting articulation...' : 'Starting selected-part regeneration...'));
+  track('ai_edit_requested', {
+    operation,
+    description: clean,
+    description_length: clean.length,
+    selected_mesh_count: selectedMeshNames().length,
+    selected_mesh_names: selectedMeshNames(),
+    model_option_id: modelOptionId,
+    part_count: state.loadedMeshes.length,
+  });
+  state.activeEditStartedAt = Date.now();
   window.parent?.postMessage({
     type: 'nova3d-edit-request',
     viewerId: state.viewerId,
@@ -329,14 +340,35 @@ export function setupEditBridge() {
         delete el.dataset.idleLabel;
       }
     });
+    const editDurationMs = state.activeEditStartedAt
+      ? Date.now() - state.activeEditStartedAt
+      : null;
     if (data.status !== 'completed') {
+      track('ai_edit_failed', {
+        operation: op,
+        workflow_id: data.workflowId,
+        error_message: data.message || 'Edit failed.',
+        duration_ms: editDurationMs,
+      });
       showSectionStatus(op, editStatusMessage(data.message || 'Edit failed.', data.workflowId), true);
       return;
     }
     if (!data.modelUrl || !data.codeArtifact) {
+      track('ai_edit_failed', {
+        operation: op,
+        workflow_id: data.workflowId,
+        error_message: 'missing_model_artifact',
+        duration_ms: editDurationMs,
+      });
       showSectionStatus(op, editStatusMessage('Edit finished but did not return a usable model artifact.', data.workflowId), true);
       return;
     }
+    track('ai_edit_succeeded', {
+      operation: op,
+      workflow_id: data.workflowId,
+      duration_ms: editDurationMs,
+      joint_count: Array.isArray(data.joints) ? data.joints.length : 0,
+    });
     pushUndoSnapshot(op);
     appendAssetVersion({
       messageId: `edit-${data.workflowId || Date.now()}`,

@@ -1,8 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nova3d_frontend/core/analytics/analytics.dart';
+import 'package:nova3d_frontend/core/analytics/analytics_events.dart';
+import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/cad/data/cad_service.dart';
+import 'package:nova3d_frontend/features/cad/data/generation_analytics.dart';
 import 'package:nova3d_frontend/features/cad/models/asset_version.dart';
 import 'package:nova3d_frontend/features/cad/models/cad_models.dart';
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
@@ -518,6 +522,12 @@ class MessagesNotifier
     required String workflowId,
   }) async {
     final cad = ref.read(cadServiceProvider);
+    final tracker = WorkflowRunTracker.forGeneration(request);
+    final requestProps = generationRequestProperties(request);
+    analytics.capture(Ev.generationRequested, <String, Object?>{
+      ...requestProps,
+      Pr.surface: Surface.chat,
+    });
     try {
       await _ensurePaidCreditBudget(request, cad);
       final startedWorkflowId = await cad.startGeneration(
@@ -525,6 +535,11 @@ class MessagesNotifier
         workflowId: workflowId,
         conversationId: arg,
       );
+      tracker.start(startedWorkflowId);
+      analytics.capture(Ev.generationStarted, <String, Object?>{
+        ...requestProps,
+        Pr.workflowId: startedWorkflowId,
+      });
       await _refreshWalletForPaid(request);
       _upsert(
         MessageModel(
@@ -546,9 +561,21 @@ class MessagesNotifier
         assistantCreatedAt: assistantCreatedAt,
         modelOptionId: request.modelOption.id,
         modelLabel: request.modelOption.persistedLabel,
+        tracker: tracker,
       );
 
       final failed = result.failed || result.glbUrl == null;
+      if (failed) {
+        tracker.failed(
+          message: result.errorMessage,
+          category: result.errorCategory,
+          retryable: result.retryable,
+        );
+      } else {
+        tracker.succeeded(
+          extra: <String, Object?>{Pr.jointCount: result.jointCount},
+        );
+      }
       _upsert(
         MessageModel(
           id: assistantId,
@@ -574,6 +601,7 @@ class MessagesNotifier
         immediateRemote: true,
       );
     } on CadException catch (e) {
+      tracker.failed(message: e.message, category: 'cad_exception');
       _upsert(
         MessageModel(
           id: assistantId,
@@ -588,7 +616,11 @@ class MessagesNotifier
         ),
         immediateRemote: true,
       );
-    } catch (_) {
+    } catch (e, st) {
+      tracker.failed(message: e.toString(), category: 'unexpected');
+      // Unexpected (non-CadException) failures are a bug, not a workflow
+      // outcome — send them to error tracking as well as the funnel.
+      analytics.captureException(e, st, context: 'generation');
       _upsert(
         MessageModel(
           id: assistantId,
@@ -617,24 +649,30 @@ class MessagesNotifier
     String? modelOptionId,
     String? modelLabel,
     bool isResume = false,
+    WorkflowRunTracker? tracker,
   }) {
     return cad.runWorkflow(
       workflowId,
       // A resumed workflow already existed, so "not found" means it closed —
       // fail fast instead of the long fresh-start grace.
       startupGraceRetries: isResume ? CadService.resumeStartupGraceRetries : null,
-      onProgress: (status) => _upsert(
-        MessageModel(
-          id: assistantId,
-          role: MessageRole.assistant,
-          text: status.progressLabel,
-          createdAt: assistantCreatedAt,
-          isStreaming: true,
-          workflowId: workflowId,
-          modelOptionId: modelOptionId,
-          modelLabel: modelLabel,
-        ),
-      ),
+      onProgress: (status) {
+        // Per-node stage timing. The tracker de-duplicates polls, so this is
+        // one event per real GraphFlow transition, not one per 3s poll.
+        tracker?.onStatus(status);
+        _upsert(
+          MessageModel(
+            id: assistantId,
+            role: MessageRole.assistant,
+            text: status.progressLabel,
+            createdAt: assistantCreatedAt,
+            isStreaming: true,
+            workflowId: workflowId,
+            modelOptionId: modelOptionId,
+            modelLabel: modelLabel,
+          ),
+        );
+      },
     );
   }
 
@@ -707,15 +745,38 @@ class MessagesNotifier
 
     final estimate = await cad.estimateGenerationCredits(option);
     final required = estimate.authorizedBudget;
+    analytics.capture(Ev.creditsEstimated, <String, Object?>{
+      ...modelOptionProperties(option),
+      Pr.projectedMaxHold: estimate.projectedMaxHold,
+      Pr.authorizedBudget: estimate.authorizedBudget,
+    });
     final wallet = await ref.read(billingProvider.notifier).refreshWallet();
     final available =
         wallet?.available ?? ref.read(billingProvider).wallet?.available;
     if (available == null) {
+      analytics.capture(Ev.generationBlocked, <String, Object?>{
+        ...modelOptionProperties(option),
+        Pr.reason: 'wallet_unavailable',
+        Pr.creditsRequired: required,
+      });
       throw CadException(
         'Nova3D could not confirm your credit balance. Refresh credits or open /subscription, then try again.',
       );
     }
     if (available < required) {
+      // The single most actionable drop-off in the funnel: the user wanted to
+      // generate and could not afford it. Carries the exact shortfall.
+      analytics.capture(Ev.generationBlocked, <String, Object?>{
+        ...modelOptionProperties(option),
+        Pr.reason: 'insufficient_credits',
+        Pr.creditsRequired: required,
+        Pr.creditsAvailable: available,
+      });
+      analytics.capture(Ev.creditsInsufficient, <String, Object?>{
+        Pr.creditsRequired: required,
+        Pr.creditsAvailable: available,
+        Pr.surface: Surface.chat,
+      });
       throw CadException(_insufficientCreditsText(required, available));
     }
   }
@@ -784,6 +845,10 @@ class MessagesNotifier
       orElse: () => throw StateError('message not found'),
     );
     if (msg.retryRequest == null) return;
+    analytics.capture(Ev.generationRetried, <String, Object?>{
+      ...generationRequestProperties(msg.retryRequest!),
+      Pr.surface: Surface.chat,
+    });
     final workflowId = CadService.createWorkflowId();
     _upsert(
       msg.copyWith(
@@ -979,6 +1044,19 @@ class MessagesNotifier
     required String workflowId,
   }) async {
     final cad = ref.read(cadServiceProvider);
+    final textureProps = <String, Object?>{
+      Pr.resolution: request.resolution.label,
+      Pr.isByok: request.geminiApiKey.trim().isNotEmpty,
+      Pr.billingMode: request.geminiApiKey.trim().isNotEmpty
+          ? 'byok'
+          : 'credits',
+      Pr.hasReferenceImages: request.referenceImageDataUrl != null,
+      if (kCaptureUserContent && request.prompt.trim().isNotEmpty)
+        Pr.prompt: request.prompt.trim(),
+      Pr.promptLength: request.prompt.trim().length,
+    };
+    final tracker = WorkflowRunTracker.forTexture(textureProps);
+    analytics.capture(Ev.textureRequested, textureProps);
     try {
       // Phase 1 — start. A failure here means the workflow never launched, so
       // the failed message carries NO workflowId: resume must not poll a
@@ -996,6 +1074,11 @@ class MessagesNotifier
           conversationId: arg,
         );
       } on CadException catch (e) {
+        analytics.capture(Ev.textureBlocked, <String, Object?>{
+          ...textureProps,
+          Pr.reason: 'start_failed',
+          Pr.errorMessage: e.message,
+        });
         _upsert(
           _startFailureMessage(base, _failureText(e.message)),
           immediateRemote: true,
@@ -1007,6 +1090,11 @@ class MessagesNotifier
       // a poll failure is terminal (the workflow itself failed) and resume can
       // safely re-check it without looping.
       await _refreshWalletForTexture(request); // show the credit hold
+      tracker.start(startedWorkflowId);
+      analytics.capture(Ev.textureStarted, <String, Object?>{
+        ...textureProps,
+        Pr.workflowId: startedWorkflowId,
+      });
       _pollingWorkflowIds.add(startedWorkflowId);
       _upsert(
         base.copyWith(
@@ -1018,16 +1106,26 @@ class MessagesNotifier
 
       final result = await cad.runTextureWorkflow(
         startedWorkflowId,
-        onProgress: (status) => _upsert(
-          base.copyWith(
-            text: status.progressLabel,
-            isStreaming: true,
-            workflowId: startedWorkflowId,
-          ),
-        ),
+        onProgress: (status) {
+          tracker.onStatus(status);
+          _upsert(
+            base.copyWith(
+              text: status.progressLabel,
+              isStreaming: true,
+              workflowId: startedWorkflowId,
+            ),
+          );
+        },
       );
 
       final failed = result.failed || result.glbUrl == null;
+      if (failed) {
+        tracker.failed(message: result.errorMessage);
+      } else {
+        tracker.succeeded(
+          extra: <String, Object?>{Pr.assetCount: result.assets.length},
+        );
+      }
       _upsert(
         base.copyWith(
           text: failed
@@ -1043,11 +1141,14 @@ class MessagesNotifier
         immediateRemote: true,
       );
     } on CadException catch (e) {
+      tracker.failed(message: e.message, category: 'cad_exception');
       _upsert(
         base.copyWith(text: _failureText(e.message), isStreaming: false),
         immediateRemote: true,
       );
-    } catch (_) {
+    } catch (e, st) {
+      tracker.failed(message: e.toString(), category: 'unexpected');
+      analytics.captureException(e, st, context: 'texturing');
       _upsert(
         base.copyWith(
           text: 'Failed to texture model. Please try again.',

@@ -3,6 +3,7 @@
 
 import { THREE } from '@nova/three-ext.js';
 import { state } from '@nova/state.js';
+import { track } from '@nova/analytics.js';
 
 const EXPLODE_SPEED = 2;
 const EXPLODE_DISTANCE = 30;
@@ -103,6 +104,7 @@ function ensureEntries() {
 }
 
 export function toggleExplode() {
+  track('explode_view_used', { enabled: !explodeState.active, mesh_count: state.loadedMeshes.length });
   if (!state.loadedMeshes.length) return;
   ensureEntries();
   explodeState.target = explodeState.target > 0 ? 0 : 1;
