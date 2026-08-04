@@ -908,6 +908,11 @@
           ].join(';');
           document.body.appendChild(overlay);
 
+          // Give the iframe its final dimensions before reparenting it. This
+          // avoids a transient 0×0 resize followed by an expensive fullscreen
+          // WebGL buffer allocation on the next frame.
+          nova3dSetOverlayFullscreen(overlay);
+
           // Move the iframe.  Per the HTML spec, adopting within the same
           // document preserves the JS context.  The iframe is NEVER moved back
           // — re-inserting into Flutter's slot triggers a platform-view reload.

@@ -20,6 +20,7 @@ import { THREE, OrbitControls, TransformControls, RGBELoader } from '@nova/three
 import { state } from '@nova/state.js';
 import { setEnvironmentMap } from '@nova/materials.js';
 import { applyBgPreset, applyBgCustomColor, DEFAULT_BG_PRESET } from '@nova/bgPresets.js';
+import { adaptiveRenderProfile } from '@nova/render_profile.js';
 
 export const DEFAULT_EXPOSURE = 0.5;
 
@@ -133,15 +134,28 @@ export function init() {
   state.camera = new THREE.PerspectiveCamera(30, state.container.clientWidth / state.container.clientHeight, 0.1, 100);
   state.camera.position.set(0, 2, 5);
 
-  state.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
+  state.renderer = new THREE.WebGLRenderer({
+    antialias: !adaptiveRenderProfile.lowPower,
+    logarithmicDepthBuffer: true,
+  });
+  state.renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
   state.renderer.setSize(state.container.clientWidth, state.container.clientHeight);
-  state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   state.renderer.toneMapping         = JEWEL_MODE ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
   state.renderer.toneMappingExposure = JEWEL_MODE ? 1.0 : DEFAULT_EXPOSURE;
   state.renderer.outputColorSpace    = THREE.SRGBColorSpace;
-  state.renderer.shadowMap.enabled   = true;
+  state.renderer.shadowMap.enabled   = !adaptiveRenderProfile.lowPower;
   state.renderer.shadowMap.type      = THREE.PCFSoftShadowMap;
   state.container.appendChild(state.renderer.domElement);
+
+  // A session can enter low-power mode after sustained slow frame pacing. DPR
+  // and shadows can be reduced live; antialiasing is selected at WebGL context
+  // creation from the initial hardware/network profile.
+  adaptiveRenderProfile.onChange(lowPower => {
+    if (!state.renderer) return;
+    state.renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
+    state.renderer.shadowMap.enabled = !lowPower;
+    onResize();
+  });
 
   state.controls = new OrbitControls(state.camera, state.renderer.domElement);
   state.controls.enableDamping   = true;
@@ -174,6 +188,7 @@ export function init() {
 let lastFrameTime = 0;
 function animate(now = 0) {
   requestAnimationFrame(animate);
+  if (!adaptiveRenderProfile.shouldRender(now)) return;
   const dt = lastFrameTime ? Math.min(0.05, (now - lastFrameTime) / 1000) : 1 / 60;
   lastFrameTime = now;
   for (const fn of frameCallbacks) {

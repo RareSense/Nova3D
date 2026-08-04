@@ -24,9 +24,10 @@ import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js?v=5';
 import {
   applyJewelSpec, updateJewelEnv, loadJewelEnv, setJewelRendering,
 } from '../nova3d/jewel_materials.js?v=2';
+import { adaptiveRenderProfile } from '../nova3d/render_profile.js';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
-const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
+const NEAR_MARGIN = '150px';  // preload only the next short scroll of models
 const DRAG_THRESHOLD = 6;     // px before a press counts as a drag (else = click)
 const CATALOG_FETCH_TIMEOUT_MS = 15000;
 
@@ -38,8 +39,12 @@ const countEl = document.getElementById('count');
 
 // ── Shared renderer + environment ────────────────────────────────────────────
 const canvas = document.getElementById('stageCanvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: !adaptiveRenderProfile.lowPower,
+  alpha: true,
+});
+renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
 renderer.setClearColor(0x000000, 0);
 renderer.autoClear = false;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -50,6 +55,10 @@ const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 function sizeRenderer() { renderer.setSize(window.innerWidth, window.innerHeight, false); }
 sizeRenderer();
 window.addEventListener('resize', sizeRenderer);
+adaptiveRenderProfile.onChange(() => {
+  renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
+  sizeRenderer();
+});
 
 // ── Tiles ────────────────────────────────────────────────────────────────────
 const cards = [];
@@ -262,12 +271,16 @@ function createCard(entry) {
 
 // ── Render loop (scissor per visible tile) ───────────────────────────────────
 let last = performance.now();
-// Paused while the host app shows a modal over us (texturing hand-off): the tiles
-// are hidden behind it anyway, and a live WebGL loop on the shared browser thread
-// makes the host's text input janky. We keep the RAF alive so it resumes cleanly.
+// Paused while the full detail editor or host texturing modal covers us. A live
+// hidden WebGL loop would compete with model parsing and host input on the shared
+// browser thread. Keep RAF alive so rendering resumes cleanly when uncovered.
 let renderPaused = false;
 function renderLoop(now) {
   if (renderPaused) { last = now; requestAnimationFrame(renderLoop); return; }
+  if (!adaptiveRenderProfile.shouldRender(now)) {
+    requestAnimationFrame(renderLoop);
+    return;
+  }
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
@@ -324,6 +337,10 @@ function canTexture(entry) {
 
 function openDetail(entry) {
   currentEntry = entry;
+  // The full editor completely covers the gallery. Stop rendering the hidden
+  // tile scenes so GLB parsing and the first large editor frame get the browser's
+  // CPU/GPU budget instead of competing with up to MAX_LOADED live models.
+  renderPaused = true;
   detailEl.classList.add('open');
   setDetailTab('model');
   dlGlb.disabled = !entry.glb_url;
@@ -419,7 +436,7 @@ function ringDetailParams(entry) {
 function closeDetail() {
   detailEl.classList.remove('open');
   detailEditor.src = 'about:blank'; // free the editor + its WebGL context
-  renderPaused = false; // in case a texture hand-off paused us
+  renderPaused = false;
 }
 
 function setDetailTab(tab) {

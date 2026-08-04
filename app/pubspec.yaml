@@ -49,9 +49,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/gifs/nova3d/
-    - assets/gifs/nova3d/adam-cad-comparison/
 
   # Bundled Google Fonts. Registering them here lets google_fonts resolve
   # from the asset bundle (with allowRuntimeFetching = false in main.dart),
