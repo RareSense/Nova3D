@@ -1,29 +1,34 @@
-// WebGL replay bridge for same-origin embedded viewers.
+// Relays WebGL canvas frames from a same-origin viewer iframe into the parent
+// PostHog replay.
 //
-// PostHog's top-level rrweb recorder serializes DOM inside same-origin iframes,
-// but its canvas sampler only scans canvases in the recorder's own document.
-// Nova3D renders both the showcase and editor inside iframes, so their DOM is
-// present in a replay while their WebGL pixels are otherwise absent.
+// PostHog/rrweb observes same-origin iframe DOM from the top document, but its
+// FPS canvas sampler only scans canvases in the document where the recorder is
+// running. Starting a second PostHog client here is not correct: it creates a
+// competing replay window, so playback can briefly switch to the model and
+// then switch back to the parent's blank iframe.
 //
-// When (and only when) the trusted parent is already recording, this module
-// starts a recording-only PostHog instance in the iframe. It bootstraps the
-// parent's session id and distinct id, while using memory persistence so the
-// iframe receives its own window id. PostHog natively plays multi-window
-// sessions as one timeline, switching to the active iframe while it is used.
+// Instead, this module loads the exact rrweb recorder version already trusted
+// and loaded by the parent. A local recorder samples this iframe's canvases,
+// and only its CanvasMutation events are handed to the parent's existing
+// recorder after translating each canvas to the parent's rrweb node id. The
+// result remains one session, one window, and one activity timeline.
 //
 // Privacy and self-hosting invariants:
-//   * no project key or company endpoint is committed here;
-//   * configuration is copied at runtime from a same-origin parent;
-//   * forks without an initialized parent PostHog client do nothing;
-//   * the child captures no product events, pageviews, heatmaps, or profiles;
-//   * recording follows the parent's start/stop state.
+//   * no PostHog project key or endpoint is committed here;
+//   * no second analytics client, identity, session, or product event exists;
+//   * only canvas pixels are relayed; local DOM/network/console events are not;
+//   * forks without an active parent PostHog recorder do nothing;
+//   * capture follows the parent's recording state and stops on pagehide.
 
 const POLL_INTERVAL_MS = 250;
 const PARENT_READY_TIMEOUT_MS = 30000;
 const PARENT_STATE_INTERVAL_MS = 1000;
+const RELAY_RETRY_INTERVAL_MS = 2000;
 const MAX_REPLAY_FPS = 2;
 const MIN_QUALITY = 0.1;
 const MAX_QUALITY = 1;
+const CANVAS_MUTATION_SOURCE = 9;
+const INCREMENTAL_SNAPSHOT_TYPE = 3;
 
 function sameOriginParent() {
   if (!window.parent || window.parent === window) return null;
@@ -42,51 +47,67 @@ function finiteNumber(value, fallback, min, max) {
   return Math.min(max, Math.max(min, number));
 }
 
-function safeHttpUrl(value) {
-  if (typeof value !== 'string' || !value.trim()) return null;
+function isHttpUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return false;
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      ? parsed.toString().replace(/\/$/, '')
-      : null;
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch (_) {
-    return null;
+    return false;
   }
 }
 
-function parentRecordingConfig(parentPostHog) {
-  const config = parentPostHog?.config;
-  const token = config?.token;
-  const sessionId = parentPostHog?.get_session_id?.();
-  const distinctId = parentPostHog?.get_distinct_id?.();
-  const apiHost = safeHttpUrl(config?.api_host);
-  const uiHost = safeHttpUrl(config?.ui_host);
+function parentRecorderScriptUrl(parentWindow) {
+  try {
+    for (const script of parentWindow.document.scripts) {
+      const src = script.src;
+      if (isHttpUrl(src) && /\/posthog-recorder(?:\.min)?\.js(?:$|[?#])/.test(src)) {
+        return src;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
 
-  if (typeof token !== 'string' || !token.trim()) return null;
-  if (typeof sessionId !== 'string' || !sessionId.trim()) return null;
-  if (typeof distinctId !== 'string' || !distinctId.trim()) return null;
-  if (!apiHost) return null;
+function parentReplayContext(parentWindow) {
+  const posthog = parentWindow.posthog;
+  let recording = false;
+  try { recording = posthog?.sessionRecordingStarted?.() === true; }
+  catch (_) {}
+  if (!recording) return null;
 
-  const parentCapture = config?.session_recording?.captureCanvas || {};
-  const parentCanvasCapture = config?.session_recording?.canvasCapture || {};
-  const parentFps = finiteNumber(parentCapture.canvasFps, MAX_REPLAY_FPS, 1, 12);
+  const sessionRecording = posthog?.sessionRecording;
+  const parentRecord = parentWindow.__PosthogExtensions__?.rrweb?.record;
+  const parentMirror = parentRecord?.mirror;
+  const recorderScriptUrl = parentRecorderScriptUrl(parentWindow);
+  if (typeof sessionRecording?.onRRwebEmit !== 'function') return null;
+  if (typeof parentMirror?.getId !== 'function') return null;
+  if (!recorderScriptUrl) return null;
+
+  const config = posthog.config?.session_recording || {};
+  const captureCanvas = config.captureCanvas || {};
+  const canvasCapture = config.canvasCapture || {};
+  const parentFps = finiteNumber(
+    captureCanvas.canvasFps,
+    MAX_REPLAY_FPS,
+    1,
+    12,
+  );
 
   return {
-    token: token.trim(),
-    sessionId,
-    distinctId,
-    apiHost,
-    uiHost: uiHost || undefined,
-    defaults: typeof config?.defaults === 'string' ? config.defaults : undefined,
+    posthog,
+    sessionRecording,
+    parentMirror,
+    recorderScriptUrl,
     canvasFps: Math.min(parentFps, MAX_REPLAY_FPS),
-    canvasQuality: String(finiteNumber(
-      parentCapture.canvasQuality,
+    canvasQuality: finiteNumber(
+      captureCanvas.canvasQuality,
       0.8,
       MIN_QUALITY,
       MAX_QUALITY,
-    )),
+    ),
     resolutionScale: finiteNumber(
-      parentCanvasCapture.resolutionScale,
+      canvasCapture.resolutionScale,
       1,
       0.1,
       1,
@@ -94,151 +115,148 @@ function parentRecordingConfig(parentPostHog) {
   };
 }
 
-function installPostHogStub(apiHost) {
-  if (window.posthog?.__SV) return window.posthog;
+let recorderScriptPromise;
 
-  const posthog = [];
-  window.posthog = posthog;
-  posthog._i = [];
-  posthog.__SV = 1;
-  posthog.init = function init(token, config, name) {
+function loadLocalRecorder(src) {
+  const existing = window.__PosthogExtensions__?.rrweb?.record;
+  if (typeof existing === 'function') return Promise.resolve(existing);
+  if (recorderScriptPromise) return recorderScriptPromise;
+
+  recorderScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.type = 'text/javascript';
     script.crossOrigin = 'anonymous';
     script.async = true;
-    script.src = `${apiHost.replace('.i.posthog.com', '-assets.i.posthog.com')}/static/array.js`;
-    const firstScript = document.getElementsByTagName('script')[0];
-    firstScript?.parentNode?.insertBefore(script, firstScript);
+    script.src = src;
+    script.dataset.nova3dReplayRelay = 'true';
+    script.addEventListener('load', () => {
+      const record = window.__PosthogExtensions__?.rrweb?.record;
+      if (typeof record === 'function') resolve(record);
+      else reject(new Error('rrweb recorder did not initialize'));
+    }, { once: true });
+    script.addEventListener('error', () => {
+      reject(new Error('rrweb recorder failed to load'));
+    }, { once: true });
+    document.head.appendChild(script);
+  }).catch((error) => {
+    recorderScriptPromise = undefined;
+    throw error;
+  });
 
-    let instance;
-    if (name !== undefined) {
-      instance = posthog[name] = [];
-    } else {
-      name = 'posthog';
-      instance = posthog;
-    }
-    instance.people = instance.people || [];
-    instance.toString = function toString(detail) {
-      let value = name === 'posthog' ? 'posthog' : `posthog.${name}`;
-      return detail ? `${value}.people (stub)` : `${value} (stub)`;
-    };
-    instance.people.toString = () => instance.toString(true);
-
-    const methods = [
-      'init', 'capture', 'get_distinct_id', 'get_session_id',
-      'sessionRecordingStarted', 'startSessionRecording',
-      'stopSessionRecording', 'set_config', 'opt_out_capturing',
-    ];
-    for (const method of methods) {
-      instance[method] = (...args) => instance.push([method, ...args]);
-    }
-    posthog._i.push([token, config, name]);
-  };
-  return posthog;
+  return recorderScriptPromise;
 }
 
-function stripNetworkUrl(request) {
-  if (!request || typeof request.name !== 'string') return request;
-  try {
-    const url = new URL(request.name, window.location.origin);
-    url.search = '';
-    url.hash = '';
-    request.name = url.toString();
-  } catch (_) {
-    request.name = request.name.split(/[?#]/, 1)[0];
-  }
-  return request;
+function isCanvasMutation(event) {
+  return event?.type === INCREMENTAL_SNAPSHOT_TYPE
+    && event?.data?.source === CANVAS_MUTATION_SOURCE;
 }
 
-function forceRecording(instance) {
-  try {
-    // The parent already passed its project's sampling/privacy gates. Override
-    // the child's independent sampling decision so its canvas cannot vanish
-    // from a session the parent is actively recording.
-    instance?.startSessionRecording?.({
-      sampling: true,
-      linked_flag: true,
-      url_trigger: true,
-      event_trigger: true,
-    });
-  } catch (_) {
-    // Replay must never become load-bearing for the viewer.
-  }
+function parentIsRecording(context) {
+  try { return context.posthog.sessionRecordingStarted?.() === true; }
+  catch (_) { return false; }
 }
 
-function startChildRecorder(parentPostHog, inherited) {
+function startBridge(parentWindow, initialContext) {
   if (window.__nova3dIframeReplayStarted) return;
   window.__nova3dIframeReplayStarted = true;
 
-  const childPostHog = installPostHogStub(inherited.apiHost);
-  childPostHog.init(inherited.token, {
-    api_host: inherited.apiHost,
-    ...(inherited.uiHost ? { ui_host: inherited.uiHost } : {}),
-    ...(inherited.defaults ? { defaults: inherited.defaults } : {}),
-    bootstrap: {
-      distinctID: inherited.distinctId,
-      sessionID: inherited.sessionId,
-    },
+  let context = initialContext;
+  let localStop = null;
+  let starting = false;
+  let disposed = false;
+  let lastStartAttempt = 0;
 
-    // A distinct in-memory persistence namespace gives this iframe its own
-    // window id without mutating the parent client's cookies/local storage.
-    persistence: 'memory',
-    person_profiles: 'never',
-    capture_pageview: false,
-    capture_pageleave: false,
-    autocapture: false,
-    rageclick: false,
-    capture_heatmaps: false,
-    capture_performance: false,
-    disable_surveys: true,
-    disable_session_recording: false,
-    property_denylist: [
-      '$current_url', '$initial_current_url', '$referrer', '$initial_referrer',
-    ],
-    session_recording: {
-      maskAllInputs: true,
-      maskInputOptions: { password: true, email: false, text: false },
-      maskTextSelector: '[data-ph-mask]',
-      blockSelector: '[data-ph-block]',
-      maskCapturedNetworkRequestFn: stripNetworkUrl,
-      // This must stay false for a same-origin child. rrweb delegates iframe
-      // recording to the parent when true, which is the exact path that omits
-      // nested canvas sampling.
-      recordCrossOriginIframes: false,
-      captureCanvas: {
-        recordCanvas: true,
-        canvasFps: inherited.canvasFps,
-        canvasQuality: inherited.canvasQuality,
-      },
-      canvasCapture: { resolutionScale: inherited.resolutionScale },
-    },
-    loaded: forceRecording,
-  });
-
-  let childInstance = childPostHog;
-  let lastParentRecording = true;
-  const syncParentState = () => {
-    let parentIsRecording = false;
-    try {
-      parentIsRecording = parentPostHog.sessionRecordingStarted?.() === true;
-    } catch (_) {}
-
-    if (parentIsRecording === lastParentRecording) return;
-    lastParentRecording = parentIsRecording;
-
-    // The real SDK replaces the stub asynchronously; always read the current
-    // global before forwarding a start/stop transition.
-    childInstance = window.posthog || childInstance;
-    try {
-      if (parentIsRecording) forceRecording(childInstance);
-      else childInstance?.stopSessionRecording?.();
-    } catch (_) {}
+  const stopLocalRecorder = () => {
+    const stop = localStop;
+    localStop = null;
+    if (typeof stop === 'function') {
+      try { stop(); } catch (_) {}
+    }
   };
 
-  const stateTimer = window.setInterval(syncParentState, PARENT_STATE_INTERVAL_MS);
+  const startLocalRecorder = async () => {
+    if (disposed || starting || localStop) return;
+    const now = Date.now();
+    if (now - lastStartAttempt < RELAY_RETRY_INTERVAL_MS) return;
+    lastStartAttempt = now;
+    starting = true;
+
+    try {
+      const record = await loadLocalRecorder(context.recorderScriptUrl);
+      if (disposed || !parentIsRecording(context)) return;
+
+      const childMirror = record.mirror;
+      if (typeof childMirror?.getNode !== 'function') return;
+
+      const stop = record({
+        emit(event) {
+          if (!isCanvasMutation(event) || !parentIsRecording(context)) return;
+          try {
+            const canvas = childMirror.getNode(event.data.id);
+            if (!(canvas instanceof window.HTMLCanvasElement)) return;
+
+            // The parent recorder already serialized this same-origin canvas.
+            // Resolve its current id for every frame because rrweb replaces
+            // mirror ids whenever it takes a new full snapshot.
+            const parentId = context.parentMirror.getId(canvas);
+            if (!Number.isInteger(parentId) || parentId < 0) return;
+
+            context.sessionRecording.onRRwebEmit({
+              ...event,
+              data: { ...event.data, id: parentId },
+            });
+          } catch (_) {
+            // Replay must never become load-bearing for the model viewer.
+          }
+        },
+        recordCanvas: true,
+        recordCrossOriginIframes: false,
+        sampling: {
+          canvas: context.canvasFps,
+          // The parent recorder already owns interaction/activity capture.
+          mousemove: false,
+          mouseInteraction: false,
+          scroll: false,
+        },
+        dataURLOptions: {
+          type: 'image/webp',
+          quality: context.canvasQuality,
+          maxBase64ImageLength: 1048576,
+        },
+        canvasResolutionScale: context.resolutionScale,
+        maskAllInputs: true,
+        maskInputOptions: { password: true, email: false, text: false },
+        maskTextSelector: '[data-ph-mask]',
+        blockSelector: '[data-ph-block]',
+      });
+
+      if (typeof stop === 'function') localStop = stop;
+    } catch (_) {
+      // Retried while the trusted parent recorder remains active.
+    } finally {
+      starting = false;
+    }
+  };
+
+  const syncParentState = () => {
+    const freshContext = parentReplayContext(parentWindow);
+    if (!freshContext) {
+      stopLocalRecorder();
+      return;
+    }
+    context = freshContext;
+    void startLocalRecorder();
+  };
+
+  void startLocalRecorder();
+  const stateTimer = window.setInterval(
+    syncParentState,
+    PARENT_STATE_INTERVAL_MS,
+  );
   window.addEventListener('pagehide', () => {
+    disposed = true;
     window.clearInterval(stateTimer);
-    try { (window.posthog || childInstance)?.stopSessionRecording?.(); } catch (_) {}
+    stopLocalRecorder();
   }, { once: true });
 }
 
@@ -248,14 +266,9 @@ function boot() {
 
   const startedAt = performance.now();
   const poll = () => {
-    const parentPostHog = parentWindow.posthog;
-    let recording = false;
-    try { recording = parentPostHog?.sessionRecordingStarted?.() === true; }
-    catch (_) {}
-
-    const inherited = recording ? parentRecordingConfig(parentPostHog) : null;
-    if (inherited) {
-      startChildRecorder(parentPostHog, inherited);
+    const context = parentReplayContext(parentWindow);
+    if (context) {
+      startBridge(parentWindow, context);
       return;
     }
     if (performance.now() - startedAt < PARENT_READY_TIMEOUT_MS) {
