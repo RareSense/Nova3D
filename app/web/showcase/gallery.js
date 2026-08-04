@@ -24,10 +24,10 @@ import { colorizeIfUncolored } from '../nova3d/showcase_colorize.js?v=5';
 import {
   applyJewelSpec, updateJewelEnv, loadJewelEnv, setJewelRendering,
 } from '../nova3d/jewel_materials.js?v=2';
-import { adaptiveRenderProfile } from '../nova3d/render_profile.js';
 
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
-const NEAR_MARGIN = '150px';  // preload only the next short scroll of models
+const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
+const MAX_CONCURRENT_CARD_LOADS = 3; // progressive tiles; leave capacity for a clicked detail
 const DRAG_THRESHOLD = 6;     // px before a press counts as a drag (else = click)
 const CATALOG_FETCH_TIMEOUT_MS = 15000;
 
@@ -39,12 +39,8 @@ const countEl = document.getElementById('count');
 
 // ── Shared renderer + environment ────────────────────────────────────────────
 const canvas = document.getElementById('stageCanvas');
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: !adaptiveRenderProfile.lowPower,
-  alpha: true,
-});
-renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x000000, 0);
 renderer.autoClear = false;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -55,10 +51,6 @@ const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 function sizeRenderer() { renderer.setSize(window.innerWidth, window.innerHeight, false); }
 sizeRenderer();
 window.addEventListener('resize', sizeRenderer);
-adaptiveRenderProfile.onChange(() => {
-  renderer.setPixelRatio(adaptiveRenderProfile.pixelRatio());
-  sizeRenderer();
-});
 
 // ── Tiles ────────────────────────────────────────────────────────────────────
 const cards = [];
@@ -131,60 +123,144 @@ function disposeObject(obj) {
 }
 
 const CARD_MODEL_TIMEOUT_MS = 30000;
+const cardLoadQueue = [];
+let activeCardLoads = 0;
+let cardLoadsPaused = false;
+let cardLoadPumpScheduled = false;
 
-function loadCardModel(card) {
-  if (card.loaded || card.loading || !card.entry.glb_url) return;
+function cardLoadPriority(card) {
+  const cardRect = card.stage.getBoundingClientRect();
+  const viewport = scrollEl.getBoundingClientRect();
+  const visible = cardRect.bottom > viewport.top && cardRect.top < viewport.bottom;
+  return visible ? 0 : 1;
+}
+
+function cardDistanceFromViewportCenter(card) {
+  const cardRect = card.stage.getBoundingClientRect();
+  const viewport = scrollEl.getBoundingClientRect();
+  const viewportCenter = (viewport.top + viewport.bottom) / 2;
+  const cardCenter = (cardRect.top + cardRect.bottom) / 2;
+  return Math.abs(cardCenter - viewportCenter);
+}
+
+function scheduleCardLoadPump() {
+  if (cardLoadPumpScheduled) return;
+  cardLoadPumpScheduled = true;
+  queueMicrotask(() => {
+    cardLoadPumpScheduled = false;
+    pumpCardLoadQueue();
+  });
+}
+
+function queueCardModel(card, priority = cardLoadPriority(card)) {
+  if (card.loaded || card.loading || card.disposed || !card.entry.glb_url) return;
+  if (card.queued) {
+    card.loadPriority = Math.min(card.loadPriority, priority);
+  } else {
+    card.queued = true;
+    card.loadPriority = priority;
+    cardLoadQueue.push(card);
+  }
+  scheduleCardLoadPump();
+}
+
+function pumpCardLoadQueue() {
+  if (cardLoadsPaused) return;
+  cardLoadQueue.sort((a, b) =>
+    a.loadPriority - b.loadPriority
+      || cardDistanceFromViewportCenter(a) - cardDistanceFromViewportCenter(b));
+  while (activeCardLoads < MAX_CONCURRENT_CARD_LOADS && cardLoadQueue.length) {
+    const card = cardLoadQueue.shift();
+    if (!card) continue;
+    const wasQueued = card.queued;
+    card.queued = false;
+    if (!wasQueued || card.loaded || card.loading || card.disposed || !card.near) continue;
+    startCardModelLoad(card);
+  }
+}
+
+function parseCardGlb(bytes, url) {
+  return new Promise((resolve, reject) => {
+    loader.parse(bytes, THREE.LoaderUtils.extractUrlBase(url), resolve, reject);
+  });
+}
+
+async function fetchCardGlb(card, controller) {
+  const url = card.entry.glb_url;
+  const response = await fetch(url, {
+    cache: 'force-cache',
+    credentials: 'omit',
+    mode: 'cors',
+    signal: controller.signal,
+  });
+  if (!response.ok) throw new Error(`Model request failed (${response.status})`);
+  const bytes = await response.arrayBuffer();
+  if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  return parseCardGlb(bytes, url);
+}
+
+function startCardModelLoad(card) {
   card.loading = true;
+  card.spin.style.display = '';
+  card.spin.textContent = '◆ loading…';
   const attempt = ++card.loadAttempt;
+  const controller = new AbortController();
+  card.abortController = controller;
+  activeCardLoads++;
+  let timedOut = false;
   const timeout = setTimeout(() => {
-    if (card.disposed || !card.loading || attempt !== card.loadAttempt) return;
-    card.loading = false;
-    card.spin.textContent = 'preview unavailable';
+    if (card.disposed || attempt !== card.loadAttempt) return;
+    timedOut = true;
+    controller.abort();
   }, CARD_MODEL_TIMEOUT_MS);
-  loader.load(
-    card.entry.glb_url,
-    (gltf) => {
-      clearTimeout(timeout);
-      if (attempt !== card.loadAttempt) {
-        disposeObject(gltf.scene);
-        return;
-      }
-      card.loading = false;
-      if (card.disposed) { disposeObject(gltf.scene); return; }
-      card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
-      if (entryHasJewelSpec(card.entry)) {
-        // Ring published with a materials spec: render the exact metals/gems
-        // chosen at publish time (identical to the publish UI + detail view).
-        const env = loadJewelEnv(renderer, (e) => {
-          if (card.disposed || !card.model) return;
-          if (e.pmrem) card.scene.environment = e.pmrem;
-          updateJewelEnv(card.model, { raw: e.raw });
-        });
-        applyJewelSpec(card.model, card.entry.materials, { raw: env.raw });
-      } else {
-        // Legacy rings (no spec): force soft pastel part-coding instead of grey.
-        // Everything else: colour-code only if it ships no colour.
-        colorizeIfUncolored(card.model,
-          card.entry.kind === 'ring' ? { force: true, pastel: true } : {});
-      }
-      card.scene.add(card.model);
-      card.loaded = true;
-      card.spin.style.display = 'none';
-      enforceLoadCap();
-    },
-    undefined,
-    () => {
-      clearTimeout(timeout);
-      if (attempt !== card.loadAttempt) return;
-      card.loading = false;
-      card.spin.textContent = 'preview unavailable';
-    },
-  );
+
+  fetchCardGlb(card, controller).then((gltf) => {
+    if (attempt !== card.loadAttempt || card.disposed) {
+      disposeObject(gltf.scene);
+      return;
+    }
+    card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
+    if (entryHasJewelSpec(card.entry)) {
+      // Ring published with a materials spec: render the exact metals/gems
+      // chosen at publish time (identical to the publish UI + detail view).
+      const env = loadJewelEnv(renderer, (e) => {
+        if (card.disposed || !card.model) return;
+        if (e.pmrem) card.scene.environment = e.pmrem;
+        updateJewelEnv(card.model, { raw: e.raw });
+      });
+      applyJewelSpec(card.model, card.entry.materials, { raw: env.raw });
+    } else {
+      // Legacy rings (no spec): force soft pastel part-coding instead of grey.
+      // Everything else: colour-code only if it ships no colour.
+      colorizeIfUncolored(card.model,
+        card.entry.kind === 'ring' ? { force: true, pastel: true } : {});
+    }
+    card.scene.add(card.model);
+    card.loaded = true;
+    card.spin.style.display = 'none';
+    enforceLoadCap();
+  }).catch((error) => {
+    if (attempt !== card.loadAttempt || card.disposed) return;
+    if (error?.name === 'AbortError' && !timedOut) {
+      card.spin.textContent = '◆ loading…';
+      return;
+    }
+    card.spin.textContent = 'preview unavailable';
+  }).finally(() => {
+    clearTimeout(timeout);
+    if (card.abortController === controller) card.abortController = null;
+    if (attempt === card.loadAttempt) card.loading = false;
+    activeCardLoads = Math.max(0, activeCardLoads - 1);
+    scheduleCardLoadPump();
+  });
 }
 
 function unloadCardModel(card) {
   card.loadAttempt++;
+  card.queued = false;
   card.loading = false;
+  card.abortController?.abort();
+  card.abortController = null;
   if (card.model) { card.scene.remove(card.model); disposeObject(card.model); card.model = null; }
   card.loaded = false;
   card.spin.style.display = '';
@@ -194,17 +270,11 @@ function unloadCardModel(card) {
 function enforceLoadCap() {
   const loaded = cards.filter((c) => c.loaded);
   if (loaded.length <= MAX_LOADED) return;
-  const mid = window.scrollY + window.innerHeight / 2;
   loaded
-    .map((c) => ({ c, d: Math.abs(cardCenterY(c) - mid) }))
+    .map((c) => ({ c, d: cardDistanceFromViewportCenter(c) }))
     .sort((a, b) => b.d - a.d)
     .slice(0, loaded.length - MAX_LOADED)
     .forEach(({ c }) => { if (!c.near) unloadCardModel(c); });
-}
-
-function cardCenterY(card) {
-  const r = card.stage.getBoundingClientRect();
-  return window.scrollY + r.top + r.height / 2;
 }
 
 function createCard(entry) {
@@ -239,7 +309,8 @@ function createCard(entry) {
   const card = {
     entry, el, stage, spin: el.querySelector('.spin'),
     scene: buildScene(entry), camera: makeCamera(), model: null,
-    loaded: false, loading: false, near: false, disposed: false, loadAttempt: 0,
+    loaded: false, loading: false, queued: false, loadPriority: 1,
+    near: false, disposed: false, loadAttempt: 0, abortController: null,
     rot: { x: 0.1, y: 0.4 }, dragging: false,
   };
 
@@ -271,16 +342,12 @@ function createCard(entry) {
 
 // ── Render loop (scissor per visible tile) ───────────────────────────────────
 let last = performance.now();
-// Paused while the full detail editor or host texturing modal covers us. A live
-// hidden WebGL loop would compete with model parsing and host input on the shared
-// browser thread. Keep RAF alive so rendering resumes cleanly when uncovered.
+// Paused while the host app shows a modal over us (texturing hand-off): the tiles
+// are hidden behind it anyway, and a live WebGL loop on the shared browser thread
+// makes the host's text input janky. We keep the RAF alive so it resumes cleanly.
 let renderPaused = false;
 function renderLoop(now) {
   if (renderPaused) { last = now; requestAnimationFrame(renderLoop); return; }
-  if (!adaptiveRenderProfile.shouldRender(now)) {
-    requestAnimationFrame(renderLoop);
-    return;
-  }
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
@@ -337,10 +404,17 @@ function canTexture(entry) {
 
 function openDetail(entry) {
   currentEntry = entry;
-  // The full editor completely covers the gallery. Stop rendering the hidden
-  // tile scenes so GLB parsing and the first large editor frame get the browser's
-  // CPU/GPU budget instead of competing with up to MAX_LOADED live models.
+  // A user's explicit selection wins over speculative tile work. Stop queued
+  // and in-flight background GLBs before the editor requests the selected one.
+  cardLoadsPaused = true;
   renderPaused = true;
+  for (const card of cards) {
+    if (!card.loading) continue;
+    card.loadAttempt++;
+    card.loading = false;
+    card.abortController?.abort();
+    card.abortController = null;
+  }
   detailEl.classList.add('open');
   setDetailTab('model');
   dlGlb.disabled = !entry.glb_url;
@@ -437,6 +511,11 @@ function closeDetail() {
   detailEl.classList.remove('open');
   detailEditor.src = 'about:blank'; // free the editor + its WebGL context
   renderPaused = false;
+  cardLoadsPaused = false;
+  for (const card of cards) {
+    if (card.near && !card.loaded) queueCardModel(card);
+  }
+  scheduleCardLoadPump();
 }
 
 function setDetailTab(tab) {
@@ -555,9 +634,13 @@ const catalogRequestIds = { generations: 0, textures: 0, rings: 0 };
 
 function disposeCards() {
   if (io) { io.disconnect(); io = null; }
+  cardLoadQueue.length = 0;
   for (const card of cards) {
     card.disposed = true;
+    card.queued = false;
     card.loadAttempt++;
+    card.abortController?.abort();
+    card.abortController = null;
     if (card.model) { card.scene.remove(card.model); disposeObject(card.model); card.model = null; }
     card.el.remove();
   }
@@ -591,7 +674,7 @@ function mountEntries(entries, noun) {
       const card = b.target._card;
       if (!card) continue;
       card.near = b.isIntersecting;
-      if (card.near) loadCardModel(card);
+      if (card.near) queueCardModel(card);
     }
     enforceLoadCap();
   }, { root: scrollEl, rootMargin: NEAR_MARGIN, threshold: 0 });

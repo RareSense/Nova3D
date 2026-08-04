@@ -119,10 +119,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   // platform-view factory and the AI edit handler. Called once from initState
   // and again from [_rebuildAfterDisposal] when the host has torn the iframe
   // out from under us.
-  void _provisionViewer({
-    String? reusableResolvedSrc,
-    String? reusableSourceUrl,
-  }) {
+  void _provisionViewer() {
     _viewerId = 'nova3d-viewer-${++_counter}';
     _viewType = '$_viewerId-g$_instanceGen';
     _iframe = web.HTMLIFrameElement()
@@ -139,16 +136,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       (int id) => _iframe,
     );
 
-    if (reusableResolvedSrc != null && reusableResolvedSrc.isNotEmpty) {
-      final attempt = ++_resolveAttempt;
-      _resolvedSrc = reusableResolvedSrc;
-      _loadedSourceModelUrl = reusableSourceUrl;
-      _loadError = false;
-      _iframe.src = _buildViewerUrl(reusableResolvedSrc);
-      _postEditConfigSoon(widget.src, attempt);
-    } else {
-      _resolveAndLoad(widget.src);
-    }
+    _resolveAndLoad(widget.src);
     _registerEditHandler(_viewerId.toJS, _handleEditRequest.toJS);
   }
 
@@ -206,24 +194,20 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     analytics.capture(event, properties);
   }
 
-  // The host has already removed our iframe from the DOM. Keep the resolved
-  // parent-owned blob URL alive, tear down the stale edit-handler registration,
-  // then provision a fresh iframe around those same bytes. This avoids another
-  // cache/backend resolution when returning from fullscreen.
+  // The host has already removed our iframe from the DOM. Release any blob
+  // URL we held, tear down the now-stale edit-handler registration, then
+  // provision a fresh viewer and trigger a rebuild so HtmlElementView mounts
+  // the new viewType.
   void _rebuildAfterDisposal() {
     if (!mounted) return;
-    final reusableResolvedSrc = _resolvedSrc;
-    final reusableSourceUrl = _loadedSourceModelUrl;
     _invalidateResolution();
     _unregisterEditHandler(_viewerId.toJS);
+    GlbAssetCache.revoke(_resolvedSrc ?? '');
+    _resolvedSrc = null;
+    _loadedSourceModelUrl = null;
     _loadError = false;
     _instanceGen++;
-    setState(() {
-      _provisionViewer(
-        reusableResolvedSrc: reusableResolvedSrc,
-        reusableSourceUrl: reusableSourceUrl,
-      );
-    });
+    setState(_provisionViewer);
   }
 
   @override
