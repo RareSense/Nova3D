@@ -149,16 +149,55 @@ export function updateMeshStats() {
 }
 
 // ── GLB load/clear ───────────────────────────────────────────────────────────
+const MODEL_LOAD_TIMEOUT_MS = 45000;
+let _modelLoadAttempt = 0;
+
 export function loadGLB(url, options = {}) {
+  const attempt = ++_modelLoadAttempt;
+  let settled = false;
+  const loadStartedAt = performance.now();
+  const source = /^blob:/i.test(url) ? 'blob' : (/^data:/i.test(url) ? 'data' : 'remote');
+  track('model_load_started', {
+    source,
+    has_canonical_url: Boolean(options.canonicalUrl),
+  });
   showLoading();
+  const loadTimer = setTimeout(() => {
+    if (settled || attempt !== _modelLoadAttempt) return;
+    settled = true;
+    track('model_load_failed', {
+      source,
+      duration_ms: Math.round(performance.now() - loadStartedAt),
+      error_message: 'Model load timed out',
+    });
+    showError('Model loading timed out. Reopen the preview to try again.');
+  }, MODEL_LOAD_TIMEOUT_MS);
   new GLTFLoader().load(
     url,
     gltf => {
+      if (settled || attempt !== _modelLoadAttempt) {
+        gltf.scene?.traverse?.(child => {
+          if (!child.isMesh) return;
+          child.geometry?.dispose?.();
+          const materials = Array.isArray(child.material)
+            ? child.material
+            : [child.material];
+          materials.forEach(disposeMaterial);
+        });
+        return;
+      }
+      settled = true;
+      clearTimeout(loadTimer);
       clearModel();
       // canonicalUrl: when loading from a local blob: cache, persist the real
       // backend artifact URL instead of the ephemeral object URL.
-      state.currentModelUrl = options.canonicalUrl || url;
-      if (options.sourceModelUrl) state.currentSourceModelUrl = options.sourceModelUrl;
+      const preserveSource = options.preserveCurrentSourceModelUrl === true
+        && Boolean(state.currentSourceModelUrl);
+      state.currentModelUrl = options.canonicalUrl
+        || (preserveSource ? state.currentSourceModelUrl : url);
+      if (options.sourceModelUrl && !preserveSource) {
+        state.currentSourceModelUrl = options.sourceModelUrl;
+      }
       const model = gltf.scene;
       const box  = new THREE.Box3().setFromObject(model);
       const ctr  = box.getCenter(new THREE.Vector3());
@@ -207,12 +246,30 @@ export function loadGLB(url, options = {}) {
       }
       saveEditorState();
       state.renderer.render(state.scene, state.camera);
+      track('model_load_succeeded', {
+        source,
+        duration_ms: Math.round(performance.now() - loadStartedAt),
+        mesh_count: state.loadedMeshes.length,
+      });
     },
-    prog => { if (prog.total > 0) setLoadingProgress(Math.round(prog.loaded / prog.total * 100)); },
+    prog => {
+      if (!settled && attempt === _modelLoadAttempt && prog.total > 0) {
+        setLoadingProgress(Math.round(prog.loaded / prog.total * 100));
+      }
+    },
     err  => {
+      if (settled || attempt !== _modelLoadAttempt) return;
+      settled = true;
+      clearTimeout(loadTimer);
       const msg = err?.message || String(err);
       console.error('GLB load error:', err);
-      showError(`Failed to load model: ${msg}\n\nURL: ${url.slice(0,80)}`);
+      track('model_load_failed', {
+        source,
+        duration_ms: Math.round(performance.now() - loadStartedAt),
+        error_message: msg,
+      });
+      const displayMessage = msg.replace(/(?:https?|blob|data):[^\s]+/gi, '[model asset]');
+      showError(`Failed to load model: ${displayMessage}`);
     }
   );
 }

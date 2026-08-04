@@ -75,6 +75,11 @@ class GlbViewerPlatform extends ConsumerStatefulWidget {
 
 class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   static int _counter = 0;
+  static const Duration _resolutionBudget = Duration(seconds: 42);
+  static const Duration _historicalResultTimeout = Duration(seconds: 6);
+  static const Duration _freshUrlResolveSlice = Duration(seconds: 20);
+  static const Duration _originalUrlResolveSlice = Duration(seconds: 18);
+  static const int _maxVersionFallbacks = 2;
 
   // These are reassigned by [_provisionViewer] when the host (web/index.html)
   // tears the iframe down on fullscreen exit and we rebuild it in place.
@@ -82,6 +87,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   late String _viewerId;
   late web.HTMLIFrameElement _iframe;
   int _instanceGen = 0;
+  int _resolveAttempt = 0;
 
   String? _resolvedSrc;
   String? _loadedSourceModelUrl;
@@ -135,6 +141,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   }
 
   void _onWindowMessage(web.MessageEvent event) {
+    if (event.origin != web.window.location.origin) return;
     final raw = event.data?.dartify();
     if (raw is! Map) return;
     // Both branches filter on viewerId: several viewers can be mounted at once
@@ -143,9 +150,19 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     // once per mounted viewer.
     if (raw['viewerId'] != _viewerId) return;
 
-    switch (raw['type']) {
+    final type = raw['type'];
+    // The disposal notification is deliberately relayed by the top window;
+    // every other viewer message must come from this exact iframe.
+    if (type != 'nova3d-viewer-disposed' &&
+        event.source != _iframe.contentWindow) {
+      return;
+    }
+
+    switch (type) {
       case 'nova3d-viewer-disposed':
         _rebuildAfterDisposal();
+      case 'nova3d-viewer-ready':
+        _postEditConfig();
       case 'nova3d-analytics':
         _forwardViewerAnalytics(raw);
     }
@@ -183,6 +200,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   // the new viewType.
   void _rebuildAfterDisposal() {
     if (!mounted) return;
+    _invalidateResolution();
     _unregisterEditHandler(_viewerId.toJS);
     GlbAssetCache.revoke(_resolvedSrc ?? '');
     _resolvedSrc = null;
@@ -197,6 +215,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.src != widget.src ||
         oldWidget.autoRotate != widget.autoRotate) {
+      _invalidateResolution();
       GlbAssetCache.revoke(_resolvedSrc ?? '');
       _resolvedSrc = null;
       _loadedSourceModelUrl = null;
@@ -225,6 +244,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
 
   @override
   void dispose() {
+    _invalidateResolution();
     _windowMessageSub?.cancel();
     _windowMessageSub = null;
     _unregisterEditHandler(_viewerId.toJS);
@@ -233,121 +253,251 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   }
 
   Future<void> _resolveAndLoad(String src) async {
+    final attempt = ++_resolveAttempt;
     if (_loadError) setState(() => _loadError = false);
+    final timer = Stopwatch()..start();
+    analytics.capture(Ev.modelResolutionStarted, <String, Object?>{
+      Pr.versionCount: widget.assetVersions.length,
+      'has_workflow_id': (widget.sourceWorkflowId ?? '').isNotEmpty,
+    });
 
     final resolved = await _resolveModelCandidate(
       modelUrl: src,
       workflowId: widget.sourceWorkflowId,
+      timer: timer,
+      attempt: attempt,
     );
-    if (!mounted || src != widget.src) {
+    if (!_isResolutionCurrent(attempt, src)) {
       if (resolved != null) GlbAssetCache.revoke(resolved.objectUrl);
       return;
     }
 
     if (resolved != null) {
-      _loadResolvedModel(resolved, expectedSrc: src);
+      analytics.capture(Ev.modelResolutionSucceeded, <String, Object?>{
+        Pr.durationMs: timer.elapsedMilliseconds,
+        Pr.source: 'requested_model',
+      });
+      _loadResolvedModel(resolved, expectedSrc: src, attempt: attempt);
       return;
     }
 
+    final triedCandidates = <String>{
+      _candidateKey(src, widget.sourceWorkflowId),
+    };
+    var fallbackCount = 0;
     for (final version in widget.assetVersions.reversed) {
+      if (_resolutionRemaining(timer) <= Duration.zero) break;
+      final candidateKey = _candidateKey(version.modelUrl, version.workflowId);
+      if (!triedCandidates.add(candidateKey)) continue;
+      if (++fallbackCount > _maxVersionFallbacks) break;
       final versionResolved = await _resolveModelCandidate(
         modelUrl: version.modelUrl,
         workflowId: version.workflowId,
+        timer: timer,
+        attempt: attempt,
       );
-      if (!mounted || src != widget.src) {
+      if (!_isResolutionCurrent(attempt, src)) {
         if (versionResolved != null) {
           GlbAssetCache.revoke(versionResolved.objectUrl);
         }
         return;
       }
       if (versionResolved == null) continue;
-      _loadResolvedModel(versionResolved, expectedSrc: src);
+      analytics.capture(Ev.modelResolutionSucceeded, <String, Object?>{
+        Pr.durationMs: timer.elapsedMilliseconds,
+        Pr.source: 'version_fallback',
+      });
+      _loadResolvedModel(versionResolved, expectedSrc: src, attempt: attempt);
       return;
     }
 
-    if (mounted && src == widget.src) setState(() => _loadError = true);
+    if (_isResolutionCurrent(attempt, src)) {
+      analytics.capture(Ev.modelResolutionFailed, <String, Object?>{
+        Pr.durationMs: timer.elapsedMilliseconds,
+        Pr.versionCount: widget.assetVersions.length,
+      });
+      setState(() => _loadError = true);
+    }
   }
 
   Future<_ResolvedGlb?> _resolveModelCandidate({
     required String modelUrl,
     String? workflowId,
+    required Stopwatch timer,
+    required int attempt,
   }) async {
-    if (modelUrl.trim().isNotEmpty) {
-      final resolved = await GlbAssetCache.resolve(modelUrl);
-      if (resolved != null) {
-        return _ResolvedGlb(objectUrl: resolved, sourceUrl: modelUrl);
+    final originalUrl = modelUrl.trim();
+    // Start the original URL immediately so a CacheStorage hit can complete
+    // while the backend is refreshing an expired signed URL. We still prefer a
+    // fresh backend URL when one is returned within the short refresh window.
+    Future<String?>? originalResolution = originalUrl.isEmpty
+        ? null
+        : GlbAssetCache.resolve(originalUrl);
+
+    final workflow = workflowId?.trim() ?? '';
+    String freshUrl = '';
+    if (workflow.isNotEmpty && _resolutionRemaining(timer) > Duration.zero) {
+      final wait = _boundedWait(
+        _historicalResultTimeout,
+        _resolutionRemaining(timer),
+      );
+      if (wait > Duration.zero) {
+        try {
+          final result = await ref
+              .read(cadServiceProvider)
+              .getResult(workflow, receiveTimeout: wait)
+              .timeout(wait);
+          freshUrl = result.glbUrl?.trim() ?? '';
+        } catch (_) {
+          // Historical refresh is opportunistic. The original URL/cache and
+          // bounded version fallbacks remain available below.
+        }
       }
     }
 
-    if (workflowId == null || workflowId.isEmpty) return null;
+    if (!_isResolutionCurrent(attempt, widget.src)) {
+      _discardResolution(originalResolution);
+      return null;
+    }
 
+    if (freshUrl.isNotEmpty) {
+      if (freshUrl == originalUrl && originalResolution != null) {
+        final resolved = await _claimResolution(
+          originalResolution,
+          sourceUrl: freshUrl,
+          timer: timer,
+          maxWait: _freshUrlResolveSlice,
+          attempt: attempt,
+        );
+        originalResolution = null;
+        if (resolved != null) return resolved;
+      } else {
+        final resolved = await _claimResolution(
+          GlbAssetCache.resolve(freshUrl),
+          sourceUrl: freshUrl,
+          timer: timer,
+          maxWait: _freshUrlResolveSlice,
+          attempt: attempt,
+        );
+        if (resolved != null) {
+          _discardResolution(originalResolution);
+          return resolved;
+        }
+      }
+    }
+
+    if (originalResolution != null) {
+      final resolved = await _claimResolution(
+        originalResolution,
+        sourceUrl: originalUrl,
+        timer: timer,
+        maxWait: _originalUrlResolveSlice,
+        attempt: attempt,
+      );
+      originalResolution = null;
+      if (resolved != null) return resolved;
+    }
+    return null;
+  }
+
+  Future<_ResolvedGlb?> _claimResolution(
+    Future<String?> resolution, {
+    required String sourceUrl,
+    required Stopwatch timer,
+    required Duration maxWait,
+    required int attempt,
+  }) async {
+    final wait = _boundedWait(maxWait, _resolutionRemaining(timer));
+    if (wait <= Duration.zero) {
+      _discardResolution(resolution);
+      return null;
+    }
     try {
-      final freshUrl =
-          (await ref.read(cadServiceProvider).getResult(workflowId)).glbUrl;
-      if (freshUrl == null || freshUrl.isEmpty) return null;
-      final freshResolved = await GlbAssetCache.resolve(freshUrl);
-      if (freshResolved == null) return null;
-      return _ResolvedGlb(objectUrl: freshResolved, sourceUrl: freshUrl);
+      final objectUrl = await resolution.timeout(wait);
+      if (objectUrl == null) return null;
+      if (!_isResolutionCurrent(attempt, widget.src)) {
+        GlbAssetCache.revoke(objectUrl);
+        return null;
+      }
+      return _ResolvedGlb(objectUrl: objectUrl, sourceUrl: sourceUrl);
+    } on TimeoutException {
+      // Future.timeout cannot cancel the JS fetch. Revoke its object URL if it
+      // completes after this attempt has moved on.
+      _discardResolution(resolution);
+      return null;
     } catch (_) {
       return null;
     }
   }
 
+  void _discardResolution(Future<String?>? resolution) {
+    if (resolution == null) return;
+    unawaited(
+      resolution.then<void>((objectUrl) {
+        if (objectUrl != null) GlbAssetCache.revoke(objectUrl);
+      }, onError: (Object _, StackTrace _) {}),
+    );
+  }
+
+  Duration _resolutionRemaining(Stopwatch timer) {
+    final remaining = _resolutionBudget - timer.elapsed;
+    return remaining.isNegative ? Duration.zero : remaining;
+  }
+
+  Duration _boundedWait(Duration requested, Duration remaining) =>
+      requested < remaining ? requested : remaining;
+
+  String _candidateKey(String modelUrl, String? workflowId) =>
+      '${modelUrl.trim()}\n${workflowId?.trim() ?? ''}';
+
+  bool _isResolutionCurrent(int attempt, String src) =>
+      mounted && attempt == _resolveAttempt && src == widget.src;
+
+  void _invalidateResolution() {
+    _resolveAttempt++;
+  }
+
   void _loadResolvedModel(
     _ResolvedGlb resolved, {
     required String expectedSrc,
+    required int attempt,
   }) {
+    if (!_isResolutionCurrent(attempt, expectedSrc)) {
+      GlbAssetCache.revoke(resolved.objectUrl);
+      return;
+    }
+    if (_resolvedSrc != null && _resolvedSrc != resolved.objectUrl) {
+      GlbAssetCache.revoke(_resolvedSrc!);
+    }
     setState(() {
       _resolvedSrc = resolved.objectUrl;
       _loadedSourceModelUrl = resolved.sourceUrl;
       _loadError = false;
     });
-    _iframe.src = _buildViewerUrl(
-      resolved.objectUrl,
-      sourceModelUrl: resolved.sourceUrl,
-    );
-    _postEditConfigSoon(expectedSrc);
+    _iframe.src = _buildViewerUrl(resolved.objectUrl);
+    _postEditConfigSoon(expectedSrc, attempt);
   }
 
-  void _postEditConfigSoon(String expectedSrc) {
+  void _postEditConfigSoon(String expectedSrc, int attempt) {
     for (final delay in const [
       Duration(milliseconds: 250),
       Duration(milliseconds: 1000),
       Duration(milliseconds: 2500),
     ]) {
       Future<void>.delayed(delay, () {
-        if (!mounted || expectedSrc != widget.src) return;
+        if (!_isResolutionCurrent(attempt, expectedSrc)) return;
         _postEditConfig();
       });
     }
   }
 
-  String _buildViewerUrl(String modelUrl, {String? sourceModelUrl}) {
+  String _buildViewerUrl(String modelUrl) {
     final params = {
       'viewerId': _viewerId,
       'stateKey':
           widget.viewerStateKey ?? widget.src.hashCode.toRadixString(16),
       'glb': modelUrl,
-      'sourceModelUrl': sourceModelUrl ?? widget.src,
       'autoRotate': widget.autoRotate.toString(),
-      if (widget.modelArtifact != null)
-        'modelArtifact': json.encode(widget.modelArtifact),
-      if (widget.codeArtifact != null)
-        'codeArtifact': json.encode(widget.codeArtifact),
-      if (widget.jointsArtifact != null)
-        'jointsArtifact': json.encode(widget.jointsArtifact),
-      if (widget.joints.isNotEmpty) 'joints': json.encode(widget.joints),
-      if ((widget.instructionPrompt ?? '').isNotEmpty)
-        'instructionPrompt': widget.instructionPrompt!,
-      if (widget.sourceWorkflowId != null)
-        'sourceWorkflowId': widget.sourceWorkflowId!,
-      if (widget.assetVersions.isNotEmpty)
-        'assetVersions': json.encode(
-          widget.assetVersions.map((version) => version.toJson()).toList(),
-        ),
-      'editModelOptions': json.encode(_editModelOptionsPayload()),
-      if (widget.defaultEditModelOptionId != null)
-        'editDefaultModelId': widget.defaultEditModelOptionId!,
     };
     return Uri(path: '/nova3d_viewer.html', queryParameters: params).toString();
   }
@@ -367,11 +517,12 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     _iframe.contentWindow?.postMessage(
       {
         'type': 'nova3d-edit-config',
-        if (widget.modelArtifact != null) 'modelArtifact': widget.modelArtifact,
-        if (widget.codeArtifact != null) 'codeArtifact': widget.codeArtifact,
-        if (widget.jointsArtifact != null)
-          'jointsArtifact': widget.jointsArtifact,
-        if (widget.joints.isNotEmpty) 'joints': widget.joints,
+        // Null/empty values are intentional clears. Omitting them would let
+        // metadata restored from IndexedDB leak into a different model.
+        'modelArtifact': widget.modelArtifact,
+        'codeArtifact': widget.codeArtifact,
+        'jointsArtifact': widget.jointsArtifact,
+        'joints': widget.joints,
         'sourceModelUrl': _loadedSourceModelUrl ?? widget.src,
         'instructionPrompt': widget.instructionPrompt ?? '',
         'sourceWorkflowId': widget.sourceWorkflowId ?? '',
@@ -381,7 +532,7 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
         'editModelOptions': _editModelOptionsPayload(),
         'editDefaultModelId': widget.defaultEditModelOptionId ?? '',
       }.jsify(),
-      '*'.toJS,
+      web.window.location.origin.toJS,
     );
   }
 
@@ -481,7 +632,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
     required String requestId,
     required Map<String, dynamic>? codeArtifact,
   }) async {
-    final hasCode = codeArtifact != null &&
+    final hasCode =
+        codeArtifact != null &&
         ((codeArtifact['uri'] is String &&
                 (codeArtifact['uri'] as String).isNotEmpty) ||
             (codeArtifact['url'] is String &&
@@ -490,7 +642,8 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
       _postUvResult({
         'requestId': requestId,
         'status': 'failed',
-        'message': 'This model has no editable code yet. Generate it again first.',
+        'message':
+            'This model has no editable code yet. Generate it again first.',
       });
       return;
     }
@@ -809,21 +962,21 @@ class _GlbViewerPlatformState extends ConsumerState<GlbViewerPlatform> {
   void _postEditResult(Map<String, dynamic> payload) {
     _iframe.contentWindow?.postMessage(
       {'type': 'nova3d-edit-result', ...payload}.jsify(),
-      '*'.toJS,
+      web.window.location.origin.toJS,
     );
   }
 
   void _postVersionResolveResult(Map<String, dynamic> payload) {
     _iframe.contentWindow?.postMessage(
       {'type': 'nova3d-version-resolve-result', ...payload}.jsify(),
-      '*'.toJS,
+      web.window.location.origin.toJS,
     );
   }
 
   void _postUvResult(Map<String, dynamic> payload) {
     _iframe.contentWindow?.postMessage(
       {'type': 'nova3d-uv-result', ...payload}.jsify(),
-      '*'.toJS,
+      web.window.location.origin.toJS,
     );
   }
 

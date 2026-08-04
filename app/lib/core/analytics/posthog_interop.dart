@@ -37,7 +37,11 @@ extension type PostHogJs._(JSObject _) implements JSObject {
 
   external void setPersonProperties(JSObject properties);
 
-  external void group(String groupType, String groupKey, [JSObject? properties]);
+  external void group(
+    String groupType,
+    String groupKey, [
+    JSObject? properties,
+  ]);
 
   external void startSessionRecording();
 
@@ -78,6 +82,17 @@ PostHogJs? get posthogJs {
   final value = global.getProperty<JSAny?>('posthog'.toJS);
   if (value == null || !value.isA<JSObject>()) return null;
   return PostHogJs._(value as JSObject);
+}
+
+/// Browser-side URL/network redactor installed by web/index.html. Keeping the
+/// function in JavaScript lets PostHog invoke it synchronously for replay
+/// snapshots and performance entries before those payloads leave the browser.
+JSFunction? get posthogNetworkRequestMask {
+  final value = globalContext.getProperty<JSAny?>(
+    'nova3dPostHogMaskCapturedRequest'.toJS,
+  );
+  if (value == null || !value.isA<JSFunction>()) return null;
+  return value as JSFunction;
 }
 
 /// A real JS `Error`, so PostHog's error tracking can group and symbolicate it.

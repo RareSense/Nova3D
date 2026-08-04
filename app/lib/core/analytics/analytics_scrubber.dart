@@ -24,6 +24,13 @@ const int kMaxStackLength = 8000;
 /// a 500-part model).
 const int kMaxListLength = 50;
 
+/// Bounds untrusted maps forwarded by the viewer iframe.
+const int kMaxMapEntries = 50;
+
+/// Prevents cyclic or attacker-crafted nested values from exhausting the UI
+/// thread while an analytics event is being sanitized.
+const int kMaxNestingDepth = 5;
+
 const String kRedacted = '[redacted]';
 
 /// Property names containing any of these are dropped outright.
@@ -31,13 +38,20 @@ const List<String> kDeniedNameFragments = <String>[
   'api_key',
   'apikey',
   'access_token',
+  'account_key',
   'auth_token',
   'authorization',
   'bearer',
+  'cookie',
   'credential',
+  'id_token',
   'password',
+  'private_key',
+  'refresh_token',
+  'sas_token',
   'secret',
   'session_token',
+  'signed_url',
 ];
 
 /// Shapes that identify provider credentials in free text.
@@ -48,11 +62,19 @@ const List<String> kDeniedNameFragments = <String>[
 /// still records that something was present.
 final RegExp kSecretValuePattern = RegExp(
   r'(sk-ant-[A-Za-z0-9\-_]{8,})' // Anthropic
-  r'|(sk-[A-Za-z0-9]{16,})' // OpenAI / OpenRouter
+  r'|(sk-[A-Za-z0-9\-_]{16,})' // OpenAI / OpenRouter, incl. proj/or-v1
+  r'|([sr]k_live_[A-Za-z0-9]{16,})' // Stripe secret/restricted keys
   r'|(AIza[A-Za-z0-9\-_]{16,})' // Google / Gemini
   r'|(n3d_[A-Za-z0-9\-_]{8,})' // Nova3D MCP key
-  r'|(phc_[A-Za-z0-9]{16,})' // PostHog project key
+  r'|(ph[ctx]_[A-Za-z0-9\-_]{16,})' // PostHog project/personal keys
+  r'|(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,})' // GitHub
+  r'|(AKIA[0-9A-Z]{16})' // AWS access key id
+  r'|(1//[A-Za-z0-9\-_]{16,})' // Google refresh token
+  r'|(Bearer\s+[A-Za-z0-9._~+\-/=]{12,})' // Authorization value in text
+  r'|((?:[?&]|\b)sig=[^&\s]+)' // Azure SAS signature in a URL
+  r'|(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*)'
   r'|(eyJ[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,})', // JWT
+  caseSensitive: false,
 );
 
 bool isDeniedPropertyName(String name) {
@@ -63,6 +85,25 @@ bool isDeniedPropertyName(String name) {
 String redactSecrets(String value) =>
     value.replaceAll(kSecretValuePattern, kRedacted);
 
+/// Bounds work before applying the credential regex, then bounds the emitted
+/// value again. The look-ahead catches a token that starts close to the output
+/// boundary without running regexes over a multi-megabyte untrusted string.
+String scrubText(String value, {int maxLength = kMaxStringLength}) {
+  const lookAhead = 1024;
+  final scanLength = maxLength + lookAhead;
+  final scanInput = value.length <= scanLength
+      ? value
+      : value.substring(0, scanLength);
+  final redacted = redactSecrets(scanInput);
+  if (value.length <= maxLength && redacted.length <= maxLength) {
+    return redacted;
+  }
+  final prefix = redacted.length <= maxLength
+      ? redacted
+      : redacted.substring(0, maxLength);
+  return '$prefix…[truncated ${value.length} chars]';
+}
+
 String truncate(String value, {int maxLength = kMaxStringLength}) =>
     value.length <= maxLength
     ? value
@@ -72,35 +113,40 @@ String truncate(String value, {int maxLength = kMaxStringLength}) =>
 /// hand to PostHog.
 Map<String, Object?> scrubProperties(Map<String, Object?> properties) {
   final clean = <String, Object?>{};
-  properties.forEach((key, value) {
-    if (value == null) return;
-    if (isDeniedPropertyName(key)) return;
+  for (final entry in properties.entries.take(kMaxMapEntries)) {
+    final key = entry.key;
+    final value = entry.value;
+    if (value == null) continue;
+    if (isDeniedPropertyName(key)) continue;
     final scrubbed = scrubValue(value);
     if (scrubbed != null) clean[key] = scrubbed;
-  });
+  }
   return clean;
 }
 
-Object? scrubValue(Object? value) {
+Object? scrubValue(Object? value, {int depth = 0}) {
   if (value == null) return null;
-  if (value is String) return truncate(redactSecrets(value));
+  if (value is String) return scrubText(value);
   if (value is num || value is bool) return value;
+  if (depth >= kMaxNestingDepth) return '[nested value omitted]';
   if (value is Iterable) {
     return value
         .take(kMaxListLength)
-        .map(scrubValue)
+        .map((item) => scrubValue(item, depth: depth + 1))
         .where((e) => e != null)
         .toList();
   }
   if (value is Map) {
     final nested = <String, Object?>{};
-    value.forEach((k, v) {
+    for (final entry in value.entries.take(kMaxMapEntries)) {
+      final k = entry.key;
+      final v = entry.value;
       final name = k.toString();
-      if (isDeniedPropertyName(name)) return;
-      final scrubbed = scrubValue(v);
+      if (isDeniedPropertyName(name)) continue;
+      final scrubbed = scrubValue(v, depth: depth + 1);
       if (scrubbed != null) nested[name] = scrubbed;
-    });
+    }
     return nested;
   }
-  return truncate(redactSecrets(value.toString()));
+  return scrubText(value.toString());
 }

@@ -561,7 +561,12 @@ class CadService {
   }) async {
     final base = createWorkflowId();
 
-    Future<UvMapsResult> run(String mode, int? maxAtlases, String suffix, String phase) async {
+    Future<UvMapsResult> run(
+      String mode,
+      int? maxAtlases,
+      String suffix,
+      String phase,
+    ) async {
       final wf = await startUvMaps(
         codeArtifact: codeArtifact,
         atlasMode: mode,
@@ -715,11 +720,16 @@ class CadService {
     }
   }
 
-  Future<CadResult> getResult(String workflowId) async {
+  Future<CadResult> getResult(
+    String workflowId, {
+    Duration? receiveTimeout,
+  }) async {
     try {
       final resp = await _dio.get(
         '/result/$workflowId',
-        options: await _authOptions(receiveTimeout: _resultReceiveTimeout),
+        options: await _authOptions(
+          receiveTimeout: receiveTimeout ?? _resultReceiveTimeout,
+        ),
       );
       return CadResult.fromJson(resp.data as Map<String, dynamic>);
     } on DioException catch (e) {

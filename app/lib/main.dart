@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:nova3d_frontend/core/analytics/analytics.dart';
 import 'package:nova3d_frontend/core/analytics/analytics_provider.dart';
 import 'package:nova3d_frontend/core/router.dart';
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:web/web.dart' as web;
 
@@ -39,7 +40,19 @@ void _installErrorHandlers() {
   };
 }
 
+/// Removes checkout, MCP handoff, and OAuth credentials from the address bar
+/// before any third-party SDK can observe the page URL.
+void _sanitizeStartupUrl() {
+  final sanitized = StartupUrlBootstrap.capture(Uri.base);
+  if (sanitized == null) return;
+  web.window.history.replaceState(null, '', sanitized.toString());
+}
+
 void main() {
+  // URL credentials must be removed before analytics initialization. PostHog
+  // adds browser URL context outside our custom-property scrubber.
+  _sanitizeStartupUrl();
+
   // Analytics first: session replay should cover as much of the session as
   // possible, and the error handlers below need it live.
   analytics.init();
@@ -54,23 +67,6 @@ void main() {
   // Without this, GoRouter reads the OAuth fragment (#access_token=...) as a
   // route path, fails to match it, and crashes with a RouteMatchList assertion.
   usePathUrlStrategy();
-
-  // Strip the OAuth token out of the URL fragment before GoRouter initializes.
-  // GoRouter's route matcher asserts uri.path.startsWith(matchedLocation),
-  // which fails when the fragment is still attached to the path string.
-  // We park the fragment in sessionStorage; OAuthCallbackPage reads it from there.
-  final hash = web.window.location.hash;
-  if (hash.contains('access_token=')) {
-    web.window.sessionStorage.setItem(
-      '_nova3d_oauth',
-      hash.startsWith('#') ? hash.substring(1) : hash,
-    );
-    web.window.history.replaceState(
-      null,
-      '',
-      '${web.window.location.pathname}${web.window.location.search}',
-    );
-  }
 
   runApp(const ProviderScope(child: Nova3DApp()));
 }

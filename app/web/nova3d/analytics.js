@@ -23,7 +23,7 @@ export function track(event, properties = {}) {
       viewerId: state.viewerId,
       event,
       properties: properties || {},
-    }, '*');
+    }, window.location.origin);
   } catch (_) {
     // Analytics is never load-bearing.
   }

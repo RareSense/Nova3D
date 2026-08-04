@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:web/web.dart' as web;
 
 const String _mcpContextStorageKey = '_nova3d_mcp_context';
@@ -78,10 +79,18 @@ class McpBrowserContext {
   }
 
   static McpBrowserContext? readOrCapture(Uri uri) {
-    final fromUri = McpBrowserContext.fromUri(uri);
-    if (fromUri != null) {
-      persist(fromUri);
-      return fromUri;
+    var captured = McpBrowserContext.fromUri(uri);
+    if (captured == null) {
+      final bootstrapQuery = StartupUrlBootstrap.takeMcpQueryParameters();
+      if (bootstrapQuery.isNotEmpty) {
+        captured = McpBrowserContext.fromUri(
+          Uri(queryParameters: bootstrapQuery),
+        );
+      }
+    }
+    if (captured != null) {
+      persist(captured);
+      return captured;
     }
     return read();
   }

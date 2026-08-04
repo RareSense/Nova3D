@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:nova3d_frontend/features/api_keys/data/api_key_local_source.dart';
 import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
@@ -9,6 +11,8 @@ class ApiKeyValidationResult {
 }
 
 class ApiKeyService {
+  static const Duration _validationTimeout = Duration(seconds: 15);
+
   ApiKeyService(this._local);
 
   final ApiKeyLocalSource _local;
@@ -19,11 +23,46 @@ class ApiKeyService {
 
   Future<Map<String, String>> loadValidKeys() => _local.loadValidKeys();
 
-  Future<void> clear(AiProvider provider) => _local.clear(provider);
+  Future<bool> clear(AiProvider provider, {required int expectedEpoch}) =>
+      _local.clear(provider, expectedEpoch: expectedEpoch);
+
+  Future<bool> persistValidated(
+    AiProvider provider,
+    String apiKey, {
+    required int expectedEpoch,
+  }) => _local.save(
+    provider,
+    apiKey.trim(),
+    isValid: true,
+    expectedEpoch: expectedEpoch,
+  );
 
   // ── Validation + save orchestration ──────────────────────────────────────
 
   Future<ApiKeyValidationResult> saveValidated(
+    AiProvider provider,
+    String apiKey, {
+    required int expectedEpoch,
+  }) async {
+    final trimmed = apiKey.trim();
+    final validation = await validateForSave(provider, trimmed);
+    if (!validation.isValid) return validation;
+
+    final saved = await persistValidated(
+      provider,
+      trimmed,
+      expectedEpoch: expectedEpoch,
+    );
+    return saved
+        ? validation
+        : const ApiKeyValidationResult(
+            isValid: false,
+            message:
+                'The key was valid but could not be saved in this browser.',
+          );
+  }
+
+  Future<ApiKeyValidationResult> validateForSave(
     AiProvider provider,
     String apiKey,
   ) async {
@@ -33,11 +72,7 @@ class ApiKeyService {
       return ApiKeyValidationResult(isValid: false, message: formatError);
     }
 
-    final validation = await validate(provider, trimmed);
-    if (!validation.isValid) return validation;
-
-    await _local.save(provider, trimmed, isValid: true);
-    return validation;
+    return validate(provider, trimmed);
   }
 
   // TODO(security): replace direct provider calls with POST /api/keys/validate
@@ -47,21 +82,28 @@ class ApiKeyService {
     String apiKey,
   ) async {
     try {
+      late final Future<ApiKeyValidationResult> request;
       switch (provider) {
         case AiProvider.gemini:
-          return await _validateGemini(apiKey);
+          request = _validateGemini(apiKey);
+          break;
         case AiProvider.anthropic:
-          return await _validateAnthropic(apiKey);
+          request = _validateAnthropic(apiKey);
+          break;
         case AiProvider.openai:
-          return await _validateOpenAi(apiKey);
+          request = _validateOpenAi(apiKey);
+          break;
         case AiProvider.openrouter:
-          return await _validateOpenRouter(apiKey);
+          request = _validateOpenRouter(apiKey);
+          break;
       }
+      return await request.timeout(_validationTimeout);
     } catch (e) {
-      final hint =
-          e is DioException &&
-              (e.type == DioExceptionType.connectionError ||
-                  e.type == DioExceptionType.unknown)
+      final hint = e is TimeoutException
+          ? 'The provider took too long to respond. Try again.'
+          : e is DioException &&
+                (e.type == DioExceptionType.connectionError ||
+                    e.type == DioExceptionType.unknown)
           ? 'Check your internet connection and try again.'
           : 'Unexpected error — please try again.';
       return ApiKeyValidationResult(
@@ -72,7 +114,7 @@ class ApiKeyService {
   }
 
   Future<ApiKeyValidationResult> _validateGemini(String apiKey) async {
-    final dio = Dio();
+    final dio = _providerClient();
     try {
       await dio.get(
         'https://generativelanguage.googleapis.com/v1beta/models',
@@ -115,7 +157,7 @@ class ApiKeyService {
   }
 
   Future<ApiKeyValidationResult> _validateAnthropic(String apiKey) async {
-    final dio = Dio();
+    final dio = _providerClient();
     try {
       await dio.get(
         'https://api.anthropic.com/v1/models',
@@ -145,7 +187,7 @@ class ApiKeyService {
   }
 
   Future<ApiKeyValidationResult> _validateOpenAi(String apiKey) async {
-    final dio = Dio();
+    final dio = _providerClient();
     try {
       await dio.get(
         'https://api.openai.com/v1/models',
@@ -169,7 +211,7 @@ class ApiKeyService {
   }
 
   Future<ApiKeyValidationResult> _validateOpenRouter(String apiKey) async {
-    final dio = Dio();
+    final dio = _providerClient();
     try {
       final resp = await dio.get(
         'https://openrouter.ai/api/v1/key',
@@ -225,4 +267,12 @@ class ApiKeyService {
             : 'OpenRouter keys usually start with sk-or-.';
     }
   }
+
+  Dio _providerClient() => Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 12),
+      sendTimeout: const Duration(seconds: 10),
+    ),
+  );
 }

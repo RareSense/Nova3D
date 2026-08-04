@@ -17,6 +17,7 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta name="referrer" content="no-referrer">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Nova3D client application.">
 
@@ -51,6 +52,22 @@
        buffered instead of thrown away. -->
   <script>
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+
+    // Session replay and performance capture see URLs outside Dart's custom
+    // event scrubber. Strip every query string and fragment before PostHog
+    // records page or network URLs; paths retain enough diagnostic value.
+    window.nova3dPostHogMaskCapturedRequest = function(request) {
+      if (!request || typeof request.name !== 'string') return request;
+      try {
+        var url = new URL(request.name, window.location.origin);
+        url.search = '';
+        url.hash = '';
+        request.name = url.toString();
+      } catch (_) {
+        request.name = request.name.split(/[?#]/, 1)[0];
+      }
+      return request;
+    };
   </script>
 
   <!-- Preload the splash fonts so they're ready before paint. These are the
@@ -372,30 +389,208 @@
   <script>
     window.nova3dModelCache = {
       name: 'nova3d-glb-cache-v1',
-      async store(src) {
-        if (!src || src.startsWith('blob:') || src.startsWith('data:') || !('caches' in window)) {
+      fetchTimeoutMs: 30000,
+      cacheTimeoutMs: 5000,
+      clearTimeoutMs: 5000,
+      generation: 0,
+      cacheEnabled: true,
+      pendingWrites: new Set(),
+      async deadline(promise, timeoutMs) {
+        let timer = null;
+        try {
+          return await Promise.race([
+            Promise.resolve(promise),
+            new Promise((_, reject) => {
+              timer = window.setTimeout(
+                () => reject(new Error('Nova3D cache operation timed out')),
+                timeoutMs
+              );
+            })
+          ]);
+        } finally {
+          if (timer !== null) window.clearTimeout(timer);
+        }
+      },
+      key(src) {
+        try {
+          const url = new URL(src);
+          const names = [...url.searchParams.keys()];
+          const isSigned = names.some((name) => {
+            const lower = name.toLowerCase();
+            return lower === 'sig' || lower === 'signature'
+              || lower === 'x-amz-signature' || lower === 'x-goog-signature';
+          });
+          if (isSigned) {
+            names.forEach((name) => {
+              const lower = name.toLowerCase();
+              if (['sv','ss','srt','sp','se','st','spr','sig','sr','skoid','sktid','skt','ske','sks','skv'].includes(lower)
+                  || lower.startsWith('x-amz-') || lower.startsWith('x-goog-')) {
+                url.searchParams.delete(name);
+              }
+            });
+          }
+          url.hash = '';
+          return url.toString();
+        } catch (_) {
           return src;
         }
-
-        const cache = await caches.open(this.name);
-        let response = await cache.match(src);
-
-        if (!response) {
-          let fetchResp;
-          try { fetchResp = await fetch(src, { mode: 'cors', credentials: 'omit' }); }
-          catch (e) { return null; }
-          if (!fetchResp.ok) { return null; }  // expired SAS or auth error — signal Dart to refresh
-          await cache.put(src, fetchResp.clone());
-          response = fetchResp;
+      },
+      async store(src) {
+        if (!src || src.startsWith('blob:')) {
+          return src;
+        }
+        const generation = this.generation;
+        if (src.startsWith('data:')) {
+          try {
+            const response = await this.deadline(fetch(src), this.fetchTimeoutMs);
+            const blob = await this.deadline(response.blob(), this.fetchTimeoutMs);
+            if (generation !== this.generation) return null;
+            return URL.createObjectURL(blob);
+          }
+          catch (_) { return null; }
         }
 
-        const blob = await response.blob();
+        let cache = null;
+        if (this.cacheEnabled && 'caches' in window) {
+          try {
+            cache = await this.deadline(
+              caches.open(this.name),
+              this.cacheTimeoutMs
+            );
+          } catch (_) {}
+        }
+        const cacheKey = this.key(src);
+        let response = null;
+        if (cache) {
+          try {
+            response = await this.deadline(
+              cache.match(cacheKey),
+              this.cacheTimeoutMs
+            );
+          } catch (_) {}
+        }
+        if (generation !== this.generation) return null;
+
+        let blob;
+        if (!response) {
+          const controller = typeof AbortController === 'function' ? new AbortController() : null;
+          const timer = controller
+            ? window.setTimeout(() => controller.abort(), this.fetchTimeoutMs)
+            : null;
+          try {
+            const fetchResp = await this.deadline(
+              fetch(src, {
+                mode: 'cors',
+                credentials: 'omit',
+                ...(controller ? { signal: controller.signal } : {})
+              }),
+              this.fetchTimeoutMs
+            );
+            if (!fetchResp.ok) return null; // expired SAS/auth error: let Dart refresh
+            // Keep the abort deadline active through the response body. Fetch
+            // resolves when headers arrive, which is too early for a large GLB.
+            blob = await this.deadline(
+              fetchResp.blob(),
+              this.fetchTimeoutMs
+            );
+            if (generation !== this.generation) return null;
+            // CacheStorage is best-effort and must not hold model display open.
+            if (cache && this.cacheEnabled) {
+              const write = cache.put(cacheKey, new Response(blob, {
+                status: fetchResp.status,
+                statusText: fetchResp.statusText,
+                headers: fetchResp.headers,
+              })).catch(() => {});
+              this.pendingWrites.add(write);
+              void write.finally(() => this.pendingWrites.delete(write));
+            }
+          } catch (e) {
+            return null;
+          } finally {
+            if (timer !== null) window.clearTimeout(timer);
+          }
+        } else {
+          try {
+            blob = await this.deadline(
+              response.blob(),
+              this.fetchTimeoutMs
+            );
+          } catch (_) {
+            return null;
+          }
+        }
+
+        if (generation !== this.generation) return null;
         return URL.createObjectURL(blob);
       },
       revoke(src) {
         if (src && src.startsWith('blob:')) {
           URL.revokeObjectURL(src);
         }
+      },
+      async clearPrivateData() {
+        // Invalidate every in-flight store() before touching persistent state.
+        // If CacheStorage deletion cannot be confirmed, future loads bypass it.
+        this.generation += 1;
+        this.cacheEnabled = false;
+
+        try {
+          const frames = typeof window.nova3dCollectIframes === 'function'
+            ? window.nova3dCollectIframes(document, [])
+            : [...document.querySelectorAll('iframe')];
+          frames.forEach((frame) => {
+            try {
+              const url = new URL(frame.src, window.location.href);
+              if (url.origin !== window.location.origin
+                  || !url.pathname.endsWith('/nova3d_viewer.html')) return;
+              frame.contentWindow?.postMessage(
+                { type: 'nova3d-clear-private-cache' },
+                window.location.origin
+              );
+            } catch (_) {}
+          });
+        } catch (_) {}
+
+        const deleteCache = async () => {
+          if (!('caches' in window)) return true;
+          await this.deadline(
+            caches.delete(this.name),
+            this.clearTimeoutMs
+          );
+          return true; // false from caches.delete means it was already absent.
+        };
+        const settleCacheWrites = async () => {
+          if (!this.pendingWrites.size) return true;
+          await this.deadline(
+            Promise.allSettled([...this.pendingWrites]),
+            this.clearTimeoutMs
+          );
+          return true;
+        };
+        const deleteEditorDb = async () => {
+          if (!('indexedDB' in window)) return true;
+          const deletion = new Promise((resolve, reject) => {
+            let request;
+            try { request = indexedDB.deleteDatabase('nova3d-editor'); }
+            catch (error) { reject(error); return; }
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => reject(request.error || new Error('IndexedDB deletion failed'));
+            // A live viewer may briefly block deletion. Its clear message above
+            // asks it to close first; the outer deadline remains the hard bound.
+          });
+          await this.deadline(deletion, this.clearTimeoutMs);
+          return true;
+        };
+
+        const writesResult = await Promise.allSettled([settleCacheWrites()]);
+        const writesSettled = writesResult[0].status === 'fulfilled';
+        const [cacheResult, editorResult] = await Promise.allSettled([
+          deleteCache(),
+          deleteEditorDb()
+        ]);
+        const cacheCleared = cacheResult.status === 'fulfilled';
+        if (writesSettled && cacheCleared) this.cacheEnabled = true;
+        return writesSettled && cacheCleared && editorResult.status === 'fulfilled';
       }
     };
   </script>
@@ -507,6 +702,7 @@
     };
 
     window.addEventListener('message', function (event) {
+      if (event.origin !== window.location.origin) return;
       var data = event.data || {};
 
       function collectIframes(root, out) {
@@ -526,6 +722,29 @@
         });
       }
 
+      // Bind privileged viewer requests to the iframe that actually sent the
+      // message. The viewerId in event.data is attacker-controlled even for a
+      // same-origin frame, so derive the identity from that iframe's own URL.
+      function viewerIdForNova3dFrame(frame) {
+        if (!frame) return '';
+        try {
+          var frameUrl = new URL(frame.getAttribute('src') || frame.src || '', window.location.href);
+          if (frameUrl.origin !== window.location.origin) return '';
+          if (!frameUrl.pathname.endsWith('/nova3d_viewer.html')) return '';
+          var viewerId = String(frameUrl.searchParams.get('viewerId') || 'standalone-viewer');
+          frame.__nova3dViewerId = viewerId;
+          return viewerId;
+        } catch (_) {
+          return '';
+        }
+      }
+
+      function handlerForNova3dFrame(frame) {
+        var viewerId = viewerIdForNova3dFrame(frame);
+        if (!viewerId) return null;
+        return window.__nova3dEditHandlers && window.__nova3dEditHandlers[viewerId];
+      }
+
       if (data.type === 'nova3d-edit-request') {
         var editFrame = findNova3dFrame(event.source);
         if (!editFrame) return;
@@ -534,14 +753,14 @@
             editFrame.contentWindow && editFrame.contentWindow.postMessage(Object.assign({
               type: 'nova3d-edit-result',
               requestId: String(data.requestId || '')
-            }, payload), '*');
+            }, payload), window.location.origin);
           } catch (_) {}
         }
         postEditBridgeResult({
           status: 'running',
           message: 'Nova3D received the edit request. Preparing workflow...'
         });
-        var handler = window.__nova3dEditHandlers && window.__nova3dEditHandlers[String(data.viewerId || '')];
+        var handler = handlerForNova3dFrame(editFrame);
         if (typeof handler === 'function') {
           try {
             handler(JSON.stringify({
@@ -581,10 +800,10 @@
             versionFrame.contentWindow && versionFrame.contentWindow.postMessage(Object.assign({
               type: 'nova3d-version-resolve-result',
               requestId: String(data.requestId || '')
-            }, payload), '*');
+            }, payload), window.location.origin);
           } catch (_) {}
         }
-        var versionHandler = window.__nova3dEditHandlers && window.__nova3dEditHandlers[String(data.viewerId || '')];
+        var versionHandler = handlerForNova3dFrame(versionFrame);
         if (typeof versionHandler === 'function') {
           try {
             versionHandler(JSON.stringify({
@@ -610,10 +829,10 @@
             uvFrame.contentWindow && uvFrame.contentWindow.postMessage(Object.assign({
               type: 'nova3d-uv-result',
               requestId: String(data.requestId || '')
-            }, payload), '*');
+            }, payload), window.location.origin);
           } catch (_) {}
         }
-        var uvHandler = window.__nova3dEditHandlers && window.__nova3dEditHandlers[String(data.viewerId || '')];
+        var uvHandler = handlerForNova3dFrame(uvFrame);
         if (typeof uvHandler === 'function') {
           try {
             uvHandler(JSON.stringify({
@@ -635,13 +854,15 @@
       if (data.type !== 'nova3d-viewer-fullscreen') return;
       var frame = findNova3dFrame(event.source);
       if (!frame) return;
+      var frameViewerId = viewerIdForNova3dFrame(frame);
+      if (!frameViewerId) return;
 
       function notify(full) {
         try {
           frame.contentWindow.postMessage({
             type: 'nova3d-viewer-fullscreen-state',
             full: full
-          }, '*');
+          }, window.location.origin);
         } catch (_) {}
       }
 
@@ -672,7 +893,7 @@
 
         if (!frame.dataset.nova3dFullscreen) {
           frame.dataset.nova3dFullscreen = 'true';
-          frame.__nova3dViewerId = String(data.viewerId || '');
+          frame.__nova3dViewerId = frameViewerId;
           frame.__nova3dSlot = frame.parentNode;
           nova3dPreviousBodyOverflow = document.body.style.overflow || '';
 
@@ -712,7 +933,7 @@
             if (frame.dataset.nova3dFullscreenState !== 'full') return;
             try {
               frame.contentWindow.postMessage(
-                { type: 'nova3d-viewer-fullscreen-state', full: true }, '*');
+                { type: 'nova3d-viewer-fullscreen-state', full: true }, window.location.origin);
             } catch(_) {}
           }, ms);
         });
@@ -754,7 +975,7 @@
         window.postMessage({
           type: 'nova3d-viewer-disposed',
           viewerId: viewerId
-        }, '*');
+        }, window.location.origin);
       } catch (_) {}
     }
 

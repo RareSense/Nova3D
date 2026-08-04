@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/subscription/state/billing_provider.dart';
@@ -16,13 +17,20 @@ class PaymentSuccessPage extends ConsumerStatefulWidget {
 
 class _PaymentSuccessPageState extends ConsumerState<PaymentSuccessPage> {
   String? _verifiedSessionId;
+  late final String _startupSessionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _startupSessionId = StartupUrlBootstrap.takeCheckoutSessionId() ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final billing = ref.watch(billingProvider);
     final user = auth.valueOrNull;
-    final sessionId = Uri.base.queryParameters['session_id'] ?? '';
+    final sessionId = _startupSessionId;
     final canVerify = user != null && sessionId.isNotEmpty;
 
     if (canVerify && _verifiedSessionId != sessionId) {

@@ -63,6 +63,18 @@ abstract final class Ev {
   static const generationRetried = 'generation_retried';
   static const generationResumed = 'generation_resumed';
 
+  // ── Conversation history ─────────────────────────────────────────────────
+  static const conversationHistoryCacheLoaded =
+      'conversation_history_cache_loaded';
+  static const conversationHistorySyncStarted =
+      'conversation_history_sync_started';
+  static const conversationHistoryFirstPageLoaded =
+      'conversation_history_first_page_loaded';
+  static const conversationHistorySyncSucceeded =
+      'conversation_history_sync_succeeded';
+  static const conversationHistorySyncFailed =
+      'conversation_history_sync_failed';
+
   // ── Reference images / prompt composition ────────────────────────────────
   static const referenceImageAttached = 'reference_image_attached';
   static const referenceImageRemoved = 'reference_image_removed';
@@ -73,6 +85,12 @@ abstract final class Ev {
   // ── 3D editor (the code-native differentiator) ───────────────────────────
   static const viewerOpened = 'viewer_opened';
   static const viewerFullscreenToggled = 'viewer_fullscreen_toggled';
+  static const modelLoadStarted = 'model_load_started';
+  static const modelLoadSucceeded = 'model_load_succeeded';
+  static const modelLoadFailed = 'model_load_failed';
+  static const modelResolutionStarted = 'model_resolution_started';
+  static const modelResolutionSucceeded = 'model_resolution_succeeded';
+  static const modelResolutionFailed = 'model_resolution_failed';
   static const meshSelected = 'mesh_selected';
   static const editorToolUsed = 'editor_tool_used';
   static const displayModeChanged = 'display_mode_changed';
@@ -194,6 +212,9 @@ abstract final class Pr {
   static const nodeElapsedMs = 'node_elapsed_ms';
   static const totalElapsedMs = 'total_elapsed_ms';
   static const durationMs = 'duration_ms';
+  static const pageCount = 'page_count';
+  static const conversationCount = 'conversation_count';
+  static const cachedCount = 'cached_count';
   static const terminalNode = 'terminal_node';
   static const retryCount = 'retry_count';
   static const stageRetryCount = 'stage_retry_count';
@@ -283,6 +304,9 @@ const Set<String> kViewerEvents = <String>{
   Ev.materialApplied,
   Ev.meshSelected,
   Ev.modelDownloaded,
+  Ev.modelLoadStarted,
+  Ev.modelLoadSucceeded,
+  Ev.modelLoadFailed,
   Ev.undoUsed,
   Ev.redoUsed,
   Ev.versionSwitched,

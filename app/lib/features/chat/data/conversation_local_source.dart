@@ -1,32 +1,52 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:nova3d_frontend/core/errors.dart';
 import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _kConversationsKey = 'local_conversations';
+const _kLegacyConversationsKey = 'local_conversations';
+const _kConversationsPrefix = 'local_conversations_';
 const _kMessagesPrefix = 'local_messages_';
+const _kMaxCachedConversations = 500;
+const _kMaxConversationCacheChars = 2 * 1024 * 1024;
+const _kStorageTimeout = Duration(seconds: 1);
 
 class ConversationLocalSource {
-  Future<List<ConversationModel>> loadConversations() async {
+  String _conversationsKey(String userId) =>
+      '$_kConversationsPrefix${Uri.encodeComponent(userId)}';
+
+  Future<List<ConversationModel>> loadConversations(String userId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_kConversationsKey);
+      final prefs = await SharedPreferences.getInstance().timeout(
+        _kStorageTimeout,
+      );
+      // The pre-user-scoping cache cannot be safely attributed on a shared
+      // browser. Drop it once instead of briefly showing it to the next user.
+      unawaited(_removeLegacyCache(prefs));
+      final raw = prefs.getString(_conversationsKey(userId));
       if (raw == null) return [];
+      // JSON decoding is synchronous on web. Reject an unexpectedly large or
+      // corrupted cache before parsing so local storage can never pin startup.
+      if (raw.length > _kMaxConversationCacheChars) {
+        debugPrint(
+          '[ConversationLocalSource] ignored oversized cache '
+          '(${raw.length} chars)',
+        );
+        return [];
+      }
       final decoded = json.decode(raw);
       if (decoded is! List) return [];
       return decoded
           .whereType<Map<String, dynamic>>()
+          .take(_kMaxCachedConversations)
           .map(ConversationModel.fromJson)
           .toList();
     } catch (e, st) {
       debugPrint('[ConversationLocalSource] load failed: $e\n$st');
-      throw AppError(
-        'Failed to load conversations from storage.',
-        kind: AppErrorKind.persistence,
-        cause: e,
-      );
+      // The backend is authoritative. A slow, unavailable, or corrupt local
+      // cache must behave exactly like a cache miss and never gate the sidebar.
+      return [];
     }
   }
 
@@ -41,13 +61,18 @@ class ConversationLocalSource {
   /// The backend is the source of truth, so a write failure (e.g. a quota or
   /// private-mode error) is logged and swallowed — persisting the cache must
   /// never discard conversation data the caller already fetched.
-  Future<void> save(List<ConversationModel> convs) async {
+  Future<void> save(String userId, List<ConversationModel> convs) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _kConversationsKey,
-        json.encode(convs.map(_toCacheEntry).toList()),
+      final prefs = await SharedPreferences.getInstance().timeout(
+        _kStorageTimeout,
       );
+      final encoded = json.encode(
+        convs.take(_kMaxCachedConversations).map(_toCacheEntry).toList(),
+      );
+      if (encoded.length > _kMaxConversationCacheChars) return;
+      await prefs
+          .setString(_conversationsKey(userId), encoded)
+          .timeout(_kStorageTimeout);
     } catch (e, st) {
       debugPrint('[ConversationLocalSource] save failed (ignored): $e\n$st');
     }
@@ -61,11 +86,21 @@ class ConversationLocalSource {
     return entry;
   }
 
+  Future<void> _removeLegacyCache(SharedPreferences prefs) async {
+    try {
+      await prefs.remove(_kLegacyConversationsKey).timeout(_kStorageTimeout);
+    } catch (_) {
+      // Best-effort migration cleanup; the user-scoped key is still safe.
+    }
+  }
+
   // Non-fatal cleanup — orphaned message data in storage is acceptable.
   Future<void> deleteMessages(String convId) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('$_kMessagesPrefix$convId');
+      final prefs = await SharedPreferences.getInstance().timeout(
+        _kStorageTimeout,
+      );
+      await prefs.remove('$_kMessagesPrefix$convId').timeout(_kStorageTimeout);
     } catch (e, st) {
       debugPrint(
         '[ConversationLocalSource] deleteMessages($convId) failed: $e\n$st',
@@ -77,16 +112,19 @@ class ConversationLocalSource {
   /// Called on logout to prevent data leaking into the next user's session.
   Future<void> clearAll() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance().timeout(
+        _kStorageTimeout,
+      );
       final toRemove = prefs
           .getKeys()
           .where(
-            (k) => k == _kConversationsKey || k.startsWith(_kMessagesPrefix),
+            (k) =>
+                k == _kLegacyConversationsKey ||
+                k.startsWith(_kConversationsPrefix) ||
+                k.startsWith(_kMessagesPrefix),
           )
           .toList();
-      for (final key in toRemove) {
-        await prefs.remove(key);
-      }
+      await Future.wait(toRemove.map(prefs.remove)).timeout(_kStorageTimeout);
     } catch (e, st) {
       debugPrint('[ConversationLocalSource] clearAll failed: $e\n$st');
     }

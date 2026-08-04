@@ -28,6 +28,7 @@ import {
 const MAX_LOADED = 28;        // cap simultaneously-loaded tile models (GPU memory)
 const NEAR_MARGIN = '900px';  // preload/keep models this far outside viewport
 const DRAG_THRESHOLD = 6;     // px before a press counts as a drag (else = click)
+const CATALOG_FETCH_TIMEOUT_MS = 15000;
 
 const loader = new GLTFLoader();
 const scrollEl = document.getElementById('scroll');
@@ -120,12 +121,25 @@ function disposeObject(obj) {
   });
 }
 
+const CARD_MODEL_TIMEOUT_MS = 30000;
+
 function loadCardModel(card) {
   if (card.loaded || card.loading || !card.entry.glb_url) return;
   card.loading = true;
+  const attempt = ++card.loadAttempt;
+  const timeout = setTimeout(() => {
+    if (card.disposed || !card.loading || attempt !== card.loadAttempt) return;
+    card.loading = false;
+    card.spin.textContent = 'preview unavailable';
+  }, CARD_MODEL_TIMEOUT_MS);
   loader.load(
     card.entry.glb_url,
     (gltf) => {
+      clearTimeout(timeout);
+      if (attempt !== card.loadAttempt) {
+        disposeObject(gltf.scene);
+        return;
+      }
       card.loading = false;
       if (card.disposed) { disposeObject(gltf.scene); return; }
       card.model = fitModel(gltf.scene, card.camera); // pivot wrapping the model
@@ -150,11 +164,18 @@ function loadCardModel(card) {
       enforceLoadCap();
     },
     undefined,
-    () => { card.loading = false; card.spin.textContent = 'preview unavailable'; },
+    () => {
+      clearTimeout(timeout);
+      if (attempt !== card.loadAttempt) return;
+      card.loading = false;
+      card.spin.textContent = 'preview unavailable';
+    },
   );
 }
 
 function unloadCardModel(card) {
+  card.loadAttempt++;
+  card.loading = false;
   if (card.model) { card.scene.remove(card.model); disposeObject(card.model); card.model = null; }
   card.loaded = false;
   card.spin.style.display = '';
@@ -209,7 +230,7 @@ function createCard(entry) {
   const card = {
     entry, el, stage, spin: el.querySelector('.spin'),
     scene: buildScene(entry), camera: makeCamera(), model: null,
-    loaded: false, loading: false, near: false, disposed: false,
+    loaded: false, loading: false, near: false, disposed: false, loadAttempt: 0,
     rot: { x: 0.1, y: 0.4 }, dragging: false,
   };
 
@@ -465,7 +486,7 @@ txBtn.addEventListener('click', () => {
       glb_url: currentEntry.glb_url || '',
       code_url: currentEntry.code_url || '',
     },
-  }, '*');
+  }, window.location.origin);
   // The host normally navigates away (unmounting this gallery). If it doesn't
   // (e.g. the user cancels the texture dialog), re-enable + resume rendering.
   setTimeout(() => {
@@ -513,11 +534,13 @@ let io = null;
 let renderLoopStarted = false;
 const catalogs = { generations: null, textures: null, rings: null }; // fetched entry caches
 let activeCat = 'generations';
+const catalogRequestIds = { generations: 0, textures: 0, rings: 0 };
 
 function disposeCards() {
   if (io) { io.disconnect(); io = null; }
   for (const card of cards) {
     card.disposed = true;
+    card.loadAttempt++;
     if (card.model) { card.scene.remove(card.model); disposeObject(card.model); card.model = null; }
     card.el.remove();
   }
@@ -571,13 +594,51 @@ function mountEntries(entries, noun) {
 }
 
 async function fetchEntries(url) {
-  const resp = await fetch(url, { cache: 'no-store' });
-  if (!resp.ok) throw new Error(String(resp.status));
-  const data = await resp.json();
-  return Array.isArray(data?.entries) ? data.entries : [];
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  let deadline;
+  const timeout = new Promise((_, reject) => {
+    deadline = setTimeout(() => {
+      controller?.abort();
+      const error = new Error('Showcase request timed out');
+      error.name = 'TimeoutError';
+      reject(error);
+    }, CATALOG_FETCH_TIMEOUT_MS);
+  });
+
+  try {
+    // Race both headers and body parsing against one overall deadline. Fetch
+    // resolving is not enough when a stalled response body never completes.
+    const resp = await Promise.race([
+      fetch(url, { cache: 'no-store', signal: controller?.signal }),
+      timeout,
+    ]);
+    if (!resp.ok) {
+      const error = new Error(String(resp.status));
+      error.status = resp.status;
+      throw error;
+    }
+    const data = await Promise.race([resp.json(), timeout]);
+    return Array.isArray(data?.entries) ? data.entries : [];
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
+function showCatalogUnavailable(cat) {
+  statusEl.style.display = '';
+  statusEl.replaceChildren(document.createTextNode('Showcase temporarily unavailable. '));
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'dl-btn';
+  retry.textContent = 'Retry';
+  retry.addEventListener('click', () => {
+    if (activeCat === cat) void showCatalog(cat);
+  });
+  statusEl.appendChild(retry);
 }
 
 async function showCatalog(cat) {
+  const requestId = ++catalogRequestIds[cat];
   activeCat = cat;
   document.querySelectorAll('.cat-tab').forEach((t) =>
     t.classList.toggle('active', t.dataset.cat === cat));
@@ -600,11 +661,19 @@ async function showCatalog(cat) {
   let entries;
   try {
     entries = await fetchEntries(url);
-  } catch (_) {
+  } catch (error) {
+    if (requestId !== catalogRequestIds[cat] || activeCat !== cat) return;
     // A missing textures.json / rings.json just means nothing is published yet.
-    entries = cat === 'generations' ? null : [];
-    if (entries === null) { statusEl.textContent = 'Could not load the showcase.'; return; }
+    const optionalCatalogMissing = cat !== 'generations'
+      && (error?.status === 404 || error?.status === 410);
+    if (!optionalCatalogMissing) {
+      countEl.textContent = '';
+      showCatalogUnavailable(cat);
+      return;
+    }
+    entries = [];
   }
+  if (requestId !== catalogRequestIds[cat]) return;
   if (cat === 'textures') for (const e of entries) e.kind = e.kind || 'texture';
   if (cat === 'rings') for (const e of entries) e.kind = e.kind || 'ring';
   catalogs[cat] = entries;
@@ -627,7 +696,7 @@ function initialCat() {
 
 function notifyParentTab(cat) {
   if (window.parent && window.parent !== window) {
-    try { window.parent.postMessage({ type: 'nova3d-showcase-tab', tab: cat }, '*'); } catch (_) {}
+    try { window.parent.postMessage({ type: 'nova3d-showcase-tab', tab: cat }, window.location.origin); } catch (_) {}
   }
 }
 
@@ -640,6 +709,7 @@ document.querySelectorAll('.cat-tab').forEach((t) =>
 
 // Host app → gallery: switch tab without notifying back (avoids a loop).
 window.addEventListener('message', (e) => {
+  if (e.origin !== window.location.origin || e.source !== window.parent) return;
   const d = e.data;
   if (!d || d.type !== 'nova3d-showcase-set-tab') return;
   const cat = validCat(d.tab);

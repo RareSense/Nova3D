@@ -23,6 +23,10 @@ class ChatService {
       BaseOptions(
         baseUrl: kApiBaseUrl,
         connectTimeout: const Duration(seconds: 10),
+        // Conversation/history requests must never leave the UI waiting
+        // indefinitely on a server that accepted a connection but stopped
+        // responding. Generation streaming uses a separate Dio client below.
+        receiveTimeout: const Duration(seconds: 15),
       ),
     );
   }

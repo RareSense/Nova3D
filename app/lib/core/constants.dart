@@ -56,6 +56,13 @@ const bool kCaptureUserContent = bool.fromEnvironment(
   defaultValue: true,
 );
 
+/// Allows deployments handling confidential designs to keep structured
+/// product events while disabling pixel-level session replay.
+const bool kSessionReplayEnabled = bool.fromEnvironment(
+  'SESSION_REPLAY_ENABLED',
+  defaultValue: true,
+);
+
 /// Session-replay canvas snapshot rate. Flutter web renders to a canvas, so
 /// these two values decide whether replays of the 3D editor are legible.
 /// PostHog accepts 0–12 fps; quality is a decimal string in 0–1.

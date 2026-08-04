@@ -36,9 +36,11 @@ final messageLocalSourceProvider = Provider<MessageLocalSource>(
 );
 
 final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
+  final userId = ref.watch(authProvider.select((auth) => auth.valueOrNull?.id));
   final repo = ConversationRepository(
     ref.watch(conversationLocalSourceProvider),
     ref.watch(chatServiceProvider),
+    userId: userId,
   );
   ref.onDispose(repo.cancelPendingTimers);
   return repo;
@@ -69,7 +71,12 @@ class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
     final user = ref.watch(authProvider).valueOrNull;
     if (user == null) return [];
 
+    final cacheTimer = Stopwatch()..start();
     final local = await ref.read(conversationRepositoryProvider).load();
+    analytics.capture(Ev.conversationHistoryCacheLoaded, <String, Object?>{
+      Pr.durationMs: cacheTimer.elapsedMilliseconds,
+      Pr.conversationCount: local.length,
+    });
     Future.microtask(_syncLatest);
     return local;
   }
@@ -83,14 +90,52 @@ class ConversationsNotifier extends AsyncNotifier<List<ConversationModel>> {
   Future<void> _syncLatest() async {
     final userId = ref.read(authProvider).valueOrNull?.id;
     if (userId == null) return;
+    final timer = Stopwatch()..start();
+    final cachedCount = state.valueOrNull?.length ?? 0;
+    var pageCount = 0;
+    analytics.capture(Ev.conversationHistorySyncStarted, <String, Object?>{
+      Pr.cachedCount: cachedCount,
+    });
     try {
       final synced = await ref
           .read(conversationRepositoryProvider)
-          .syncLatest();
+          .syncLatest(
+            onPage: (page) {
+              // A logout/login can complete while an old user's request is in
+              // flight. Never publish that stale response into the new session.
+              if (ref.read(authProvider).valueOrNull?.id != userId) return;
+              pageCount++;
+              state = AsyncValue.data(page);
+              if (pageCount == 1) {
+                analytics.capture(
+                  Ev.conversationHistoryFirstPageLoaded,
+                  <String, Object?>{
+                    Pr.durationMs: timer.elapsedMilliseconds,
+                    Pr.conversationCount: page.length,
+                    Pr.cachedCount: cachedCount,
+                  },
+                );
+              }
+            },
+          );
+      if (ref.read(authProvider).valueOrNull?.id != userId) return;
       state = AsyncValue.data(synced);
-    } catch (_) {
-      // Local cache remains authoritative for rendering when remote history
-      // sync is temporarily unavailable.
+      analytics.capture(Ev.conversationHistorySyncSucceeded, <String, Object?>{
+        Pr.durationMs: timer.elapsedMilliseconds,
+        Pr.pageCount: pageCount,
+        Pr.conversationCount: synced.length,
+        Pr.cachedCount: cachedCount,
+      });
+    } catch (error) {
+      analytics.capture(Ev.conversationHistorySyncFailed, <String, Object?>{
+        Pr.durationMs: timer.elapsedMilliseconds,
+        Pr.pageCount: pageCount,
+        Pr.conversationCount: state.valueOrNull?.length ?? cachedCount,
+        Pr.cachedCount: cachedCount,
+        Pr.errorMessage: error.toString(),
+      });
+      // The local cache (plus any pages already published by onPage) remains
+      // authoritative when the rest of remote history is unavailable.
     }
   }
 
@@ -393,6 +438,11 @@ class MessagesNotifier
           clearRetryRequest: true,
         ),
       );
+      analytics.capture(Ev.generationResumed, <String, Object?>{
+        Pr.workflowId: workflowId,
+        Pr.modelOptionId: msg.modelOptionId,
+        Pr.surface: Surface.chat,
+      });
       _busy = true;
       _pollExistingGeneration(
         workflowId: workflowId,
@@ -524,10 +574,6 @@ class MessagesNotifier
     final cad = ref.read(cadServiceProvider);
     final tracker = WorkflowRunTracker.forGeneration(request);
     final requestProps = generationRequestProperties(request);
-    analytics.capture(Ev.generationRequested, <String, Object?>{
-      ...requestProps,
-      Pr.surface: Surface.chat,
-    });
     try {
       await _ensurePaidCreditBudget(request, cad);
       final startedWorkflowId = await cad.startGeneration(
@@ -655,7 +701,9 @@ class MessagesNotifier
       workflowId,
       // A resumed workflow already existed, so "not found" means it closed —
       // fail fast instead of the long fresh-start grace.
-      startupGraceRetries: isResume ? CadService.resumeStartupGraceRetries : null,
+      startupGraceRetries: isResume
+          ? CadService.resumeStartupGraceRetries
+          : null,
       onProgress: (status) {
         // Per-node stage timing. The tracker de-duplicates polls, so this is
         // one event per real GraphFlow transition, not one per 3s poll.
@@ -1191,8 +1239,9 @@ class MessagesNotifier
       final result = await cad.runTextureWorkflow(
         workflowId,
         startupGraceRetries: CadService.resumeStartupGraceRetries,
-        onProgress: (status) =>
-            _upsert(msg.copyWith(text: status.progressLabel, isStreaming: true)),
+        onProgress: (status) => _upsert(
+          msg.copyWith(text: status.progressLabel, isStreaming: true),
+        ),
       );
       final failed = result.failed || result.glbUrl == null;
       _upsert(

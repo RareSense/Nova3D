@@ -27,9 +27,13 @@ class ShowcaseGalleryView extends StatelessWidget {
   static void setTab(String manifestUrl, String tab) {
     _iframeByUrl[manifestUrl]?.contentWindow?.postMessage(
       {'type': 'nova3d-showcase-set-tab', 'tab': tab}.jsify(),
-      '*'.toJS,
+      web.window.location.origin.toJS,
     );
   }
+
+  /// Whether [source] is the window of this manifest's mounted gallery iframe.
+  static bool isMessageSource(String manifestUrl, Object? source) =>
+      source != null && source == _iframeByUrl[manifestUrl]?.contentWindow;
 
   String _viewType() {
     return _viewTypeByUrl.putIfAbsent(manifestUrl, () {

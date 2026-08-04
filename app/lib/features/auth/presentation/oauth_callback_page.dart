@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
@@ -21,14 +22,17 @@ class _OAuthCallbackPageState extends ConsumerState<OAuthCallbackPage> {
   }
 
   Future<void> _handleCallback() async {
-    // main() stores the OAuth fragment in sessionStorage before GoRouter
-    // initializes (to avoid the fragment causing a route-match assertion).
-    // Fall back to reading the live hash in case of hot-reload during dev.
+    // main() captures the OAuth fragment before analytics and GoRouter start.
+    // The sessionStorage read supports callbacks parked by an older app build;
+    // the live hash remains a development hot-reload fallback.
+    final bootstrap = StartupUrlBootstrap.takeOAuthFragment() ?? '';
     final stored = web.window.sessionStorage.getItem('_nova3d_oauth') ?? '';
     web.window.sessionStorage.removeItem('_nova3d_oauth');
 
     final hash = web.window.location.hash;
-    final fragment = stored.isNotEmpty
+    final fragment = bootstrap.isNotEmpty
+        ? bootstrap
+        : stored.isNotEmpty
         ? stored
         : (hash.startsWith('#') ? hash.substring(1) : hash);
 

@@ -40,6 +40,7 @@ String routePatternFor(String path) {
 /// the provider calls on teardown.
 void Function() attachAnalyticsToRouter(GoRouter router) {
   String? previousPath;
+  String? previousPattern;
   var replayPausedForRoute = false;
 
   void onRouteChanged() {
@@ -62,11 +63,14 @@ void Function() attachAnalyticsToRouter(GoRouter router) {
     }
 
     analytics.pageview(
-      path: path,
+      // Never send a concrete `/chat/<id>` path. The pattern is sufficient for
+      // product analytics and avoids retaining user-specific identifiers.
+      path: pattern,
       pattern: pattern,
-      previousPath: previousPath,
+      previousPath: previousPattern,
     );
     previousPath = path;
+    previousPattern = pattern;
   }
 
   router.routerDelegate.addListener(onRouteChanged);

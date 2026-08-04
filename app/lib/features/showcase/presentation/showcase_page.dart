@@ -85,7 +85,10 @@ class _Header extends StatelessWidget {
         children: [
           const Text('✦', style: TextStyle(color: kLilac, fontSize: 18)),
           const SizedBox(width: 10),
-          Text('SHOWCASE', style: kSilkscreen(13, color: kInk, letterSpacing: 1)),
+          Text(
+            'SHOWCASE',
+            style: kSilkscreen(13, color: kInk, letterSpacing: 1),
+          ),
           const Spacer(),
           _NavButton(
             label: signedIn ? 'Home' : 'Sign in',
@@ -171,6 +174,13 @@ class _ShowcaseTextureBridgeState
   }
 
   void _onMessage(web.MessageEvent event) {
+    if (event.origin != web.window.location.origin) return;
+    if (!ShowcaseGalleryView.isMessageSource(
+      kShowcaseManifestUrl,
+      event.source,
+    )) {
+      return;
+    }
     final data = event.data?.dartify();
     if (data is! Map) return;
 

@@ -88,18 +88,19 @@ export function setupViewportMode() {
         saveEditorState();
         setViewportMode(false);
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'nova3d-viewer-fullscreen', action: 'exit', viewerId: state.viewerId }, '*');
+          window.parent.postMessage({ type: 'nova3d-viewer-fullscreen', action: 'exit', viewerId: state.viewerId }, window.location.origin);
         }
         return;
       }
       saveEditorState();
       setViewportMode(true);
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'nova3d-viewer-fullscreen', action: 'enter', viewerId: state.viewerId }, '*');
+        window.parent.postMessage({ type: 'nova3d-viewer-fullscreen', action: 'enter', viewerId: state.viewerId }, window.location.origin);
       }
     };
   }
   window.addEventListener('message', event => {
+    if (event.origin !== window.location.origin || event.source !== window.parent) return;
     const data = event.data || {};
     if (data.type === 'nova3d-viewer-fullscreen-state') {
       setViewportMode(Boolean(data.full));

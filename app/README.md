@@ -81,6 +81,38 @@ flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5555
 - **Reference images:** attach a photo to guide the spatial logic of the generated script.
 - **Production build:** `flutter build web --release` for static hosting.
 
+BYOK provider keys are stored only in that browser profile. Nova3D clears them,
+along with private model/editor caches, on sign-out or an account change so one
+account cannot inherit another account's local data on a shared browser.
+
+## Optional analytics
+
+Analytics is disabled unless a PostHog project token is supplied at build
+time. No Nova3D token is committed, so clones and self-hosted builds do not
+send data to Nova3D by default.
+
+```bash
+flutter build web --release \
+  --dart-define=POSTHOG_KEY=your_project_token \
+  --dart-define=POSTHOG_HOST=https://us.i.posthog.com \
+  --dart-define=POSTHOG_UI_HOST=https://us.posthog.com
+```
+
+Privacy controls are also build-time settings:
+
+- `CAPTURE_USER_CONTENT=false` removes prompts, edit descriptions, mesh names,
+  item titles, and email from structured events.
+- `SESSION_REPLAY_ENABLED=false` keeps structured events but disables session
+  replay. Replay records the Flutter canvas as pixels, so use this for
+  deployments that handle confidential designs unless users have consented.
+- `REPLAY_CANVAS_FPS`, `REPLAY_CANVAS_QUALITY`, and
+  `REPLAY_CANVAS_RESOLUTION_SCALE` tune replay cost and fidelity.
+
+Provider keys and credential-shaped values are removed by the central
+analytics scrubber regardless of these settings. Treat the build-time PostHog
+project token as a client identifier; never put PostHog personal API keys or
+other read-capable credentials in a web build.
+
 ## Troubleshooting
 
 - **Auth loops:** always use `http://127.0.0.1:5555`. Using `localhost:5555` will cause Google Sign-In to fail due to strict OAuth origin policies.

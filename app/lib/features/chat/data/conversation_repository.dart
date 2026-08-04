@@ -8,14 +8,30 @@ import 'package:nova3d_frontend/shared/models/conversation_model.dart';
 import 'package:nova3d_frontend/shared/models/message_model.dart';
 
 class ConversationRepository {
-  ConversationRepository(this._local, this._remote);
+  ConversationRepository(this._local, this._remote, {required String? userId})
+    : _userId = userId;
 
   final ConversationLocalSource _local;
   final ChatService _remote;
+  final String? _userId;
   final Map<String, Timer> _snapshotDebounce = {};
   final Set<String> _messagePersistKeys = {};
+  bool _disposed = false;
 
-  Future<List<ConversationModel>> load() => _local.loadConversations();
+  Future<List<ConversationModel>> load() => _loadLocal();
+
+  Future<List<ConversationModel>> _loadLocal() {
+    final userId = _userId;
+    return userId == null
+        ? Future.value(<ConversationModel>[])
+        : _local.loadConversations(userId);
+  }
+
+  Future<void> _saveLocal(List<ConversationModel> conversations) {
+    final userId = _userId;
+    if (userId == null || _disposed) return Future<void>.value();
+    return _local.save(userId, conversations);
+  }
 
   /// Syncs the conversation list from the backend.
   ///
@@ -24,34 +40,132 @@ class ConversationRepository {
   /// the size of any single response the browser must download and parse,
   /// keeping history loadable even while older conversations still carry heavy
   /// (pre-trim) snapshots. [maxConversations] caps the walk so a growing list
-  /// can never loop unbounded.
+  /// can never loop unbounded. The first page is fetched alone and published
+  /// immediately; later pages are fetched in small concurrent batches so deep
+  /// histories do not require one network round-trip per page.
   Future<List<ConversationModel>> syncLatest({
-    int pageSize = 10,
+    int pageSize = 50,
     int maxConversations = 500,
+    int maxConcurrentPages = 3,
+    Duration syncTimeout = const Duration(seconds: 30),
+    void Function(List<ConversationModel> conversations)? onPage,
   }) async {
-    final remote = <ConversationModel>[];
-    for (var offset = 0; offset < maxConversations; offset += pageSize) {
-      final page = await _remote.getConversations(
-        limit: pageSize,
-        offset: offset,
-      );
-      remote.addAll(page);
-      if (page.length < pageSize) break;
+    if (_userId == null || _disposed) return <ConversationModel>[];
+    final effectivePageSize = pageSize.clamp(1, 50).toInt();
+    final effectiveMaxConversations = maxConversations.clamp(1, 500).toInt();
+    final effectiveConcurrency = maxConcurrentPages.clamp(1, 3).toInt();
+    final deadline = DateTime.now().add(syncTimeout);
+
+    Duration remainingTime() {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        throw TimeoutException(
+          'Conversation history sync exceeded ${syncTimeout.inSeconds}s.',
+        );
+      }
+      return remaining;
     }
-    final local = await _local.loadConversations();
-    final merged = _mergeConversations(local, remote);
-    await _local.save(merged);
+
+    final local = await _loadLocal().timeout(
+      remainingTime(),
+      onTimeout: () => <ConversationModel>[],
+    );
+    if (_disposed) return local.take(effectiveMaxConversations).toList();
+    final remote = <ConversationModel>[];
+    var merged = _mergeConversations(
+      local,
+      remote,
+    ).take(effectiveMaxConversations).toList();
+
+    Future<_ConversationPageResult> fetchPage(int offset) async {
+      try {
+        final page = await _remote
+            .getConversations(limit: effectivePageSize, offset: offset)
+            .timeout(remainingTime());
+        if (_disposed) {
+          return _ConversationPageResult(offset: offset, page: const []);
+        }
+
+        final remainingSlots = effectiveMaxConversations - remote.length;
+        if (remainingSlots > 0) {
+          remote.addAll(page.take(remainingSlots));
+          merged = _mergeConversations(
+            local,
+            remote,
+          ).take(effectiveMaxConversations).toList();
+          onPage?.call(merged);
+        }
+        return _ConversationPageResult(offset: offset, page: page);
+      } catch (error, stackTrace) {
+        return _ConversationPageResult(
+          offset: offset,
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
+    try {
+      // Fetch page zero by itself so useful history is visible after one
+      // request, regardless of how deep the account's history is.
+      final first = await fetchPage(0);
+      if (first.error != null) {
+        Error.throwWithStackTrace(first.error!, first.stackTrace!);
+      }
+      if (_disposed) return local.take(effectiveMaxConversations).toList();
+      unawaited(_saveLocal(merged));
+
+      var nextOffset = effectivePageSize;
+      var reachedEnd = first.page.length < effectivePageSize;
+
+      while (!reachedEnd &&
+          remote.length < effectiveMaxConversations &&
+          nextOffset < effectiveMaxConversations) {
+        remainingTime();
+        final offsets = <int>[];
+        while (offsets.length < effectiveConcurrency &&
+            nextOffset < effectiveMaxConversations) {
+          offsets.add(nextOffset);
+          nextOffset += effectivePageSize;
+        }
+
+        // Every future converts failures into a result, so the whole bounded
+        // batch settles before we decide whether to stop. No late page can
+        // mutate state after this method reports a failure.
+        final results = await Future.wait(offsets.map(fetchPage));
+        results.sort((a, b) => a.offset.compareTo(b.offset));
+
+        Object? firstError;
+        StackTrace? firstStackTrace;
+        for (final result in results) {
+          if (result.error != null && firstError == null) {
+            firstError = result.error;
+            firstStackTrace = result.stackTrace;
+          }
+          if (result.page.length < effectivePageSize) reachedEnd = true;
+        }
+        if (firstError != null) {
+          Error.throwWithStackTrace(firstError, firstStackTrace!);
+        }
+      }
+    } catch (_) {
+      // Keep every successfully fetched page available on the next launch,
+      // while still rethrowing so callers can record/report the partial sync.
+      unawaited(_saveLocal(merged));
+      rethrow;
+    }
+    unawaited(_saveLocal(merged));
     return merged;
   }
 
   Future<ConversationModel> create(String title) async {
     final conv = await _remote.createConversation(title);
-    final current = await _local.loadConversations();
-    await _local.save(_mergeConversations([conv, ...current], const []));
+    final current = await _loadLocal();
+    await _saveLocal(_mergeConversations([conv, ...current], const []));
     return conv;
   }
 
-  Future<void> persist(List<ConversationModel> convs) => _local.save(convs);
+  Future<void> persist(List<ConversationModel> convs) => _saveLocal(convs);
 
   /// Loads messages from the server. If [cachedMetadata] is provided (i.e. the
   /// conversation was already fetched as part of the list API), its embedded
@@ -84,8 +198,9 @@ class ConversationRepository {
           messages: messages,
         );
         await _persistStableMessages(conversation.id, messages);
-        final current = await _local.loadConversations();
-        await _local.save(_mergeConversations(current, [updated]));
+        if (_disposed) return;
+        final current = await _loadLocal();
+        await _saveLocal(_mergeConversations(current, [updated]));
       } catch (e, st) {
         debugPrint(
           '[ConversationRepository] snapshot sync(${conversation.id}) failed: $e\n$st',
@@ -130,6 +245,7 @@ class ConversationRepository {
   /// set. Must be called on logout so stale background writes don't fire after
   /// the session ends.
   void cancelPendingTimers() {
+    _disposed = true;
     for (final timer in _snapshotDebounce.values) {
       timer.cancel();
     }
@@ -218,4 +334,18 @@ class ConversationRepository {
     score += message.joints.length;
     return score;
   }
+}
+
+class _ConversationPageResult {
+  const _ConversationPageResult({
+    required this.offset,
+    this.page = const <ConversationModel>[],
+    this.error,
+    this.stackTrace,
+  });
+
+  final int offset;
+  final List<ConversationModel> page;
+  final Object? error;
+  final StackTrace? stackTrace;
 }

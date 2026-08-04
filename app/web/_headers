@@ -10,13 +10,13 @@
 # Scoped by explicit path so Flutter's hashed assets and service worker keep
 # their default long-lived caching untouched.
 
+/*
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+
 /showcase/*
   Cache-Control: no-cache
 /showcase_gallery.html
-  Cache-Control: no-cache
-/showcase_admin/*
-  Cache-Control: no-cache
-/showcase_demo/*
   Cache-Control: no-cache
 /nova3d/*
   Cache-Control: no-cache

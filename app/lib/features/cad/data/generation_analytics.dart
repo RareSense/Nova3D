@@ -15,10 +15,7 @@ import 'package:nova3d_frontend/features/cad/models/generation_model_option.dart
 import 'package:nova3d_frontend/features/cad/models/generation_request.dart';
 
 /// Nodes that indicate the build stage was re-run.
-const Set<String> _kRetryNodes = <String>{
-  'build_repair_prompt',
-  'repair_llm',
-};
+const Set<String> _kRetryNodes = <String>{'build_repair_prompt', 'repair_llm'};
 
 /// Node that runs only when the review stage produced an amended build.
 const String _kAmendNode = 'validation_correction_blender';
@@ -33,7 +30,9 @@ Map<String, Object?> generationRequestProperties(GenerationRequest request) {
   return <String, Object?>{
     if (kCaptureUserContent && prompt.isNotEmpty) Pr.prompt: prompt,
     Pr.promptLength: prompt.length,
-    Pr.promptWordCount: prompt.isEmpty ? 0 : prompt.split(RegExp(r'\s+')).length,
+    Pr.promptWordCount: prompt.isEmpty
+        ? 0
+        : prompt.split(RegExp(r'\s+')).length,
     Pr.hasReferenceImages: request.hasImage,
     Pr.imageCount: request.images.length,
     ...modelOptionProperties(request.modelOption),
@@ -198,13 +197,20 @@ class WorkflowRunTracker {
   static WorkflowRunTracker forGeneration(
     GenerationRequest request, {
     bool isResume = false,
-  }) => WorkflowRunTracker(
-    nodeEvent: Ev.generationNodeChanged,
-    succeededEvent: Ev.generationSucceeded,
-    failedEvent: Ev.generationFailed,
-    isResume: isResume,
-    baseProperties: generationRequestProperties(request),
-  );
+  }) {
+    final stageProperties = generationRequestProperties(request)
+      // Raw content is attached once to generation_started. Repeating it on
+      // every node/retry/terminal event increases exposure and event volume
+      // without adding joinability; workflow_id links those events instead.
+      ..remove(Pr.prompt);
+    return WorkflowRunTracker(
+      nodeEvent: Ev.generationNodeChanged,
+      succeededEvent: Ev.generationSucceeded,
+      failedEvent: Ev.generationFailed,
+      isResume: isResume,
+      baseProperties: stageProperties,
+    );
+  }
 
   /// Factory for a texture_3d_v2 run.
   static WorkflowRunTracker forTexture(Map<String, Object?> baseProperties) =>

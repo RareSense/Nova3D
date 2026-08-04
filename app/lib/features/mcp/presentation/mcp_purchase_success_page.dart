@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/mcp/data/mcp_browser_context.dart';
 import 'package:nova3d_frontend/features/mcp/presentation/mcp_shared.dart';
@@ -20,6 +21,7 @@ class McpPurchaseSuccessPage extends ConsumerStatefulWidget {
 class _McpPurchaseSuccessPageState
     extends ConsumerState<McpPurchaseSuccessPage> {
   String? _verifiedSessionId;
+  late final String? _checkoutSessionId;
   Timer? _pollTimer;
 
   @override
@@ -31,13 +33,12 @@ class _McpPurchaseSuccessPageState
   @override
   void initState() {
     super.initState();
+    _checkoutSessionId = StartupUrlBootstrap.takeCheckoutSessionId();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
   Future<void> _bootstrap() async {
-    final sessionId =
-        Uri.base.queryParameters['session_id'] ??
-        Uri.base.queryParameters['checkout_session_id'];
+    final sessionId = _checkoutSessionId;
     if (sessionId != null &&
         sessionId.trim().isNotEmpty &&
         sessionId != _verifiedSessionId) {

@@ -55,8 +55,8 @@ import {
   applyRenderProfileToMaterial,
   highlightMat,
 } from '@nova/materials.js';
-import {
 import { track } from '@nova/analytics.js';
+import {
   captureJointNodes,
   objectParentJointName,
   bindArticulatedJoints,
@@ -411,8 +411,8 @@ export function syncHistoryUi() {
 }
 
 export function switchAiVersion(index) {
-  track('version_switched', { version_index: index, from_index: state.aiVersionIndex, version_count: (state.assetVersions || []).length });
   if (!Number.isInteger(index) || index < 0 || index >= state.aiVersions.length) return;
+  track('version_switched', { version_index: index, from_index: state.aiVersionIndex, version_count: state.aiVersions.length });
   const version = state.aiVersions[index];
   state.aiVersionIndex = index;
   state.currentCodeArtifact = version.codeArtifact || null;
@@ -432,7 +432,7 @@ export function switchAiVersion(index) {
       requestId,
       workflowId: version.workflowId,
       modelUrl: version.modelUrl,
-    }, '*');
+    }, window.location.origin);
   } catch (_) {}
   window.setTimeout(() => {
     if (_activeVersionRequestId === requestId) {
@@ -443,6 +443,7 @@ export function switchAiVersion(index) {
 }
 
 window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin || event.source !== window.parent) return;
   const data = event.data || {};
   if (data.type !== 'nova3d-version-resolve-result') return;
   if (data.requestId !== _activeVersionRequestId) return;

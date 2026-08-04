@@ -207,16 +207,24 @@ export function renderEditModelSelector() {
   });
 }
 
+let latestEditConfig = null;
+
 export function applyEditConfig(data) {
   if (!data || typeof data !== 'object') return;
+  latestEditConfig = data;
   if (data.modelArtifact !== undefined) state.currentModelArtifact = data.modelArtifact || null;
   if (data.codeArtifact !== undefined) state.currentCodeArtifact = data.codeArtifact || null;
   if (data.jointsArtifact !== undefined) state.currentJointsArtifact = data.jointsArtifact || null;
-  if (Array.isArray(data.joints) && data.joints.length > 0) {
+  if (Array.isArray(data.joints)) {
     state.currentJoints = data.joints;
     bindArticulatedJoints(state.currentJoints, { preserveValues: true });
   }
-  if (data.sourceModelUrl !== undefined) state.currentSourceModelUrl = String(data.sourceModelUrl || '');
+  if (data.sourceModelUrl !== undefined) {
+    state.currentSourceModelUrl = String(data.sourceModelUrl || '');
+    // Parent-resolved source is authoritative and arrives outside the iframe
+    // URL so signed query strings never enter replay/history/referrer data.
+    if (state.currentSourceModelUrl) state.currentModelUrl = state.currentSourceModelUrl;
+  }
   if (data.instructionPrompt !== undefined) state.currentInstructionPrompt = String(data.instructionPrompt || '');
   if (data.sourceWorkflowId !== undefined) state.currentSourceWorkflowId = String(data.sourceWorkflowId || '');
   if (Array.isArray(data.assetVersions)) setAssetVersions(data.assetVersions);
@@ -225,6 +233,10 @@ export function applyEditConfig(data) {
   }
   if (data.editDefaultModelId !== undefined) state.editDefaultModelId = String(data.editDefaultModelId || '');
   renderEditModelSelector();
+}
+
+export function reapplyLatestEditConfig() {
+  if (latestEditConfig) applyEditConfig(latestEditConfig);
 }
 
 // ── Request flow ─────────────────────────────────────────────────────────────
@@ -290,7 +302,7 @@ function requestAiEdit(operation, description, partType = '') {
     selectedMeshes: selectedMeshNames(),
     sourceWorkflowId: state.currentSourceWorkflowId,
     modelOptionId,
-  }, '*');
+  }, window.location.origin);
   const sentRequestId = state.activeEditRequestId;
   window.setTimeout(() => {
     if (state.activeEditRequestId === sentRequestId) {
@@ -318,6 +330,7 @@ export function requestArticulation() {
 // ── Result handler (parent → viewer) ─────────────────────────────────────────
 export function setupEditBridge() {
   window.addEventListener('message', event => {
+    if (event.origin !== window.location.origin || event.source !== window.parent) return;
     const data = event.data || {};
     if (data.type === 'nova3d-edit-config') {
       applyEditConfig(data);

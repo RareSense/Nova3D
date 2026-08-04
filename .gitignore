@@ -7,3 +7,18 @@
 Thumbs.db
 *.swp
 *~
+
+# Local environment and credential files. Keep sanitized templates tracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials.json
+service-account*.json
+service_account*.json
+client_secret*.json

@@ -26,7 +26,7 @@ import {
   switchAiVersion,
 } from '@nova/history.js';
 import {
-  saveEditorState, flushEditorState, restoreEditorState,
+  saveEditorState, flushEditorState, restoreEditorState, clearEditorPersistence,
   setPersistenceSceneRefreshers, setPersistenceModelLoader,
 } from '@nova/persistence.js';
 import {
@@ -56,11 +56,45 @@ import { setupKeyboard } from '@nova/ui/keyboard.js';
 import { setupSculpting } from '@nova/sculpt.js';
 import { setupExplodeControls, updateExplode } from '@nova/explode.js';
 import {
-  setupEditBridge, renderEditModelSelector,
+  setupEditBridge, renderEditModelSelector, reapplyLatestEditConfig,
   requestRegeneratePart, requestAddPart, requestArticulation,
   showEditStatus,
 } from '@nova/aiEdit.js';
 import { setupUvBridge, requestUvMaps } from '@nova/uvMaps.js';
+
+const CONTAINER_READY_TIMEOUT_MS = 4000;
+
+function runWhenContainerReady(action) {
+  let finished = false;
+  let observer = null;
+  let deadline = null;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (observer) observer.disconnect();
+    if (deadline !== null) clearTimeout(deadline);
+    action();
+  };
+
+  if (!state.container) {
+    requestAnimationFrame(finish);
+    return;
+  }
+  if (state.container.clientWidth > 0 && state.container.clientHeight > 0) {
+    finish();
+    return;
+  }
+
+  deadline = setTimeout(finish, CONTAINER_READY_TIMEOUT_MS);
+  if (typeof ResizeObserver === 'function') {
+    observer = new ResizeObserver(() => {
+      if (state.container?.clientWidth > 0 && state.container?.clientHeight > 0) finish();
+    });
+    observer.observe(state.container);
+    if (state.container.clientWidth > 0 && state.container.clientHeight > 0) finish();
+  }
+}
 
 // ── Cross-module callback wires ──────────────────────────────────────────────
 // These hooks let modules that would otherwise form an import cycle stay
@@ -106,6 +140,14 @@ setSceneHooks({
   attachTransformToSelection: () => attachTransformToSelection(),
   detachProxy:                () => detachProxy(),
   pushUndoSnapshot:           (action) => pushUndoSnapshot(action),
+});
+
+// Logout/private-data cleanup is controlled by the exact same-origin parent
+// that owns this iframe. Persistence owns deletion, keeping the bridge acyclic.
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin || event.source !== window.parent) return;
+  if (event.data?.type !== 'nova3d-clear-private-cache') return;
+  void clearEditorPersistence();
 });
 
 // Articulation's per-frame work runs as a scene frame callback.
@@ -252,7 +294,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   state.editDefaultModelId      = params.get('editDefaultModelId') || '';
-  state.currentSourceModelUrl   = params.get('sourceModelUrl') || params.get('glb') || '';
+  const initialGlbUrl = params.get('glb') || '';
+  state.currentSourceModelUrl   = params.get('sourceModelUrl')
+    || (/^blob:/i.test(initialGlbUrl) ? '' : initialGlbUrl);
   state.currentInstructionPrompt = params.get('instructionPrompt') || '';
   state.currentSourceWorkflowId = params.get('sourceWorkflowId') || '';
   const bootVersion = state.aiVersionIndex >= 0 ? state.aiVersions[state.aiVersionIndex] : null;
@@ -278,24 +322,30 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('pagehide',     () => { void flushEditorState(); });
   window.addEventListener('beforeunload', () => { void flushEditorState(); });
 
-  // restoreEditorState is async (IndexedDB); only load from the URL param
-  // when no saved state exists for this model.
-  restoreEditorState().then(restored => {
+  // Restore editor metadata from IndexedDB, but keep the host-resolved GLB as
+  // the authoritative geometry URL. A persisted signed URL may be expired.
+  restoreEditorState({
+    modelUrl: glbUrl || '',
+    sourceModelUrl: state.currentSourceModelUrl,
+  }).then(restored => {
+    // IndexedDB is asynchronous. Reapply any config that arrived while it was
+    // restoring, then request the authoritative host config once more.
+    reapplyLatestEditConfig();
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'nova3d-viewer-ready',
+          viewerId: state.viewerId,
+        }, window.location.origin);
+      }
+    } catch (_) {}
     if (!glbUrl || restored) return;
     if (bootVersion?.modelUrl) {
       switchAiVersion(state.aiVersionIndex);
       return;
     }
-    if (state.container.clientWidth > 0 && state.container.clientHeight > 0) {
+    runWhenContainerReady(() => {
       loadGLB(glbUrl, { sourceModelUrl: state.currentSourceModelUrl });
-    } else {
-      const ro = new ResizeObserver((_, obs) => {
-        if (state.container.clientWidth > 0 && state.container.clientHeight > 0) {
-          obs.disconnect();
-          loadGLB(glbUrl, { sourceModelUrl: state.currentSourceModelUrl });
-        }
-      });
-      ro.observe(state.container);
-    }
+    });
   });
 });

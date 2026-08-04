@@ -55,7 +55,7 @@ export function requestUvMaps() {
       codeArtifact: state.currentCodeArtifact,
       sourceWorkflowId: state.currentSourceWorkflowId || '',
       atlasMode: 'budget',
-    }, '*');
+    }, window.location.origin);
   } catch (_) {
     _activeUvRequestId = '';
     setUvBusy(false);
@@ -65,6 +65,7 @@ export function requestUvMaps() {
 
 export function setupUvBridge() {
   window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin || event.source !== window.parent) return;
     const data = event.data || {};
     if (data.type !== 'nova3d-uv-result') return;
     if (data.requestId !== _activeUvRequestId) return;

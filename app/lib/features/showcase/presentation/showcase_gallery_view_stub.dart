@@ -11,6 +11,9 @@ class ShowcaseGalleryView extends StatelessWidget {
   /// Web-only in practice; no-op on other targets.
   static void setTab(String manifestUrl, String tab) {}
 
+  /// There is no gallery iframe on non-web targets.
+  static bool isMessageSource(String manifestUrl, Object? source) => false;
+
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();
 }

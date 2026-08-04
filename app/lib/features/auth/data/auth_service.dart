@@ -19,6 +19,8 @@ class AuthException implements Exception {
 }
 
 class AuthService {
+  static const Duration _tokenStorageTimeout = Duration(seconds: 2);
+
   late final Dio _dio;
 
   AuthService() {
@@ -34,7 +36,9 @@ class AuthService {
   // ── Token helpers ──────────────────────────────────────────────────────────
 
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance().timeout(
+      _tokenStorageTimeout,
+    );
     return prefs.getString(kTokenKey);
   }
 
@@ -44,13 +48,25 @@ class AuthService {
   }
 
   Future<void> _saveToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(kTokenKey, token);
+    final prefs = await SharedPreferences.getInstance().timeout(
+      _tokenStorageTimeout,
+    );
+    final saved = await prefs
+        .setString(kTokenKey, token)
+        .timeout(_tokenStorageTimeout);
+    if (!saved || prefs.getString(kTokenKey) != token) {
+      throw AuthException('Could not save this browser session.');
+    }
   }
 
   Future<void> _clearToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(kTokenKey);
+    final prefs = await SharedPreferences.getInstance().timeout(
+      _tokenStorageTimeout,
+    );
+    final removed = await prefs.remove(kTokenKey).timeout(_tokenStorageTimeout);
+    if (!removed || prefs.getString(kTokenKey) != null) {
+      throw AuthException('Could not clear this browser session.');
+    }
   }
 
   // ── Email / Password ───────────────────────────────────────────────────────
@@ -155,9 +171,11 @@ class AuthService {
     final parts = token.split('.');
     if (parts.length != 3) throw const FormatException('Invalid token');
 
-    final payload = json.decode(
-      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-    ) as Map<String, dynamic>;
+    final payload =
+        json.decode(
+              utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+            )
+            as Map<String, dynamic>;
 
     final exp = payload['exp'];
     if (exp is num) {
@@ -171,7 +189,9 @@ class AuthService {
     }
 
     final id = payload['sub'] as String?;
-    if (id == null || id.isEmpty) throw const FormatException('Missing sub claim');
+    if (id == null || id.isEmpty) {
+      throw const FormatException('Missing sub claim');
+    }
 
     // email is not a required JWT claim in all FastAPI Users configurations.
     final email = payload['email'] as String? ?? '';

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nova3d_frontend/core/startup_url_bootstrap.dart';
 import 'package:nova3d_frontend/core/theme.dart';
 import 'package:nova3d_frontend/features/auth/state/auth_provider.dart';
 import 'package:nova3d_frontend/features/subscription/models/billing_models.dart';
@@ -16,10 +17,12 @@ class SubscriptionPage extends ConsumerStatefulWidget {
 
 class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   String? _verifiedSessionId;
+  late final String? _returnSessionId;
 
   @override
   void initState() {
     super.initState();
+    _returnSessionId = StartupUrlBootstrap.takeCheckoutSessionId();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(billingProvider.notifier).load();
       _verifyReturnSession();
@@ -27,9 +30,7 @@ class _SubscriptionPageState extends ConsumerState<SubscriptionPage> {
   }
 
   void _verifyReturnSession() {
-    final sessionId =
-        Uri.base.queryParameters['session_id'] ??
-        Uri.base.queryParameters['checkout_session_id'];
+    final sessionId = _returnSessionId;
     if (sessionId == null ||
         sessionId.trim().isEmpty ||
         sessionId == _verifiedSessionId) {

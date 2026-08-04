@@ -66,7 +66,9 @@ class Analytics {
     final ph = posthogJs;
     if (ph == null) {
       if (kDebugMode) {
-        debugPrint('[Analytics] posthog-js not on window — analytics disabled.');
+        debugPrint(
+          '[Analytics] posthog-js not on window — analytics disabled.',
+        );
       }
       return;
     }
@@ -82,7 +84,7 @@ class Analytics {
   }
 
   JSObject _initConfig() {
-    return <String, Object?>{
+    final config = <String, Object?>{
       'api_host': kPostHogHost,
       'ui_host': kPostHogUiHost,
 
@@ -99,6 +101,18 @@ class Analytics {
       // ever see raw paths.
       'capture_pageview': false,
       'capture_pageleave': true,
+      'strict_script_versioning': true,
+
+      // PostHog adds these browser properties after our custom property map is
+      // scrubbed. The app records route patterns itself, so dropping raw URLs
+      // prevents conversation ids, OAuth fragments, and return-query values
+      // from bypassing the privacy boundary.
+      'property_denylist': <String>[
+        r'$current_url',
+        r'$initial_current_url',
+        r'$referrer',
+        r'$initial_referrer',
+      ],
 
       // DOM autocapture is near-useless for the CanvasKit-rendered Flutter
       // shell, but the editor iframe is real DOM — this is what gives the
@@ -106,6 +120,10 @@ class Analytics {
       'autocapture': true,
       'rageclick': true,
       'capture_performance': true,
+      'rate_limiting': <String, Object?>{
+        'events_per_second': 10,
+        'events_burst_limit': 100,
+      },
 
       'session_recording': <String, Object?>{
         'maskAllInputs': true,
@@ -117,6 +135,8 @@ class Analytics {
         // Opt-in masking hooks for any DOM we add later that shows secrets.
         'maskTextSelector': '[data-ph-mask]',
         'blockSelector': '[data-ph-block]',
+        if (posthogNetworkRequestMask != null)
+          'maskCapturedNetworkRequestFn': posthogNetworkRequestMask,
 
         // Flutter web paints into a <canvas>; without this every replay is a
         // blank page. Values chosen for readable 3D-viewport playback.
@@ -146,9 +166,10 @@ class Analytics {
       },
 
       'persistence': 'localStorage+cookie',
-      'disable_session_recording': false,
-      'enable_heatmaps': true,
-    }.jsify() as JSObject;
+      'disable_session_recording': !kSessionReplayEnabled,
+      'capture_heatmaps': true,
+    };
+    return config.jsify() as JSObject;
   }
 
   void _registerSuperProperties() {
@@ -224,14 +245,10 @@ class Analytics {
     _guard(() => posthogJs?.capture(event, _scrub(properties)));
   }
 
-  /// Manual pageview carrying the GoRouter pattern (`/chat/:id`) alongside the
-  /// concrete path, so insights can group by screen without high-cardinality
-  /// path explosion.
-  void pageview({
-    required String path,
-    String? pattern,
-    String? previousPath,
-  }) {
+  /// Manual pageview carrying only a sanitized GoRouter pattern (`/chat/:id`).
+  /// Concrete paths can contain conversation or showcase identifiers and are
+  /// intentionally kept out of analytics.
+  void pageview({required String path, String? pattern, String? previousPath}) {
     capture(Ev.pageview, <String, Object?>{
       Pr.route: path,
       Pr.routePattern: ?pattern,
@@ -250,14 +267,15 @@ class Analytics {
   }) {
     if (!isEnabled) return;
     _guard(() {
-      final message = truncate(redactSecrets(error.toString()));
+      final message = scrubText(error.toString());
+      final safeStack = scrubText(
+        '${error.runtimeType}: $message\n${stack ?? StackTrace.current}',
+        maxLength: kMaxStackLength,
+      );
       final jsError = JsError(message)
         ..name = error.runtimeType.toString()
         // Stacks get the longer cap: a truncated stack is a useless stack.
-        ..stack = truncate(
-          '${error.runtimeType}: $message\n${stack ?? StackTrace.current}',
-          maxLength: kMaxStackLength,
-        );
+        ..stack = safeStack;
       posthogJs?.captureException(
         jsError,
         _scrub(<String, Object?>{
@@ -361,10 +379,25 @@ class Analytics {
 
   /// Scrubs properties (see analytics_scrubber.dart — the privacy boundary,
   /// unit-tested on the VM) and converts the result to a JS object.
-  JSObject _scrub(Map<String, Object?> properties) =>
-      scrubProperties(properties).jsify() as JSObject;
-
+  JSObject _scrub(Map<String, Object?> properties) {
+    final policyFiltered = kCaptureUserContent
+        ? properties
+        : (Map<String, Object?>.from(properties)
+            ..removeWhere((key, _) => _userContentProperties.contains(key)));
+    return scrubProperties(policyFiltered).jsify() as JSObject;
+  }
 }
 
 /// Convenience accessor so call sites read as `analytics.capture(...)`.
 Analytics get analytics => Analytics.instance;
+
+/// Content-like fields are removed centrally when CAPTURE_USER_CONTENT=false,
+/// including events forwarded from the JavaScript editor iframe.
+const Set<String> _userContentProperties = <String>{
+  Pr.email,
+  Pr.prompt,
+  Pr.description,
+  Pr.selectedMeshNames,
+  Pr.jointName,
+  Pr.itemTitle,
+};
