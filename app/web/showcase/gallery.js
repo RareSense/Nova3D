@@ -39,7 +39,16 @@ const countEl = document.getElementById('count');
 
 // ── Shared renderer + environment ────────────────────────────────────────────
 const canvas = document.getElementById('stageCanvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+// PostHog's FPS canvas sampler intentionally clears non-preserved WebGL draw
+// buffers before copying them. The showcase now records inside its iframe (see
+// iframe_replay.js), so preservation is required for visible replay frames.
+// This does not alter DPR, antialiasing, materials, lighting, or live fidelity.
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: true,
+  preserveDrawingBuffer: true,
+});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x000000, 0);
 renderer.autoClear = false;
