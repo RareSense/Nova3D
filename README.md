@@ -86,7 +86,7 @@ Every visually distinct component is its own named, editable mesh, grouped into 
 
 ## Assembly hierarchy
 
-<div align="center"><img src="docs/media/hierarchy_robot_arm.png" width="100%" alt="Robot arm exported as a labeled assembly tree" /></div>
+<div align="center"><img src="docs/media/assembly_hierarchy.gif" width="100%" alt="Building exported as a labeled assembly hierarchy" /></div>
 
 *Parts don't just have names; they're wired into a labeled assembly tree with a joint pivot at every articulation point. This robot arm exports as a depth-7 kinematic chain: rotating any pivot moves its whole subtree. The program writes that tree itself; mesh generators export a flat list with nothing to grab or rig.*
 
