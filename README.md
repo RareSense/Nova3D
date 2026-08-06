@@ -64,11 +64,9 @@ Nova3D/
 
 ### Visual fidelity: same prompt vs the mesh-native generators
 
-<div align="center"><img src="docs/media/comparison_textured.png" width="100%" alt="Textured renders: Nova3D vs Meshy, TRELLIS.2, TripoSG" /></div>
+<div align="center"><img src="docs/media/comparison_slider.gif" width="100%" alt="Animated textured and wireframe comparison: Nova3D vs Meshy, TRELLIS.2, and TripoSG" /></div>
 
 *Textured, as delivered: Nova3D vs the mesh-native generators (Meshy, TRELLIS.2, TripoSG).*
-
-<div align="center"><img src="docs/media/comparison_wireframe.png" width="100%" alt="Wireframe: Nova3D vs Meshy, TRELLIS.2, TripoSG" /></div>
 
 *Wireframe (mesh topology). Nova3D builds clean parts; internal structure is visible; the diffusion models output dense isosurface meshes.*
 
