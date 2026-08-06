@@ -8,7 +8,7 @@
 
 <br/>
 
-<img src="app/assets/gifs/nova3d/0504.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/0504(1).gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/0504(2).gif" width="32%" />
+<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
 
 </div>
 
@@ -44,7 +44,7 @@ Nova3D/
 
 ## Demo
 
-[![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=rLzkfTzDdwY)
+[![Editable parts — quick look](https://i.imgur.com/mnHrRKG.png)](https://www.youtube.com/watch?v=309zNw0JETU)
 
 ☝️ Prompt: *Make a washing machine with detailed internal mechanics*
 
