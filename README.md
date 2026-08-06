@@ -1,6 +1,6 @@
 <div align="center">
 
-# Nova3D
+<img src="docs/media/nova3d-logo.png" width="132" alt="Nova3D" />
 
 **Code-native 3D generation: assets are executable programs, not opaque meshes.**
 
