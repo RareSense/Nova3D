@@ -3,8 +3,7 @@ import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
 
 enum GenerationProvider {
   anthropic('anthropic', 'Anthropic'),
-  openrouter('openrouter', 'OpenRouter'),
-  moonshot('moonshot', 'Moonshot AI');
+  openrouter('openrouter', 'OpenRouter');
 
   const GenerationProvider(this.id, this.label);
   final String id;
@@ -110,19 +109,8 @@ class GenerationModelOption {
 
   static const paidCreditOptions = [
     GenerationModelOption(
-      id: 'credits_claude_opus_5_anthropic',
-      label: 'Claude Opus 5 — Anthropic',
-      llm: 'claude_opus_5_anthropic',
-      provider: GenerationProvider.anthropic,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 40,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_opus_5_anthropic',
-    ),
-    GenerationModelOption(
       id: 'credits_claude_opus_5_openrouter',
-      label: 'Claude Opus 5 — OpenRouter',
+      label: 'Claude Opus 5',
       llm: 'claude_opus_5_openrouter',
       provider: GenerationProvider.openrouter,
       billingMode: GenerationBillingMode.credits,
@@ -154,19 +142,8 @@ class GenerationModelOption {
       codeLlmTier: 'gpt_5_6_sol_openrouter',
     ),
     GenerationModelOption(
-      id: 'credits_kimi_k3_moonshot',
-      label: 'Kimi K3 — Moonshot AI',
-      llm: 'kimi_k3_moonshot',
-      provider: GenerationProvider.moonshot,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 40,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'kimi_k3_moonshot',
-    ),
-    GenerationModelOption(
       id: 'credits_kimi_k3_openrouter',
-      label: 'Kimi K3 — OpenRouter',
+      label: 'Kimi K3',
       llm: 'kimi_k3_openrouter',
       provider: GenerationProvider.openrouter,
       billingMode: GenerationBillingMode.credits,
