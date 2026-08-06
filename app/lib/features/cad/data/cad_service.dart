@@ -251,8 +251,8 @@ class CadService {
       return {
         'prompt': request.prompt.trim(),
         ..._paidPricingContext(request.modelOption),
-        // Paid generations intentionally omit provider API keys. The toolkit
-        // resolves provider credentials from the server environment.
+        // Hosted generations send an explicit empty key as a billing/routing
+        // fact. Provider credentials remain exclusively on the backend.
         if (request.hasImage) ...{
           'has_reference_images': true,
           'image_artifact': request.imageDataUrls,
@@ -281,10 +281,8 @@ class CadService {
     };
   }
 
-  Map<String, dynamic> _paidPricingContext(GenerationModelOption option) => {
-    'code_llm_profile': option.codeLlmProfile ?? 'nova3d_code_generation',
-    'code_llm_tier': option.codeLlmTier ?? option.llm,
-  };
+  Map<String, dynamic> _paidPricingContext(GenerationModelOption option) =>
+      option.hostedGenerationContext;
 
   Future<String> startRegeneratePart({
     required Map<String, dynamic> codeArtifact,

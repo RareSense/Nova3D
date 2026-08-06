@@ -6,7 +6,9 @@ enum GenerationProvider {
   anthropic('anthropic', 'Anthropic'),
   openai('openai', 'OpenAI'),
   openrouter('openrouter', 'OpenRouter'),
-  gemini('gemini', 'Gemini');
+  gemini('gemini', 'Gemini'),
+  zai('zai', 'Z.AI'),
+  moonshot('moonshot', 'Moonshot AI');
 
   const GenerationProvider(this.id, this.label);
   final String id;
@@ -71,6 +73,15 @@ class GenerationModelOption {
 
   String get persistedLabel => label;
 
+  /// Routing and billing facts shared by hosted estimate and run requests.
+  /// An explicit empty key makes the server-funded contract unambiguous while
+  /// keeping provider credentials exclusively on the backend.
+  Map<String, String> get hostedGenerationContext => {
+    'code_llm_profile': codeLlmProfile ?? _codeLlmProfile,
+    'code_llm_tier': codeLlmTier ?? llm,
+    'code_llm_api_key': '',
+  };
+
   static List<GenerationModelOption> byokForKeys(Map<String, String> keys) {
     final options = <GenerationModelOption>[];
     if ((keys[AiProvider.anthropic.id] ?? '').isNotEmpty) {
@@ -112,6 +123,72 @@ class GenerationModelOption {
   }
 
   static const paidCreditOptions = [
+    GenerationModelOption(
+      id: 'credits_claude_opus_5_anthropic',
+      label: 'Claude Opus 5 — Anthropic',
+      llm: 'claude_opus_5_anthropic',
+      provider: GenerationProvider.anthropic,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'claude_opus_5_anthropic',
+    ),
+    GenerationModelOption(
+      id: 'credits_claude_opus_5_openrouter',
+      label: 'Claude Opus 5 — OpenRouter',
+      llm: 'claude_opus_5_openrouter',
+      provider: GenerationProvider.openrouter,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'claude_opus_5_openrouter',
+    ),
+    GenerationModelOption(
+      id: 'credits_glm_5_2_zai',
+      label: 'GLM-5.2 — Z.AI',
+      llm: 'glm_5_2_zai',
+      provider: GenerationProvider.zai,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'glm_5_2_zai',
+    ),
+    GenerationModelOption(
+      id: 'credits_glm_5_2_openrouter',
+      label: 'GLM-5.2 — OpenRouter',
+      llm: 'glm_5_2_openrouter',
+      provider: GenerationProvider.openrouter,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'glm_5_2_openrouter',
+    ),
+    GenerationModelOption(
+      id: 'credits_kimi_k3_moonshot',
+      label: 'Kimi K3 — Moonshot AI',
+      llm: 'kimi_k3_moonshot',
+      provider: GenerationProvider.moonshot,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'kimi_k3_moonshot',
+    ),
+    GenerationModelOption(
+      id: 'credits_kimi_k3_openrouter',
+      label: 'Kimi K3 — OpenRouter',
+      llm: 'kimi_k3_openrouter',
+      provider: GenerationProvider.openrouter,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 40,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'kimi_k3_openrouter',
+    ),
     GenerationModelOption(
       id: 'credits_claude_fable_5_anthropic',
       label: 'Claude Fable 5',
