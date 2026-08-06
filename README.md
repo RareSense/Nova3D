@@ -92,7 +92,7 @@ Every visually distinct component is its own named, editable mesh, grouped into 
 
 ## Articulation
 
-<div align="center"><img src="docs/media/articulation_crane.gif" width="55%" alt="Tracked crane articulating, geometry frozen" /></div>
+<div align="center"><img src="docs/media/articulation_crane.gif" width="100%" alt="Tracked crane articulating, geometry frozen" /></div>
 
 *Rigging is an additive code pass: joints are added at real pivots referencing parts the program already named; the existing geometry never moves.*
 
