@@ -44,9 +44,13 @@ Nova3D/
 
 ## Demo
 
-[![Editable parts: quick look](https://i.ytimg.com/vi/309zNw0JETU/hqdefault.jpg)](https://www.youtube.com/watch?v=309zNw0JETU)
+<div align="center">
 
-☝️ Prompt: *Make a washing machine with detailed internal mechanics*
+<a href="https://www.youtube.com/watch?v=309zNw0JETU"><img src="docs/media/demo_one_shot.png" width="72%" alt="Nova3D one-shot 3D model generation demo" /></a>
+
+☝️ One shot: **3D models with 4K PBR textures, ready for games, animation, VFX, and more with Nova3D**
+
+</div>
 
 ## Comparison
 
