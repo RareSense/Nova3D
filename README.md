@@ -46,7 +46,7 @@ Nova3D/
 
 <div align="center">
 
-<a href="https://www.youtube.com/watch?v=309zNw0JETU"><img src="docs/media/demo_one_shot.png" width="72%" alt="Nova3D one-shot 3D model generation demo" /></a>
+<a href="https://www.youtube.com/watch?v=309zNw0JETU"><img src="docs/media/demo_one_shot.png" width="100%" alt="Nova3D one-shot 3D model generation demo" /></a>
 
 ☝️ One shot: **3D models with 4K PBR textures, ready for games, animation, VFX, and more with Nova3D**
 
