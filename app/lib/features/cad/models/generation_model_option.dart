@@ -2,12 +2,8 @@ import 'package:nova3d_frontend/core/constants.dart';
 import 'package:nova3d_frontend/features/api_keys/models/api_key_models.dart';
 
 enum GenerationProvider {
-  auto('auto', 'Auto'),
   anthropic('anthropic', 'Anthropic'),
-  openai('openai', 'OpenAI'),
   openrouter('openrouter', 'OpenRouter'),
-  gemini('gemini', 'Gemini'),
-  zai('zai', 'Z.AI'),
   moonshot('moonshot', 'Moonshot AI');
 
   const GenerationProvider(this.id, this.label);
@@ -62,14 +58,10 @@ class GenerationModelOption {
   String? get badgeLabel {
     if (!isPaidCredit) return null;
     if (codeLlmTier == 'claude_fable_5_anthropic') return 'Recommended';
-    if (codeLlmTier == 'gemini_3_1_pro_google') return 'Fastest';
     return null;
   }
 
-  String get compactLabel {
-    if (label == 'Gemini 3.1 Pro Preview') return 'Gemini 3.1 Pro';
-    return label;
-  }
+  String get compactLabel => label;
 
   String get persistedLabel => label;
 
@@ -87,14 +79,8 @@ class GenerationModelOption {
     if ((keys[AiProvider.anthropic.id] ?? '').isNotEmpty) {
       options.addAll(_anthropicOptions);
     }
-    if ((keys[AiProvider.openai.id] ?? '').isNotEmpty) {
-      options.add(_openAiOption);
-    }
     if ((keys[AiProvider.openrouter.id] ?? '').isNotEmpty) {
       options.addAll(_openRouterOptions);
-    }
-    if ((keys[AiProvider.gemini.id] ?? '').isNotEmpty) {
-      options.add(_geminiOption);
     }
     return options;
   }
@@ -112,14 +98,14 @@ class GenerationModelOption {
   static GenerationModelOption? defaultFor(
     Iterable<GenerationModelOption> options,
   ) {
-    GenerationModelOption? geminiByok;
+    GenerationModelOption? fableByok;
     GenerationModelOption? first;
     for (final option in options) {
       first ??= option;
-      if (option.id == 'credits_gemini_3_1_pro_google') return option;
-      if (option.id == 'gemini_gemini') geminiByok = option;
+      if (option.id == 'credits_claude_fable_5_anthropic') return option;
+      if (option.id == 'anthropic_claude_fable_5') fableByok = option;
     }
-    return geminiByok ?? first;
+    return fableByok ?? first;
   }
 
   static const paidCreditOptions = [
@@ -146,26 +132,26 @@ class GenerationModelOption {
       codeLlmTier: 'claude_opus_5_openrouter',
     ),
     GenerationModelOption(
-      id: 'credits_glm_5_2_zai',
-      label: 'GLM-5.2 — Z.AI',
-      llm: 'glm_5_2_zai',
-      provider: GenerationProvider.zai,
+      id: 'credits_claude_fable_5_anthropic',
+      label: 'Claude Fable 5',
+      llm: 'claude_fable_5_anthropic',
+      provider: GenerationProvider.anthropic,
       billingMode: GenerationBillingMode.credits,
-      creditCost: 40,
+      creditCost: 60,
       workflowName: kSketchTo3dPaidWorkflow,
       codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'glm_5_2_zai',
+      codeLlmTier: 'claude_fable_5_anthropic',
     ),
     GenerationModelOption(
-      id: 'credits_glm_5_2_openrouter',
-      label: 'GLM-5.2 — OpenRouter',
-      llm: 'glm_5_2_openrouter',
+      id: 'credits_gpt_5_6_sol_openrouter',
+      label: 'GPT-5.6 Sol',
+      llm: 'gpt_5_6_sol_openrouter',
       provider: GenerationProvider.openrouter,
       billingMode: GenerationBillingMode.credits,
-      creditCost: 40,
+      creditCost: 30,
       workflowName: kSketchTo3dPaidWorkflow,
       codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'glm_5_2_openrouter',
+      codeLlmTier: 'gpt_5_6_sol_openrouter',
     ),
     GenerationModelOption(
       id: 'credits_kimi_k3_moonshot',
@@ -189,105 +175,6 @@ class GenerationModelOption {
       codeLlmProfile: _codeLlmProfile,
       codeLlmTier: 'kimi_k3_openrouter',
     ),
-    GenerationModelOption(
-      id: 'credits_claude_fable_5_anthropic',
-      label: 'Claude Fable 5',
-      llm: 'claude_fable_5_anthropic',
-      provider: GenerationProvider.anthropic,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 60,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_fable_5_anthropic',
-    ),
-    GenerationModelOption(
-      id: 'credits_claude_opus_4_8_anthropic',
-      label: 'Claude Opus 4.8',
-      llm: 'claude_opus_4_8_anthropic',
-      provider: GenerationProvider.anthropic,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 25,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_opus_4_8_anthropic',
-    ),
-    GenerationModelOption(
-      id: 'credits_claude_sonnet_5_anthropic',
-      label: 'Claude Sonnet 5',
-      llm: 'claude_sonnet_5_anthropic',
-      provider: GenerationProvider.anthropic,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 18,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_sonnet_5_anthropic',
-    ),
-    GenerationModelOption(
-      id: 'credits_claude_sonnet_4_6_anthropic',
-      label: 'Claude Sonnet 4.6',
-      llm: 'claude_sonnet_4_6_anthropic',
-      provider: GenerationProvider.anthropic,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 15,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_sonnet_4_6_anthropic',
-    ),
-    GenerationModelOption(
-      id: 'credits_gpt_5_6_sol_openrouter',
-      label: 'GPT-5.6 Sol',
-      llm: 'gpt_5_6_sol_openrouter',
-      provider: GenerationProvider.openrouter,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 30,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'gpt_5_6_sol_openrouter',
-    ),
-    GenerationModelOption(
-      id: 'credits_gpt_5_5_openrouter',
-      label: 'GPT-5.5',
-      llm: 'gpt_5_5_openrouter',
-      provider: GenerationProvider.openrouter,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 28,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'gpt_5_5_openrouter',
-    ),
-    GenerationModelOption(
-      id: 'credits_gpt_5_6_terra_openrouter',
-      label: 'GPT-5.6 Terra',
-      llm: 'gpt_5_6_terra_openrouter',
-      provider: GenerationProvider.openrouter,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 18,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'gpt_5_6_terra_openrouter',
-    ),
-    GenerationModelOption(
-      id: 'credits_gpt_5_6_luna_openrouter',
-      label: 'GPT-5.6 Luna',
-      llm: 'gpt_5_6_luna_openrouter',
-      provider: GenerationProvider.openrouter,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 10,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'gpt_5_6_luna_openrouter',
-    ),
-    GenerationModelOption(
-      id: 'credits_gemini_3_1_pro_google',
-      label: 'Gemini 3.1 Pro Preview',
-      llm: 'gemini_3_1_pro_google',
-      provider: GenerationProvider.gemini,
-      billingMode: GenerationBillingMode.credits,
-      creditCost: 12,
-      workflowName: kSketchTo3dPaidWorkflow,
-      codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'gemini_3_1_pro_google',
-    ),
   ];
 }
 
@@ -304,48 +191,7 @@ const _anthropicOptions = [
     codeLlmProfile: _codeLlmProfile,
     codeLlmTier: 'claude_fable_5_anthropic',
   ),
-  GenerationModelOption(
-    id: 'anthropic_claude_sonnet_5',
-    label: 'Claude Sonnet 5',
-    llm: 'claude-sonnet-5',
-    provider: GenerationProvider.anthropic,
-    keyProvider: AiProvider.anthropic,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'claude_sonnet_5_anthropic',
-  ),
-  GenerationModelOption(
-    id: 'anthropic_claude_sonnet',
-    label: 'Claude Sonnet 4.6',
-    llm: 'claude-sonnet',
-    provider: GenerationProvider.anthropic,
-    keyProvider: AiProvider.anthropic,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'claude_sonnet_4_6_anthropic',
-  ),
-  GenerationModelOption(
-    id: 'anthropic_claude_opus_4_8',
-    label: 'Claude Opus 4.8',
-    llm: 'claude-opus',
-    provider: GenerationProvider.anthropic,
-    keyProvider: AiProvider.anthropic,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'claude_opus_4_8_anthropic',
-  ),
 ];
-
-const _openAiOption = GenerationModelOption(
-  id: 'openai_gpt55',
-  label: 'GPT-5.5',
-  llm: 'gpt55',
-  provider: GenerationProvider.openai,
-  keyProvider: AiProvider.openai,
-  workflowName: kSketchTo3dByokWorkflow,
-  codeLlmProfile: _codeLlmProfile,
-  codeLlmTier: 'gpt_5_5_openai',
-);
 
 const _openRouterOptions = [
   GenerationModelOption(
@@ -358,75 +204,4 @@ const _openRouterOptions = [
     codeLlmProfile: _codeLlmProfile,
     codeLlmTier: 'gpt_5_6_sol_openrouter',
   ),
-  GenerationModelOption(
-    id: 'openrouter_gpt56_terra',
-    label: 'GPT-5.6 Terra',
-    llm: 'gpt56-terra',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'gpt_5_6_terra_openrouter',
-  ),
-  GenerationModelOption(
-    id: 'openrouter_gpt56_luna',
-    label: 'GPT-5.6 Luna',
-    llm: 'gpt56-luna',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'gpt_5_6_luna_openrouter',
-  ),
-  GenerationModelOption(
-    id: 'openrouter_gpt55',
-    label: 'GPT-5.5',
-    llm: 'gpt55',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'gpt_5_5_openrouter',
-  ),
-  GenerationModelOption(
-    id: 'openrouter_gemini',
-    label: 'Gemini 3.1 Pro Preview',
-    llm: 'gemini',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'gemini_3_1_pro_openrouter',
-  ),
-  GenerationModelOption(
-    id: 'openrouter_claude_sonnet',
-    label: 'Claude Sonnet 4.6',
-    llm: 'claude-sonnet',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'claude_sonnet_4_6_openrouter',
-  ),
-  GenerationModelOption(
-    id: 'openrouter_claude_opus',
-    label: 'Claude Opus 4.8',
-    llm: 'claude-opus',
-    provider: GenerationProvider.openrouter,
-    keyProvider: AiProvider.openrouter,
-    workflowName: kSketchTo3dByokWorkflow,
-    codeLlmProfile: _codeLlmProfile,
-    codeLlmTier: 'claude_opus_4_8_openrouter',
-  ),
 ];
-
-const _geminiOption = GenerationModelOption(
-  id: 'gemini_gemini',
-  label: 'Gemini 3.1 Pro Preview',
-  llm: 'gemini',
-  provider: GenerationProvider.gemini,
-  keyProvider: AiProvider.gemini,
-  workflowName: kSketchTo3dByokWorkflow,
-  codeLlmProfile: _codeLlmProfile,
-  codeLlmTier: 'gemini_3_1_pro_google',
-);
