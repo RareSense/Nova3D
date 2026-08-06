@@ -4,7 +4,7 @@
 
 **Code-native 3D generation: assets are executable programs, not opaque meshes.**
 
-[website](https://nova3d.xyz) · [app](https://app.nova3d.xyz) · [discord](https://discord.gg/QEH8mzcwdR) · [twitter/X](https://x.com/nova3d_ai) · [issues](https://github.com/RareSense/Nova3D/issues)
+<a href="https://nova3d.xyz"><img src="https://api.iconify.design/lucide:globe-2.svg?color=%2358a6ff" width="16" height="16" align="center" alt="Website" /> website</a> · <a href="https://app.nova3d.xyz"><img src="https://api.iconify.design/lucide:box.svg?color=%2358a6ff" width="16" height="16" align="center" alt="App" /> app</a> · <a href="https://arxiv.org/abs/2607.22738"><img src="https://api.iconify.design/simple-icons:arxiv.svg?color=%23b31b1b" width="16" height="16" align="center" alt="Paper" /> paper</a> · <a href="https://discord.gg/QEH8mzcwdR"><img src="https://api.iconify.design/simple-icons:discord.svg?color=%235865f2" width="16" height="16" align="center" alt="Discord" /> discord</a> · <a href="https://x.com/nova3d_ai"><img src="https://api.iconify.design/simple-icons:x.svg?color=%238b949e" width="16" height="16" align="center" alt="X" /> X</a> · <a href="https://github.com/RareSense/Nova3D/issues"><img src="https://api.iconify.design/octicon:issue-opened-16.svg?color=%2358a6ff" width="16" height="16" align="center" alt="Issues" /> issues</a>
 
 <br/>
 
