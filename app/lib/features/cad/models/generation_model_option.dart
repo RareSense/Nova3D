@@ -142,6 +142,17 @@ class GenerationModelOption {
       codeLlmTier: 'gpt_5_6_sol_openrouter',
     ),
     GenerationModelOption(
+      id: 'credits_gpt_5_5_openrouter',
+      label: 'GPT-5.5',
+      llm: 'gpt_5_5_openrouter',
+      provider: GenerationProvider.openrouter,
+      billingMode: GenerationBillingMode.credits,
+      creditCost: 28,
+      workflowName: kSketchTo3dPaidWorkflow,
+      codeLlmProfile: _codeLlmProfile,
+      codeLlmTier: 'gpt_5_5_openrouter',
+    ),
+    GenerationModelOption(
       id: 'credits_kimi_k3_openrouter',
       label: 'Kimi K3',
       llm: 'kimi_k3_openrouter',
@@ -180,5 +191,15 @@ const _openRouterOptions = [
     workflowName: kSketchTo3dByokWorkflow,
     codeLlmProfile: _codeLlmProfile,
     codeLlmTier: 'gpt_5_6_sol_openrouter',
+  ),
+  GenerationModelOption(
+    id: 'openrouter_gpt55',
+    label: 'GPT-5.5',
+    llm: 'gpt55',
+    provider: GenerationProvider.openrouter,
+    keyProvider: AiProvider.openrouter,
+    workflowName: kSketchTo3dByokWorkflow,
+    codeLlmProfile: _codeLlmProfile,
+    codeLlmTier: 'gpt_5_5_openrouter',
   ),
 ];

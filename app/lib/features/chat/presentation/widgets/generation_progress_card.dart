@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,6 +13,10 @@ class GenerationProgressCard extends StatefulWidget {
     required this.statusText,
     this.title = 'generating',
     this.modelLabel,
+    this.progress,
+    this.progressStep,
+    this.progressTotalSteps,
+    this.stageLabel,
   });
   final String statusText;
 
@@ -24,6 +27,13 @@ class GenerationProgressCard extends StatefulWidget {
   /// never a hardcoded placeholder.
   final String? modelLabel;
 
+  /// GraphFlow-derived stage progress. Null/zero is an honest starting state;
+  /// this widget never advances progress based on elapsed time.
+  final double? progress;
+  final int? progressStep;
+  final int? progressTotalSteps;
+  final String? stageLabel;
+
   @override
   State<GenerationProgressCard> createState() => _GenerationProgressCardState();
 }
@@ -33,23 +43,9 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
   late final AnimationController _spinCtrl;
   late final AnimationController _bobCtrl;
   late final AnimationController _scanCtrl;
-  late final AnimationController _progressCtrl;
   late final AnimationController _heartCtrl;
   late final List<AnimationController> _vertCtrls;
   late final List<AnimationController> _sparkCtrls;
-  late Timer _phraseTimer;
-  int _phraseIndex = 0;
-
-  static const _phrases = [
-    'Sketching it out…',
-    'Crunching the geometry…',
-    'Laying out the mesh…',
-    'Shaping the vertices…',
-    'Checking proportions…',
-    'Adding fine details…',
-    'Smoothing the surfaces…',
-    'Almost there…',
-  ];
 
   @override
   void initState() {
@@ -66,10 +62,6 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
       vsync: this,
       duration: const Duration(milliseconds: 2400),
     )..repeat();
-    _progressCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 18),
-    )..forward();
     _heartCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -97,12 +89,6 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
       });
       return c;
     });
-
-    _phraseTimer = Timer.periodic(const Duration(milliseconds: 2400), (_) {
-      if (mounted) {
-        setState(() => _phraseIndex = (_phraseIndex + 1) % _phrases.length);
-      }
-    });
   }
 
   @override
@@ -110,7 +96,6 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
     _spinCtrl.dispose();
     _bobCtrl.dispose();
     _scanCtrl.dispose();
-    _progressCtrl.dispose();
     _heartCtrl.dispose();
     for (final c in _vertCtrls) {
       c.dispose();
@@ -118,7 +103,6 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
     for (final c in _sparkCtrls) {
       c.dispose();
     }
-    _phraseTimer.cancel();
     super.dispose();
   }
 
@@ -133,36 +117,37 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
         child: SizedBox(
           height: kViewerDefaultHeight,
           width: double.infinity,
-        child: Container(
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: kInk, width: 1.5),
-            boxShadow: const [
-              BoxShadow(color: kInk, offset: Offset(3, 3), blurRadius: 0),
-            ],
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: Column(
-            children: [
-              _buildTitleStrip(),
-              Expanded(
-                child: _Viewport(
-                  spinCtrl: _spinCtrl,
-                  bobCtrl: _bobCtrl,
-                  scanCtrl: _scanCtrl,
-                  heartCtrl: _heartCtrl,
-                  vertCtrls: _vertCtrls,
-                  sparkCtrls: _sparkCtrls,
-                  phraseIndex: _phraseIndex,
-                  phrases: _phrases,
-                  statusText: widget.statusText,
+          child: Container(
+            decoration: BoxDecoration(
+              color: kSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kInk, width: 1.5),
+              boxShadow: const [
+                BoxShadow(color: kInk, offset: Offset(3, 3), blurRadius: 0),
+              ],
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Column(
+              children: [
+                _buildTitleStrip(),
+                Expanded(
+                  child: _Viewport(
+                    spinCtrl: _spinCtrl,
+                    bobCtrl: _bobCtrl,
+                    scanCtrl: _scanCtrl,
+                    heartCtrl: _heartCtrl,
+                    vertCtrls: _vertCtrls,
+                    sparkCtrls: _sparkCtrls,
+                    statusText: widget.statusText,
+                    stageLabel: widget.stageLabel,
+                    progressStep: widget.progressStep,
+                    progressTotalSteps: widget.progressTotalSteps,
+                  ),
                 ),
-              ),
-              _buildToolbar(),
-            ],
+                _buildToolbar(),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -198,60 +183,61 @@ class _GenerationProgressCardState extends State<GenerationProgressCard>
     ),
   );
 
-  Widget _buildToolbar() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: const BoxDecoration(
-      color: kCream,
-      border: Border(top: BorderSide(color: kLineSoft, width: 1.5)),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              '✦',
-              style: TextStyle(color: kButter, fontSize: 10, height: 1),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              widget.title.toUpperCase(),
-              style: kSilkscreen(9, color: kInkSoft),
-            ),
-            const Spacer(),
-            if ((widget.modelLabel ?? '').isNotEmpty)
-              Text(widget.modelLabel!, style: kSilkscreen(9, color: kInkMuted)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 12,
-          decoration: BoxDecoration(
-            color: kSurface,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: kInk, width: 1.5),
+  Widget _buildToolbar() {
+    final progress = (widget.progress ?? 0).clamp(0.0, 0.99).toDouble();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: const BoxDecoration(
+        color: kCream,
+        border: Border(top: BorderSide(color: kLineSoft, width: 1.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '✦',
+                style: TextStyle(color: kButter, fontSize: 10, height: 1),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.title.toUpperCase(),
+                style: kSilkscreen(9, color: kInkSoft),
+              ),
+              const Spacer(),
+              if ((widget.modelLabel ?? '').isNotEmpty)
+                Text(
+                  widget.modelLabel!,
+                  style: kSilkscreen(9, color: kInkMuted),
+                ),
+            ],
           ),
-          clipBehavior: Clip.hardEdge,
-          child: AnimatedBuilder(
-            animation: _progressCtrl,
-            builder: (_, _) => FractionallySizedBox(
-              widthFactor: _evalProgress(_progressCtrl.value),
-              alignment: Alignment.centerLeft,
+          const SizedBox(height: 8),
+          Container(
+            height: 12,
+            decoration: BoxDecoration(
+              color: kSurface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: kInk, width: 1.5),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(end: progress),
+              duration: const Duration(milliseconds: 360),
+              curve: Curves.easeOutCubic,
+              builder: (_, value, child) => FractionallySizedBox(
+                widthFactor: value,
+                alignment: Alignment.centerLeft,
+                child: child,
+              ),
               child: const CustomPaint(painter: _StripesPainter()),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-
-  static double _evalProgress(double t) {
-    if (t < 0.20) return t / 0.20 * 0.28;
-    if (t < 0.45) return 0.28 + (t - 0.20) / 0.25 * 0.24;
-    if (t < 0.70) return 0.52 + (t - 0.45) / 0.25 * 0.22;
-    if (t < 0.90) return 0.74 + (t - 0.70) / 0.20 * 0.18;
-    return 0.92 + (t - 0.90) / 0.10 * 0.04;
+        ],
+      ),
+    );
   }
 }
 
@@ -265,9 +251,10 @@ class _Viewport extends StatelessWidget {
     required this.heartCtrl,
     required this.vertCtrls,
     required this.sparkCtrls,
-    required this.phraseIndex,
-    required this.phrases,
     required this.statusText,
+    required this.stageLabel,
+    required this.progressStep,
+    required this.progressTotalSteps,
   });
 
   final AnimationController spinCtrl;
@@ -276,9 +263,10 @@ class _Viewport extends StatelessWidget {
   final AnimationController heartCtrl;
   final List<AnimationController> vertCtrls;
   final List<AnimationController> sparkCtrls;
-  final int phraseIndex;
-  final List<String> phrases;
   final String statusText;
+  final String? stageLabel;
+  final int? progressStep;
+  final int? progressTotalSteps;
 
   static final _sparkData = [
     (xFrac: 0.13, yFrac: 0.14, size: 16.0, color: kPink),
@@ -318,6 +306,14 @@ class _Viewport extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final headline = (stageLabel ?? '').trim().isNotEmpty
+        ? stageLabel!.trim()
+        : (statusText.trim().isNotEmpty ? statusText.trim() : 'Starting…');
+    final showDetail =
+        statusText.trim().isNotEmpty && statusText.trim() != headline;
+    final hasStep =
+        (progressStep ?? 0) > 0 &&
+        (progressTotalSteps ?? 0) >= (progressStep ?? 0);
     return ClipRect(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -587,8 +583,8 @@ class _Viewport extends StatelessWidget {
                                     ),
                                   ),
                               child: Text(
-                                phrases[phraseIndex],
-                                key: ValueKey(phraseIndex),
+                                headline,
+                                key: ValueKey('$headline-$progressStep'),
                                 style: const TextStyle(
                                   color: kInk,
                                   fontSize: 13,
@@ -597,7 +593,7 @@ class _Viewport extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (statusText.isNotEmpty) ...[
+                            if (showDetail) ...[
                               const SizedBox(height: 2),
                               Text(
                                 statusText,
@@ -610,7 +606,9 @@ class _Viewport extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'STEP ${(phraseIndex + 1).clamp(1, 8)}/8',
+                        hasStep
+                            ? 'STEP $progressStep/$progressTotalSteps'
+                            : 'STARTING',
                         style: kSilkscreen(9, color: kInkSoft),
                       ),
                     ],

@@ -20,6 +20,12 @@ class MessageModel {
   final String? modelOptionId;
   final String? modelLabel;
   final String? instructionPrompt;
+  // GraphFlow-derived stage progress for an in-flight workflow. This is
+  // persisted so a resumed chat never falls back to a fake/time-based step.
+  final double? workflowProgress;
+  final int? workflowProgressStep;
+  final int? workflowProgressTotalSteps;
+  final String? workflowStageLabel;
   // Shown as a thumbnail in the user bubble.
   final String? imageDataUrl;
   final List<String> imageDataUrls;
@@ -52,6 +58,10 @@ class MessageModel {
     this.modelOptionId,
     this.modelLabel,
     this.instructionPrompt,
+    this.workflowProgress,
+    this.workflowProgressStep,
+    this.workflowProgressTotalSteps,
+    this.workflowStageLabel,
     this.imageDataUrl,
     this.imageDataUrls = const [],
     this.textureAssets = const [],
@@ -83,6 +93,10 @@ class MessageModel {
     String? modelOptionId,
     String? modelLabel,
     String? instructionPrompt,
+    double? workflowProgress,
+    int? workflowProgressStep,
+    int? workflowProgressTotalSteps,
+    String? workflowStageLabel,
     String? imageDataUrl,
     List<String>? imageDataUrls,
     List<Map<String, dynamic>>? textureAssets,
@@ -107,6 +121,11 @@ class MessageModel {
     modelOptionId: modelOptionId ?? this.modelOptionId,
     modelLabel: modelLabel ?? this.modelLabel,
     instructionPrompt: instructionPrompt ?? this.instructionPrompt,
+    workflowProgress: workflowProgress ?? this.workflowProgress,
+    workflowProgressStep: workflowProgressStep ?? this.workflowProgressStep,
+    workflowProgressTotalSteps:
+        workflowProgressTotalSteps ?? this.workflowProgressTotalSteps,
+    workflowStageLabel: workflowStageLabel ?? this.workflowStageLabel,
     imageDataUrl: imageDataUrl ?? this.imageDataUrl,
     imageDataUrls: imageDataUrls ?? this.imageDataUrls,
     textureAssets: textureAssets ?? this.textureAssets,
@@ -148,6 +167,13 @@ class MessageModel {
       if (modelOptionId != null) 'model_option_id': modelOptionId,
       if (modelLabel != null) 'model_label': modelLabel,
       if (instructionPrompt != null) 'instruction_prompt': instructionPrompt,
+      if (workflowProgress != null) 'workflow_progress': workflowProgress,
+      if (workflowProgressStep != null)
+        'workflow_progress_step': workflowProgressStep,
+      if (workflowProgressTotalSteps != null)
+        'workflow_progress_total_steps': workflowProgressTotalSteps,
+      if (workflowStageLabel != null)
+        'workflow_stage_label': workflowStageLabel,
       if (images.isNotEmpty) 'image_data_url': images.first,
       if (images.isNotEmpty) 'image_data_urls': images,
       if (textureAssets.isNotEmpty) 'texture_assets': textureAssets,
@@ -173,6 +199,11 @@ class MessageModel {
     modelOptionId: json['model_option_id'] as String?,
     modelLabel: json['model_label'] as String?,
     instructionPrompt: json['instruction_prompt'] as String?,
+    workflowProgress: (json['workflow_progress'] as num?)?.toDouble(),
+    workflowProgressStep: (json['workflow_progress_step'] as num?)?.toInt(),
+    workflowProgressTotalSteps: (json['workflow_progress_total_steps'] as num?)
+        ?.toInt(),
+    workflowStageLabel: json['workflow_stage_label'] as String?,
     imageDataUrl: json['image_data_url'] as String?,
     imageDataUrls: _asStringList(json['image_data_urls']),
     textureAssets: _asStringMapList(json['texture_assets']),

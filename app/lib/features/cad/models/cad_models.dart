@@ -60,12 +60,33 @@ class GenerationReadiness {
 
 // ── Workflow status (from GET /status/<id>) ───────────────────────────────────
 
+/// A user-facing phase derived from GraphFlow's real node visits.
+///
+/// This is intentionally stage progress rather than an ETA. Conditional nodes
+/// can be skipped and Blender can loop through bounded repairs, so pretending
+/// elapsed time is a percentage would be misleading. Nodes in the same loop
+/// share one phase, which keeps the progress bar monotonic.
+class WorkflowProgress {
+  const WorkflowProgress({
+    required this.stageLabel,
+    required this.step,
+    required this.totalSteps,
+    required this.fraction,
+  });
+
+  final String stageLabel;
+  final int step;
+  final int totalSteps;
+  final double fraction;
+}
+
 class WorkflowStatus {
   final String workflowId;
   final WorkflowState state;
   final String? currentNode;
   final String? lastExitNode;
   final int retryCount;
+  final Map<String, int> nodeVisitSeq;
 
   const WorkflowStatus({
     required this.workflowId,
@@ -73,6 +94,7 @@ class WorkflowStatus {
     this.currentNode,
     this.lastExitNode,
     this.retryCount = 0,
+    this.nodeVisitSeq = const {},
   });
 
   static const _terminalNodes = {
@@ -93,6 +115,135 @@ class WorkflowStatus {
     'fail_texture_apply',
   };
 
+  static const _starting = WorkflowProgress(
+    stageLabel: 'Starting generation',
+    step: 0,
+    totalSteps: 5,
+    fraction: 0,
+  );
+  static const _understanding = WorkflowProgress(
+    stageLabel: 'Understanding your request',
+    step: 1,
+    totalSteps: 5,
+    fraction: 0.14,
+  );
+  static const _designing = WorkflowProgress(
+    stageLabel: 'Designing your model',
+    step: 2,
+    totalSteps: 5,
+    fraction: 0.34,
+  );
+  static const _building = WorkflowProgress(
+    stageLabel: 'Building your model',
+    step: 3,
+    totalSteps: 5,
+    fraction: 0.60,
+  );
+  static const _checking = WorkflowProgress(
+    stageLabel: 'Checking model quality',
+    step: 4,
+    totalSteps: 5,
+    fraction: 0.82,
+  );
+  static const _finishing = WorkflowProgress(
+    stageLabel: 'Finishing your model',
+    step: 5,
+    totalSteps: 5,
+    fraction: 0.96,
+  );
+
+  static const _textureInspecting = WorkflowProgress(
+    stageLabel: 'Inspecting your model',
+    step: 1,
+    totalSteps: 6,
+    fraction: 0.12,
+  );
+  static const _textureUnwrapping = WorkflowProgress(
+    stageLabel: 'Preparing model surfaces',
+    step: 2,
+    totalSteps: 6,
+    fraction: 0.28,
+  );
+  static const _texturePlanning = WorkflowProgress(
+    stageLabel: 'Planning materials',
+    step: 3,
+    totalSteps: 6,
+    fraction: 0.44,
+  );
+  static const _texturePainting = WorkflowProgress(
+    stageLabel: 'Painting textures',
+    step: 4,
+    totalSteps: 6,
+    fraction: 0.64,
+  );
+  static const _textureApplying = WorkflowProgress(
+    stageLabel: 'Applying materials',
+    step: 5,
+    totalSteps: 6,
+    fraction: 0.82,
+  );
+  static const _textureFinishing = WorkflowProgress(
+    stageLabel: 'Finishing textures',
+    step: 6,
+    totalSteps: 6,
+    fraction: 0.96,
+  );
+
+  static const _editing = WorkflowProgress(
+    stageLabel: 'Updating your model',
+    step: 1,
+    totalSteps: 1,
+    fraction: 0.72,
+  );
+
+  static const _progressByNode = <String, WorkflowProgress>{
+    'require_byok_api_key': _understanding,
+    'caption_prompt': _understanding,
+    'caption_llm': _understanding,
+    'generation_prompt': _designing,
+    'code_generation_llm': _designing,
+    'run_blender': _building,
+    'blender_retry_gate': _building,
+    'build_repair_prompt': _building,
+    'repair_llm': _building,
+    'capture_validation_screenshots': _checking,
+    'validation_prompt': _checking,
+    'validation_llm': _checking,
+    'validation_result_parser': _checking,
+    'validation_correction_blender': _finishing,
+    'final_latest_valid': _finishing,
+    'final_validated_correction': _finishing,
+    'client_fetch_result': _finishing,
+    'material_groups': _textureInspecting,
+    'capture_beauty': _textureInspecting,
+    'uv_grid_prepare': _textureUnwrapping,
+    'mask_bake': _textureUnwrapping,
+    'capture_id_parts': _textureUnwrapping,
+    'plan_prompt': _texturePlanning,
+    'plan_llm': _texturePlanning,
+    'material_plan': _texturePlanning,
+    'paint_batch_plan': _texturePlanning,
+    'paint_prompt_grid': _texturePainting,
+    'relief_prompt_grid': _texturePainting,
+    'paint_b1': _texturePainting,
+    'paint_b2': _texturePainting,
+    'paint_b3': _texturePainting,
+    'relief_b1': _texturePainting,
+    'relief_b2': _texturePainting,
+    'relief_b3': _texturePainting,
+    'paint_batch_assemble': _textureApplying,
+    'seam_bake': _textureApplying,
+    'texture_composite': _textureApplying,
+    'pbr_derive': _textureApplying,
+    'texture_apply': _textureApplying,
+    'capture_final': _textureFinishing,
+    'final_textured': _textureFinishing,
+    'client_fetch_texture_result': _textureFinishing,
+    'regenerate_3d_part': _editing,
+    'add_3d_part': _editing,
+    'articulate_3d_model': _editing,
+  };
+
   static const _nodeLabels = {
     'require_byok_api_key': 'Checking provider key...',
     'sketch_to_3d_generator': 'Generating your 3D model...',
@@ -111,6 +262,7 @@ class WorkflowStatus {
     'validation_correction_blender': 'Applying validation fixes...',
     'final_latest_valid': 'Finalizing the model...',
     'final_validated_correction': 'Finalizing the corrected model...',
+    'client_fetch_result': 'Preparing your finished model...',
     'fail_generation': 'Generation failed.',
     'fail_llm_generation': 'Model provider failed.',
     'regenerate_3d_part': 'Regenerating the selected part...',
@@ -141,12 +293,41 @@ class WorkflowStatus {
     'texture_apply': 'Applying textures to the model...',
     'capture_final': 'Rendering the textured model...',
     'final_textured': 'Finalizing the textured model...',
+    'client_fetch_texture_result': 'Preparing your textured model...',
   };
 
+  WorkflowProgress get progress {
+    final current = _progressByNode[currentNode];
+    final exited = _progressByNode[lastExitNode];
+    if (current == null) return exited ?? _starting;
+    if (exited == null) return current;
+    return exited.fraction > current.fraction ? exited : current;
+  }
+
   String get progressLabel {
-    final node = currentNode ?? lastExitNode ?? '';
+    final current = _progressByNode[currentNode];
+    final exited = _progressByNode[lastExitNode];
+    final node =
+        exited != null && current != null && exited.fraction > current.fraction
+        ? lastExitNode
+        : (currentNode ?? lastExitNode ?? '');
     return _nodeLabels[node] ?? 'Generating…';
   }
+
+  List<String> nodesStartedSince(Map<String, int> previous) => nodeVisitSeq
+      .entries
+      .where((entry) => entry.value > (previous[entry.key] ?? 0))
+      .map((entry) => entry.key)
+      .toList(growable: false);
+
+  WorkflowStatus withCurrentNode(String? node) => WorkflowStatus(
+    workflowId: workflowId,
+    state: state,
+    currentNode: node,
+    lastExitNode: lastExitNode,
+    retryCount: retryCount,
+    nodeVisitSeq: nodeVisitSeq,
+  );
 
   bool get isTerminalByNode =>
       _terminalNodes.contains(currentNode) ||
@@ -159,14 +340,19 @@ class WorkflowStatus {
     Map<String, dynamic> json,
   ) {
     final runtime = json['runtime'] as Map<String, dynamic>? ?? {};
-    final visitSeq = json['node_visit_seq'] as Map<String, dynamic>? ?? {};
+    final rawVisitSeq = json['node_visit_seq'] as Map<String, dynamic>? ?? {};
+    final visitSeq = <String, int>{
+      for (final entry in rawVisitSeq.entries)
+        if (entry.value is num) entry.key: (entry.value as num).toInt(),
+    };
 
     return WorkflowStatus(
       workflowId: workflowId,
       state: WorkflowState.parse(runtime['state'] as String?),
       currentNode: visitSeq.keys.isNotEmpty ? visitSeq.keys.last : null,
       lastExitNode: runtime['last_exit_node_id'] as String?,
-      retryCount: 0,
+      retryCount: ((visitSeq['run_blender'] ?? 1) - 1).clamp(0, 2).toInt(),
+      nodeVisitSeq: visitSeq,
     );
   }
 }

@@ -25,6 +25,7 @@ class CadException implements Exception {
 class CadService {
   static const _startReceiveTimeout = Duration(minutes: 2);
   static const _resultReceiveTimeout = Duration(minutes: 5);
+  static const _progressDisambiguationTimeout = Duration(seconds: 5);
 
   CadService(this._auth, this._apiKeys) {
     _dio = Dio(
@@ -685,7 +686,7 @@ class CadService {
           WorkflowStatus(
             workflowId: workflowId,
             state: WorkflowState.running,
-            currentNode: 'texture_apply',
+            currentNode: 'client_fetch_texture_result',
           ),
         );
         await Future.delayed(const Duration(seconds: 3));
@@ -718,6 +719,64 @@ class CadService {
       );
     } on DioException catch (e) {
       throw CadException(_errorMessage(e));
+    }
+  }
+
+  /// Resolves the latest active node only when the compact status payload is
+  /// ambiguous (for example, several short nodes started between polls).
+  /// `/runtime/state` is intentionally not the regular polling endpoint: it
+  /// also carries accumulated results and can therefore be much larger.
+  Future<String?> _getLatestRuntimeNode(String workflowId) async {
+    try {
+      final response = await _dio.get(
+        '/runtime/state/$workflowId',
+        options: await _authOptions(
+          receiveTimeout: _progressDisambiguationTimeout,
+        ),
+      );
+      final payload = response.data;
+      if (payload is! Map) return null;
+      final rawVisits = payload['node_visits'];
+      if (rawVisits is! Map) return null;
+
+      String? latestRunningNode;
+      DateTime? latestRunningAt;
+      String? latestFinishedNode;
+      DateTime? latestFinishedAt;
+
+      for (final nodeEntry in rawVisits.entries) {
+        final nodeId = nodeEntry.key.toString();
+        final visits = nodeEntry.value;
+        if (visits is! List) continue;
+        for (final rawVisit in visits) {
+          if (rawVisit is! Map) continue;
+          final startedAt = DateTime.tryParse(
+            rawVisit['started_at']?.toString() ?? '',
+          );
+          final finishedAt = DateTime.tryParse(
+            rawVisit['finished_at']?.toString() ?? '',
+          );
+          final visitState = rawVisit['status']?.toString().toLowerCase();
+          if (visitState == 'running' &&
+              startedAt != null &&
+              (latestRunningAt == null || startedAt.isAfter(latestRunningAt))) {
+            latestRunningAt = startedAt;
+            latestRunningNode = nodeId;
+          }
+          final observedAt = finishedAt ?? startedAt;
+          if (observedAt != null &&
+              (latestFinishedAt == null ||
+                  observedAt.isAfter(latestFinishedAt))) {
+            latestFinishedAt = observedAt;
+            latestFinishedNode = nodeId;
+          }
+        }
+      }
+      return latestRunningNode ?? latestFinishedNode;
+    } on DioException {
+      // This is optional disambiguation. The compact authenticated status
+      // response remains authoritative if the richer query races completion.
+      return null;
     }
   }
 
@@ -772,9 +831,11 @@ class CadService {
   }) async {
     var observedAlive = false;
     var consecutiveLookupFailures = 0;
+    var previousVisitSeq = <String, int>{};
+    String? activeNode;
     while (true) {
       await Future.delayed(const Duration(seconds: 3));
-      final WorkflowStatus status;
+      WorkflowStatus status;
       try {
         status = await getStatus(workflowId);
       } on CadException catch (e) {
@@ -791,13 +852,27 @@ class CadService {
           WorkflowStatus(
             workflowId: workflowId,
             state: WorkflowState.pending,
-            currentNode: startNode,
+            currentNode: activeNode ?? startNode,
+            nodeVisitSeq: previousVisitSeq,
           ),
         );
         continue;
       }
       observedAlive = true;
       consecutiveLookupFailures = 0;
+      final newlyStartedNodes = status.nodesStartedSince(previousVisitSeq);
+      if (status.state.isTerminal && status.lastExitNode != null) {
+        activeNode = status.lastExitNode;
+      } else if (newlyStartedNodes.length == 1) {
+        activeNode = newlyStartedNodes.single;
+      } else if (newlyStartedNodes.length > 1) {
+        activeNode =
+            await _getLatestRuntimeNode(workflowId) ?? newlyStartedNodes.last;
+      } else {
+        activeNode ??= status.currentNode ?? status.lastExitNode;
+      }
+      previousVisitSeq = Map<String, int>.from(status.nodeVisitSeq);
+      status = status.withCurrentNode(activeNode);
       onProgress?.call(status);
       if (status.isTerminal) {
         if (status.state == WorkflowState.budgetExhausted) {
@@ -837,7 +912,7 @@ class CadService {
           WorkflowStatus(
             workflowId: workflowId,
             state: WorkflowState.running,
-            currentNode: 'sketch_to_3d_generator',
+            currentNode: 'client_fetch_result',
           ),
         );
         await Future.delayed(const Duration(seconds: 3));

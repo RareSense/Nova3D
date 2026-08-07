@@ -34,13 +34,14 @@ This repository is the home for Nova3D's open clients and integrations. The host
 Nova3D/
 ├── app/              # Flutter/Dart web client  ·  see app/README.md
 ├── mcp/              # Nova3D MCP server  ·  see mcp/README.md
-├── blender-plugin/   # Blender plugin (coming soon)
+├── blender-plugin/   # Blender add-on  ·  see blender-plugin/README.md
 ├── claude-skills/    # Claude skills (coming soon)
 ├── docs/             # architecture & the "3D as code" thesis (coming soon)
 └── examples/         # gallery of generated assets + their source programs (coming soon)
 ```
 
-> Surfaces are being moved in one at a time. Today the **client app** lives in [`app/`](app/).
+> Surfaces are being moved in one at a time. Today the **client app** and
+> **Blender add-on** live in [`app/`](app/) and [`blender-plugin/`](blender-plugin/).
 
 ## Demo
 

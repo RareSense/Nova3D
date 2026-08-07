@@ -115,6 +115,10 @@ class MessageBubble extends ConsumerWidget {
                     modelLabel: _isTextureMessage
                         ? 'Gemini'
                         : message.modelLabel,
+                    progress: message.workflowProgress,
+                    progressStep: message.workflowProgressStep,
+                    progressTotalSteps: message.workflowProgressTotalSteps,
+                    stageLabel: message.workflowStageLabel,
                   )
                 else if (message.text.isNotEmpty)
                   _BubbleContent(message: message, isUser: _isUser),
@@ -202,7 +206,6 @@ class MessageBubble extends ConsumerWidget {
     );
   }
 }
-
 /// Hover-revealed (desktop) / long-press (touch) delete for one message.
 /// Deleting soft-deletes: the message disappears from the chat but stays in
 /// the database. Confirmation guards against slips; the viewer iframes are
@@ -623,3 +626,4 @@ class _TypingIndicatorState extends State<_TypingIndicator>
     ),
   );
 }
+

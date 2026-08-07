@@ -586,6 +586,11 @@ class MessagesNotifier
         ...requestProps,
         Pr.workflowId: startedWorkflowId,
       });
+      // Register the live run before publishing its streaming message. This is
+      // the same idempotency guard used by resumed and texture workflows, and
+      // prevents a concurrent remote-snapshot sync from starting a second
+      // status poller for the same GraphFlow run.
+      _pollingWorkflowIds.add(startedWorkflowId);
       await _refreshWalletForPaid(request);
       _upsert(
         MessageModel(
@@ -708,19 +713,53 @@ class MessagesNotifier
         // Per-node stage timing. The tracker de-duplicates polls, so this is
         // one event per real GraphFlow transition, not one per 3s poll.
         tracker?.onStatus(status);
-        _upsert(
+        _publishWorkflowProgress(
           MessageModel(
             id: assistantId,
             role: MessageRole.assistant,
-            text: status.progressLabel,
+            text: '',
             createdAt: assistantCreatedAt,
             isStreaming: true,
             workflowId: workflowId,
             modelOptionId: modelOptionId,
             modelLabel: modelLabel,
           ),
+          status,
         );
       },
+    );
+  }
+
+  /// Publishes a real GraphFlow phase only when the visible state changed.
+  /// Status is polled every three seconds, so de-duplicating here avoids
+  /// needless widget rebuilds, local-cache writes, and remote snapshot work.
+  void _publishWorkflowProgress(MessageModel base, WorkflowStatus status) {
+    final progress = status.progress;
+    MessageModel? current;
+    for (final message in _messages) {
+      if (message.id == base.id) {
+        current = message;
+        break;
+      }
+    }
+    if (current != null &&
+        current.isStreaming &&
+        current.workflowId == base.workflowId &&
+        current.text == status.progressLabel &&
+        current.workflowProgressStep == progress.step &&
+        current.workflowProgressTotalSteps == progress.totalSteps &&
+        current.workflowStageLabel == progress.stageLabel) {
+      return;
+    }
+    _upsert(
+      base.copyWith(
+        text: status.progressLabel,
+        isStreaming: true,
+        workflowProgress: progress.fraction,
+        workflowProgressStep: progress.step,
+        workflowProgressTotalSteps: progress.totalSteps,
+        workflowStageLabel: progress.stageLabel,
+      ),
     );
   }
 
@@ -1156,12 +1195,9 @@ class MessagesNotifier
         startedWorkflowId,
         onProgress: (status) {
           tracker.onStatus(status);
-          _upsert(
-            base.copyWith(
-              text: status.progressLabel,
-              isStreaming: true,
-              workflowId: startedWorkflowId,
-            ),
+          _publishWorkflowProgress(
+            base.copyWith(isStreaming: true, workflowId: startedWorkflowId),
+            status,
           );
         },
       );
@@ -1239,9 +1275,7 @@ class MessagesNotifier
       final result = await cad.runTextureWorkflow(
         workflowId,
         startupGraceRetries: CadService.resumeStartupGraceRetries,
-        onProgress: (status) => _upsert(
-          msg.copyWith(text: status.progressLabel, isStreaming: true),
-        ),
+        onProgress: (status) => _publishWorkflowProgress(msg, status),
       );
       final failed = result.failed || result.glbUrl == null;
       _upsert(
