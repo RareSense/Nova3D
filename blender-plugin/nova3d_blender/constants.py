@@ -109,7 +109,7 @@ LOST_CONNECTION_LIMIT = 60
 # the app. BYOK uses the corresponding OpenRouter tier declared below.
 MODEL_OPTIONS = (
     ("credits_claude_opus_5_openrouter", "Claude Opus 5",
-     "claude_opus_5_openrouter", 40, ""),
+     "claude_opus_5_anthropic", 40, ""),
     ("credits_claude_fable_5_anthropic", "Claude Fable 5",
      "claude_fable_5_anthropic", 60, "Recommended"),
     ("credits_gpt_5_6_sol_openrouter", "GPT-5.6 Sol",
@@ -119,8 +119,9 @@ MODEL_OPTIONS = (
 )
 DEFAULT_MODEL_OPTION_ID = "credits_claude_fable_5_anthropic"
 
-# Every model exposed by the plug-in is available through OpenRouter. Fable's
-# hosted route is Anthropic-direct, so its BYOK route intentionally differs.
+# Every model exposed by the plug-in is available through OpenRouter. Hosted
+# Opus and Fable use Anthropic directly, while BYOK intentionally maps them to
+# their OpenRouter tiers. Option IDs remain stable for saved .blend files.
 OPENROUTER_TIER_BY_OPTION_ID = {
     "credits_claude_opus_5_openrouter": "claude_opus_5_openrouter",
     "credits_claude_fable_5_anthropic": "claude_fable_5_openrouter",

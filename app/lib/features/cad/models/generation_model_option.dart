@@ -111,13 +111,13 @@ class GenerationModelOption {
     GenerationModelOption(
       id: 'credits_claude_opus_5_openrouter',
       label: 'Claude Opus 5',
-      llm: 'claude_opus_5_openrouter',
-      provider: GenerationProvider.openrouter,
+      llm: 'claude_opus_5_anthropic',
+      provider: GenerationProvider.anthropic,
       billingMode: GenerationBillingMode.credits,
       creditCost: 40,
       workflowName: kSketchTo3dPaidWorkflow,
       codeLlmProfile: _codeLlmProfile,
-      codeLlmTier: 'claude_opus_5_openrouter',
+      codeLlmTier: 'claude_opus_5_anthropic',
     ),
     GenerationModelOption(
       id: 'credits_claude_fable_5_anthropic',
