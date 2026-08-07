@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Account / credits operators: open web pages, refresh the credit balance.
+"""Account / Nova3D Credits operators and external account links.
 
-`Get API Key` and `Buy Credits` simply open the hosted web pages in the user's
+`Get API Key` and `Buy Nova3D Credits` open hosted pages in the user's
 browser — the same account and Stripe checkout the web app uses; no credentials
 ever leave Blender for these.
 
-`Refresh Credits` fetches the wallet balance on a short-lived worker thread so
+`Refresh Nova3D Credits` fetches the wallet balance on a worker thread so
 the UI never blocks, then writes the count into a WindowManager property.
 """
 
@@ -36,7 +36,8 @@ class NOVA3D_OT_open_api_key(bpy.types.Operator):
 
     def execute(self, context):
         prefs = get_prefs(context)
-        web = (prefs.web_base_url if prefs else constants.DEFAULT_WEB_BASE_URL).rstrip("/")
+        web = (prefs.web_base_url if prefs else
+               constants.DEFAULT_WEB_BASE_URL).rstrip("/")
         if _open_url(web + constants.API_KEY_PATH):
             self.report({"INFO"}, "Opened the API-key page in your browser.")
             return {"FINISHED"}
@@ -47,17 +48,32 @@ class NOVA3D_OT_open_api_key(bpy.types.Operator):
 
 class NOVA3D_OT_buy_credits(bpy.types.Operator):
     bl_idname = "nova3d.buy_credits"
-    bl_label = "Buy Credits"
-    bl_description = "Open the Nova3D subscription page to buy credits"
+    bl_label = "Buy Nova3D Credits"
+    bl_description = "Open the Nova3D subscription page to buy Nova3D Credits"
 
     def execute(self, context):
         prefs = get_prefs(context)
-        web = (prefs.web_base_url if prefs else constants.DEFAULT_WEB_BASE_URL).rstrip("/")
+        web = (prefs.web_base_url if prefs else
+               constants.DEFAULT_WEB_BASE_URL).rstrip("/")
         if _open_url(web + constants.SUBSCRIPTION_PATH):
-            self.report({"INFO"}, "Opened the credits page in your browser.")
+            self.report({"INFO"}, "Opened the Nova3D Credits page in your browser.")
             return {"FINISHED"}
         self.report({"ERROR"}, "Could not open a browser. Visit "
                                f"{web + constants.SUBSCRIPTION_PATH} manually.")
+        return {"CANCELLED"}
+
+
+class NOVA3D_OT_open_openrouter_keys(bpy.types.Operator):
+    bl_idname = "nova3d.open_openrouter_keys"
+    bl_label = "Create an OpenRouter Key"
+    bl_description = "Open OpenRouter's API-key page in your browser"
+
+    def execute(self, context):
+        if _open_url(constants.OPENROUTER_KEYS_URL):
+            self.report({"INFO"}, "Opened the OpenRouter API-key page.")
+            return {"FINISHED"}
+        self.report({"ERROR"}, "Could not open a browser. Visit "
+                               f"{constants.OPENROUTER_KEYS_URL} manually.")
         return {"CANCELLED"}
 
 
@@ -94,8 +110,8 @@ class NOVA3D_OT_copy_workflow_id(bpy.types.Operator):
 
 class NOVA3D_OT_refresh_credits(bpy.types.Operator):
     bl_idname = "nova3d.refresh_credits"
-    bl_label = "Refresh Credits"
-    bl_description = "Fetch your current Nova3D credit balance"
+    bl_label = "Refresh Nova3D Credits"
+    bl_description = "Fetch your current Nova3D Credits balance"
 
     _timer = None
     _queue = None
@@ -159,7 +175,7 @@ class NOVA3D_OT_refresh_credits(bpy.types.Operator):
             wm.nova3d_service_down = True
         else:
             wm.nova3d_service_down = False
-            self.report({"WARNING"}, f"Could not load credits: {payload}")
+            self.report({"WARNING"}, f"Could not load Nova3D Credits: {payload}")
         self._finish(context)
         return {"FINISHED"}
 

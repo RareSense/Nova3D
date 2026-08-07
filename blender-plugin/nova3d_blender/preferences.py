@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
-"""Add-on preferences: API key, base URLs, and the output folder.
+"""Add-on preferences: credentials, base URLs, and the output folder.
 
 The API key is the user's Nova3D key (``n3d_...``) created on the web at
 ``<web>/api-key``. It is stored in Blender's user preferences (not in the
-.blend), so it never travels inside a shared scene file. We never log it and
-never send it anywhere except as the ``Authorization`` header to the configured
-API base.
+.blend), so it never travels inside a shared scene file. The optional OpenRouter
+key is stored the same way. Neither key is logged; the OpenRouter key is sent
+only in BYOK workflow payloads selected by the user.
 """
 
 import bpy
@@ -43,6 +43,14 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         default="",
         subtype="PASSWORD",
     )
+    openrouter_api_key: bpy.props.StringProperty(
+        name="OpenRouter API Key",
+        description="Optional OpenRouter key used only when OpenRouter BYOK is "
+                    "selected in the Nova3D panel",
+        default="",
+        maxlen=512,
+        subtype="PASSWORD",
+    )
     # How the credential was obtained ("sign_in" | "manual" | ""), and its expiry
     # if known. Hidden — used for messaging and sign-out, not user-edited.
     key_source: bpy.props.StringProperty(default="", options={"HIDDEN"})
@@ -54,7 +62,7 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
     )
     web_base_url: bpy.props.StringProperty(
         name="Web Base URL",
-        description="Hosted Nova3D website (for the API-key and credits pages).",
+        description="Hosted Nova3D website (for API keys and Nova3D Credits).",
         default=constants.DEFAULT_WEB_BASE_URL,
     )
     output_dir: bpy.props.StringProperty(
@@ -89,6 +97,13 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         # Manual key field is always available as a fallback / override.
         box.prop(self, "api_key")
         box.operator("nova3d.open_api_key", icon="URL", text="Create a key on the web")
+
+        box = layout.box()
+        box.label(text="Optional OpenRouter BYOK", icon="KEY_HLT")
+        box.prop(self, "openrouter_api_key")
+        box.operator("nova3d.open_openrouter_keys", icon="URL",
+                     text="Create an OpenRouter key")
+        box.label(text="Stored in Blender preferences, never in .blend files.")
 
         box = layout.box()
         box.label(text="Storage", icon="FILE_FOLDER")

@@ -3,7 +3,8 @@
 
 Sections, top to bottom:
   * Account gate — if no API key, prompt the user to create one.
-  * Credits — current balance, refresh, and Buy Credits.
+  * Nova3D Credits — current balance, refresh, and purchase link.
+  * Optional OpenRouter BYOK selection and key field.
   * Prompt + model + reference images.
   * Generate / Cancel + live status.
   * Last generation — open the project folder.
@@ -91,16 +92,35 @@ class NOVA3D_PT_main(bpy.types.Panel):
             rbox.operator("nova3d.resume",
                           text=f"Resume {pending} pending", icon="PLAY")
 
-        # ── Credits ──────────────────────────────────────────────────────────
+        # ── Nova3D Credits / OpenRouter BYOK ─────────────────────────────────
         box = layout.box()
         row = box.row(align=True)
         credits = wm.nova3d_credits
-        credits_text = "Credits: —" if credits < 0 else f"Credits: {credits}"
+        credits_text = ("Nova3D Credits: —" if credits < 0
+                        else f"Nova3D Credits: {credits}")
         row.label(text=credits_text, icon="FUND")
         sub = row.row(align=True)
         sub.enabled = not wm.nova3d_credits_busy
         sub.operator("nova3d.refresh_credits", text="", icon="FILE_REFRESH")
         box.operator("nova3d.buy_credits", icon="URL")
+
+        byok = layout.box()
+        byok.enabled = not running
+        byok.label(text="Or use your OpenRouter key", icon="KEY_HLT")
+        byok.prop(scene, "nova3d_use_openrouter", text="Use OpenRouter instead")
+        if scene.nova3d_use_openrouter:
+            byok.prop(prefs, "openrouter_api_key", text="Key")
+            byok.operator("nova3d.open_openrouter_keys", icon="URL",
+                          text="Create an OpenRouter key")
+            if prefs.openrouter_api_key.strip():
+                byok.label(text="OpenRouter bills your account directly.",
+                           icon="CHECKMARK")
+                byok.label(text="No Nova3D Credits are used.")
+            else:
+                warning = byok.row()
+                warning.alert = True
+                warning.label(text="Enter an OpenRouter key to use this option.",
+                              icon="ERROR")
 
         # ── Inputs ───────────────────────────────────────────────────────────
         col = layout.column()
@@ -109,6 +129,11 @@ class NOVA3D_PT_main(bpy.types.Panel):
         col.prop(scene, "nova3d_prompt", text="")
         _draw_word_counter(col, scene.nova3d_prompt)
         col.prop(scene, "nova3d_model", text="Model")
+        selected = constants.model_option_by_id(scene.nova3d_model)
+        if scene.nova3d_use_openrouter:
+            col.label(text="Cost: your OpenRouter usage; 0 Nova3D Credits")
+        else:
+            col.label(text=f"Cost: {selected[3]} Nova3D Credits")
 
         # Reference images (optional, up to 3).
         img_box = layout.box()

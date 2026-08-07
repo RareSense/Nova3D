@@ -82,6 +82,7 @@ class WorkflowStatus {
     'final_latest_valid',
     'final_validated_correction',
     'fail_generation',
+    'fail_llm_generation',
     'require_byok_api_key',
     // texture_3d_v2
     'final_textured',
@@ -111,6 +112,7 @@ class WorkflowStatus {
     'final_latest_valid': 'Finalizing the model...',
     'final_validated_correction': 'Finalizing the corrected model...',
     'fail_generation': 'Generation failed.',
+    'fail_llm_generation': 'Model provider failed.',
     'regenerate_3d_part': 'Regenerating the selected part...',
     'add_3d_part': 'Adding a new part...',
     'articulate_3d_model': 'Articulating your 3D model...',
@@ -256,6 +258,7 @@ class CadResult {
       'add_3d_part',
       'articulate_3d_model',
       'fail_generation',
+      'fail_llm_generation',
       'require_byok_api_key',
     ]) {
       final node = json[key];

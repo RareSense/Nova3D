@@ -138,6 +138,10 @@ class _JobModalMixin:
             self.report({"INFO"}, f"Nova3D model ready: {wm.nova3d_last_dir}")
         else:
             wm.nova3d_status = f"Saved '{label}' to disk (see project folder)."
+        warning = payload.get("warning_message")
+        if warning:
+            wm.nova3d_status = warning
+            self.report({"WARNING"}, warning)
         _tag_redraw(context)
 
     def _finish(self, context):
@@ -168,7 +172,8 @@ class _JobModalMixin:
 class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
     bl_idname = "nova3d.generate"
     bl_label = "Generate"
-    bl_description = "Generate a 3D model from your prompt using Nova3D credits"
+    bl_description = ("Generate a 3D model using Nova3D Credits or your "
+                      "OpenRouter key")
 
     def invoke(self, context, event):
         if is_generating():
@@ -196,6 +201,22 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
                         f"Prompt must be {constants.MAX_PROMPT_WORDS} words or fewer.")
             return {"CANCELLED"}
 
+        model_option = constants.model_option_by_id(scene.nova3d_model)
+        use_openrouter = bool(scene.nova3d_use_openrouter)
+        openrouter_key = (prefs.openrouter_api_key or "").strip()
+        if use_openrouter and not openrouter_key:
+            self.report({"ERROR"}, "Enter an OpenRouter key or turn off "
+                                   "'Use OpenRouter instead'.")
+            return {"CANCELLED"}
+        if use_openrouter and not openrouter_key.startswith("sk-or-"):
+            self.report({"ERROR"}, "This does not look like an OpenRouter key. "
+                                   "OpenRouter keys start with 'sk-or-'.")
+            return {"CANCELLED"}
+        if use_openrouter and not constants.openrouter_tier_for_option(model_option):
+            self.report({"ERROR"}, "The selected model is not available through "
+                                   "OpenRouter. Choose another model.")
+            return {"CANCELLED"}
+
         # Encode reference images now, on the main thread (bpy is not thread-safe).
         data_urls = []
         if image_paths:
@@ -208,8 +229,11 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
             api_key=prefs.api_key.strip(),
             prompt=prompt,
             image_data_urls=data_urls,
-            model_option=constants.model_option_by_id(scene.nova3d_model),
+            model_option=model_option,
             output_root=prefs.output_dir,
+            billing_mode=(constants.BILLING_OPENROUTER if use_openrouter
+                          else constants.BILLING_NOVA3D_CREDITS),
+            openrouter_api_key=openrouter_key if use_openrouter else "",
         )
         return self._start_jobs(context, [lambda q: GenerationJob(params, q)])
 

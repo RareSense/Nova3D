@@ -233,6 +233,7 @@ class CadService {
         'final_validated_correction',
         'final_latest_valid',
         'fail_generation',
+        'fail_llm_generation',
         'require_byok_api_key',
       ];
     }
@@ -240,6 +241,7 @@ class CadService {
       'final_validated_correction',
       'final_latest_valid',
       'fail_generation',
+      'fail_llm_generation',
     ];
   }
 

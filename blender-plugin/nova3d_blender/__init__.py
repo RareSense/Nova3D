@@ -3,9 +3,9 @@
 
 This add-on drives the hosted Nova3D / GraphFlow backend (the same service the
 web app uses) to generate part-structured 3D assets from a text prompt and
-optional reference images. Generations are billed in Nova3D credits, written to
-a per-generation project folder on disk, imported into the scene, and synced to
-the user's web chat history.
+optional reference images. Generations use Nova3D Credits or OpenRouter, are
+written to a per-generation project folder on disk, imported into the scene,
+and synced to the user's web chat history.
 
 It requires ZERO backend changes: every call uses the public GraphFlow API with
 the user's Nova3D API key. See ``README.md`` for the full data flow.
@@ -25,11 +25,11 @@ Package layout
 bl_info = {
     "name": "Nova3D — Code-native 3D Generation",
     "author": "RareSense (Nova3D)",
-    "version": (1, 0, 1),
+    "version": (1, 1, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar (N) > Nova3D",
     "description": "Generate part-structured 3D assets from text prompts using "
-                   "the hosted Nova3D backend and your Nova3D credits.",
+                   "the hosted Nova3D backend with Nova3D Credits or OpenRouter.",
     "category": "3D View",
     "doc_url": "https://nova3d.xyz",
     "tracker_url": "https://github.com/RareSense/Nova3D/issues",
@@ -42,7 +42,7 @@ from . import operators, ui
 
 
 def _deferred_startup():
-    """Run shortly after enable: load the credit balance and resume any
+    """Run shortly after enable: load the Nova3D Credits balance and resume any
     generations that were interrupted (so closing Blender / a dropped network
     never loses a running, paid generation). One-shot — returns None.
 

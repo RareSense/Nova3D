@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Blender operators: account/credits actions, image management, generation."""
+"""Blender operators: account/billing actions, image management, generation."""
 
 from . import account, images, generate, auth, updates
 
@@ -7,6 +7,7 @@ from . import account, images, generate, auth, updates
 # register() in the add-on's __init__.
 classes = (
     account.NOVA3D_OT_open_api_key,
+    account.NOVA3D_OT_open_openrouter_keys,
     account.NOVA3D_OT_buy_credits,
     account.NOVA3D_OT_refresh_credits,
     account.NOVA3D_OT_open_output_folder,

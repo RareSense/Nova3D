@@ -43,17 +43,47 @@ class GenerationParams:
     """Immutable inputs for one generation, assembled on the main thread."""
 
     def __init__(self, *, api_base_url, api_key, prompt, image_data_urls,
-                 model_option, output_root):
+                 model_option, output_root,
+                 billing_mode=constants.BILLING_NOVA3D_CREDITS,
+                 openrouter_api_key=""):
         self.api_base_url = api_base_url
         self.api_key = api_key
         self.prompt = (prompt or "").strip()
         self.image_data_urls = list(image_data_urls or [])
         self.model_option = model_option  # (id, label, tier, credits, badge)
         self.output_root = output_root
+        self.billing_mode = (
+            constants.BILLING_OPENROUTER
+            if billing_mode == constants.BILLING_OPENROUTER
+            else constants.BILLING_NOVA3D_CREDITS
+        )
+        # Sensitive and intentionally memory-only: never written to pending or
+        # project metadata. The GraphFlow BYOK contract receives it at start.
+        self.openrouter_api_key = (openrouter_api_key or "").strip()
 
     @property
     def has_image(self):
         return bool(self.image_data_urls)
+
+    @property
+    def uses_openrouter(self):
+        return self.billing_mode == constants.BILLING_OPENROUTER
+
+    @property
+    def workflow_name(self):
+        return (constants.BYOK_WORKFLOW_NAME if self.uses_openrouter
+                else constants.PAID_WORKFLOW_NAME)
+
+    @property
+    def code_llm_tier(self):
+        if self.uses_openrouter:
+            return constants.openrouter_tier_for_option(self.model_option)
+        return self.model_option[2]
+
+    @property
+    def return_nodes(self):
+        return (constants.BYOK_GENERATION_RETURN_NODES if self.uses_openrouter
+                else constants.GENERATION_RETURN_NODES)
 
 
 class GenerationJob(threading.Thread):
@@ -80,6 +110,8 @@ class GenerationJob(threading.Thread):
             image_data_urls=record.get("image_data_urls") or [],
             model_option=tuple(record.get("model_option") or ("", "", "", 0, "")),
             output_root=record.get("output_root"),
+            billing_mode=record.get("billing_mode") or
+                         constants.BILLING_NOVA3D_CREDITS,
         )
         job = cls(params, queue)
         job._resume = True
@@ -159,30 +191,42 @@ class GenerationJob(threading.Thread):
     # ── fresh generation ─────────────────────────────────────────────────────
     def _run_pipeline(self):
         params = self._params
-        _model_id, _model_label, tier, _credits, _badge = params.model_option
+        tier = params.code_llm_tier
+        if not tier:
+            self._fail("The selected model is not configured for this billing "
+                       "method.")
+            return
 
         # 1. Preflight: service readiness.
         self._status("Checking the generation service...")
-        readiness = self._client.readiness(constants.WORKFLOW_NAME)
+        readiness = self._client.readiness(params.workflow_name)
         if not readiness.get("ready", False):
             self._fail(_readiness_message(readiness.get("reason")))
             return
 
-        # 2. Preflight: credit estimate vs. wallet balance.
-        self._status("Estimating credits...")
-        estimate = self._client.estimate(constants.WORKFLOW_NAME, tier)
-        required = int(estimate.get("authorized_budget")
-                       or estimate.get("projected_max_hold") or 0)
-        balance = self._client.balance()
-        available = _int(balance.get("available"))
-        if available is None:
-            self._fail("Could not confirm your credit balance. "
-                       "Open Buy Credits, refresh, and try again.")
-            return
-        if available < required:
-            self._fail(f"This model needs {required} credits, but you have "
-                       f"{available}. Use 'Buy Credits' and try again.")
-            return
+        # 2. Hosted runs reserve Nova3D Credits. BYOK runs skip wallet calls and
+        # send the user-provided OpenRouter key to the dedicated BYOK workflow.
+        required = 0
+        if params.uses_openrouter:
+            if not params.openrouter_api_key:
+                self._fail("An OpenRouter key is required for BYOK generation.")
+                return
+            self._status("Using your OpenRouter key...")
+        else:
+            self._status("Estimating Nova3D Credits...")
+            estimate = self._client.estimate(params.workflow_name, tier)
+            required = int(estimate.get("authorized_budget")
+                           or estimate.get("projected_max_hold") or 0)
+            balance = self._client.balance()
+            available = _int(balance.get("available"))
+            if available is None:
+                self._fail("Could not confirm your Nova3D Credits balance. "
+                           "Refresh the balance and try again.")
+                return
+            if available < required:
+                self._fail(f"This model needs {required} Nova3D Credits, but you "
+                           f"have {available}. Buy Nova3D Credits and try again.")
+                return
         self._required = required
 
         if self._cancel.is_set():
@@ -201,9 +245,10 @@ class GenerationJob(threading.Thread):
         payload = self._build_payload(tier)
         try:
             workflow_id = self._client.start_generation(
-                constants.WORKFLOW_NAME, request_id=workflow_id, payload=payload,
-                return_nodes=constants.GENERATION_RETURN_NODES,
-                conversation_link=history.start_link(self._conversation_id)
+                params.workflow_name, request_id=workflow_id, payload=payload,
+                return_nodes=params.return_nodes,
+                conversation_link=history.start_link(
+                    self._conversation_id, params.workflow_name)
                 if self._conversation_id else None,
             )
         except AuthError:
@@ -223,7 +268,9 @@ class GenerationJob(threading.Thread):
                 workflow_id=workflow_id, conversation_id=self._conversation_id,
                 prompt=params.prompt, image_data_urls=params.image_data_urls,
                 model_option=params.model_option, output_root=params.output_root,
-                now_us=self._now_us, required=required))
+                now_us=self._now_us, required=required,
+                billing_mode=params.billing_mode,
+                workflow_name=params.workflow_name))
         except OSError:
             pass  # a disk hiccup must not abort an already-running generation
 
@@ -253,7 +300,13 @@ class GenerationJob(threading.Thread):
         if parsed is None:
             return
         if parsed.failed or not parsed.glb_url:
-            self._fail(parsed.error_message or "Generation failed.")
+            message = parsed.error_message or "Generation failed."
+            if (params.uses_openrouter and
+                    parsed.error_category == "insufficient_credits"):
+                message = ("Your OpenRouter account or API key does not have "
+                           "enough funds to continue. Add OpenRouter credits "
+                           "and retry.")
+            self._fail(message)
             return
 
         # Download artifacts into a fresh project folder.
@@ -298,7 +351,8 @@ class GenerationJob(threading.Thread):
             credits={"authorized": self._required}, workflow_id=workflow_id,
             conversation_id=self._conversation_id,
             message_id=remote_message_id or message_id, parsed=parsed,
-            files=dict(project.files),
+            files=dict(project.files), workflow_name=params.workflow_name,
+            billing_mode=params.billing_mode, code_llm_tier=params.code_llm_tier,
         )
         project.write_meta(meta)
 
@@ -313,6 +367,7 @@ class GenerationJob(threading.Thread):
             "model_label": model_label,
             "workflow_id": workflow_id,
             "conversation_id": self._conversation_id,
+            "warning_message": _validation_warning(parsed, params.uses_openrouter),
         })
 
         # The model is saved, imported, and in the user's history — the tracked
@@ -354,6 +409,9 @@ class GenerationJob(threading.Thread):
             "code_llm_profile": constants.CODE_LLM_PROFILE,
             "code_llm_tier": tier,
         }
+        if params.uses_openrouter:
+            payload["code_llm_provider"] = constants.OPENROUTER_PROVIDER
+            payload["code_llm_api_key"] = params.openrouter_api_key
         if params.has_image:
             payload["has_reference_images"] = True
             payload["image_artifact"] = params.image_data_urls
@@ -423,8 +481,12 @@ class GenerationJob(threading.Thread):
             if api_client.is_terminal(status):
                 state, _node = api_client.status_snapshot(status)
                 if state == "budget_exhausted":
-                    self._fail("Your credit budget was exhausted before the model "
-                               "completed.")
+                    if self._params.uses_openrouter:
+                        self._fail("The workflow execution budget was exhausted "
+                                   "before the model completed.")
+                    else:
+                        self._fail("Your Nova3D Credits budget was exhausted before "
+                                   "the model completed.")
                     return False
                 return True
 
@@ -473,6 +535,17 @@ def _int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _validation_warning(parsed, uses_openrouter):
+    """Explain a skipped final review without discarding an already-valid GLB."""
+    category = getattr(parsed, "validation_error_category", None)
+    if not category:
+        return None
+    if uses_openrouter and category == "insufficient_credits":
+        return ("Model generated, but final visual review was skipped because "
+                "your OpenRouter account or API key ran out of funds.")
+    return "Model generated, but final visual review could not be completed."
 
 
 def _readiness_message(reason):

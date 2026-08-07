@@ -3,7 +3,7 @@
 
 Every method authenticates with the user's Nova3D API key via
 `Authorization: Bearer n3d_...` — the exact scheme the MCP server uses. The key
-resolves server-side to the same account as the web login, so credits and
+resolves server-side to the same account as the web login, so Nova3D Credits and
 conversation history are shared automatically.
 
 This module also contains the pure result-parsing helpers (`parse_result`),
@@ -157,7 +157,7 @@ def _generator_payload(result_json):
     for key in (
         "final_validated_correction", "final_latest_valid", "sketch_to_3d_generator",
         "regenerate_3d_part", "add_3d_part", "articulate_3d_model",
-        "fail_generation", "require_byok_api_key",
+        "fail_generation", "fail_llm_generation", "require_byok_api_key",
     ):
         node = result_json.get(key)
         if isinstance(node, list) and node and isinstance(node[0], dict):
@@ -179,7 +179,8 @@ class ParsedResult:
 
     def __init__(self, *, glb_url=None, model_artifact=None, code_artifact=None,
                  joints_artifact=None, joints=None, failed=False, error_message=None,
-                 error_category=None, operation=None):
+                 error_category=None, operation=None,
+                 validation_error_category=None):
         self.glb_url = glb_url
         self.model_artifact = model_artifact
         self.code_artifact = code_artifact
@@ -189,6 +190,7 @@ class ParsedResult:
         self.error_message = error_message
         self.error_category = error_category
         self.operation = operation
+        self.validation_error_category = validation_error_category
 
     @property
     def code_url(self):
@@ -247,12 +249,32 @@ def parse_result(result_json):
         or (friendly_message(category) if has_failure else None)
     )
 
+    # A validation-provider failure happens only after Blender has already made
+    # a valid GLB. The workflow intentionally keeps that GLB. Preserve the
+    # nested category so the UI can tell the user that review was skipped.
+    validation_llm = data.get("validation_llm")
+    if isinstance(validation_llm, list):
+        validation_llm = next(
+            (item for item in reversed(validation_llm) if isinstance(item, dict)),
+            None,
+        )
+    validation_llm = _as_map(validation_llm)
+    validation_failure = _as_map((validation_llm or {}).get("failure"))
+    validation_status = str((validation_llm or {}).get("status") or "").lower()
+    validation_error_category = None
+    if validation_status == "failed" or (validation_llm or {}).get("ok") is False:
+        validation_error_category = (
+            (validation_failure or {}).get("category")
+            or (validation_llm or {}).get("error_category")
+        )
+
     failed = (not glb_url) and (has_failure or message is not None)
     return ParsedResult(
         glb_url=glb_url, model_artifact=model_artifact, code_artifact=code_artifact,
         joints_artifact=joints_artifact, joints=joints, failed=failed,
         error_message=message, error_category=category,
         operation=data.get("operation"),
+        validation_error_category=validation_error_category,
     )
 
 

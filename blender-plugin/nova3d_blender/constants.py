@@ -15,16 +15,16 @@ threads.
 # /credits, /run/state, /status, /result, /workflow/readiness all live under it.
 DEFAULT_API_BASE_URL = "https://nova3d.xyz/api"
 # Web base hosts the browser-only pages: account/API-key creation and the Stripe
-# subscription/credits checkout. Same account, same Stripe as the web app.
+# Nova3D Credits checkout. Same account and Stripe as the web app.
 DEFAULT_WEB_BASE_URL = "https://app.nova3d.xyz"
 
 API_KEY_PATH = "/api-key"        # where users create their n3d_ key
-SUBSCRIPTION_PATH = "/subscription"  # Stripe credits checkout
+SUBSCRIPTION_PATH = "/subscription"  # Nova3D Credits checkout
 
 # ── Add-on version + update check ────────────────────────────────────────────
 # Single source of truth for comparisons. KEEP IN SYNC with the version in
 # blender_manifest.toml and bl_info (__init__.py) when you cut a release.
-ADDON_VERSION = (1, 0, 1)
+ADDON_VERSION = (1, 1, 0)
 ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
 # Public GitHub releases — read-only, unauthenticated, used only to tell the
 # user when a newer build exists. Releases are tagged `blender-plugin-v<x.y.z>`.
@@ -46,17 +46,26 @@ SIGN_IN_TIMEOUT_SECONDS = 300    # how long to wait for the browser callback
 CLIENT_DISPLAY_NAME = "Blender"
 
 # ── Workflow contract ────────────────────────────────────────────────────────
-# Credits-only initial generation. BYOK (`sketch_to_3d_byok_v2`) is intentionally
-# NOT supported by this plugin — generations always use the paid-credit workflow.
-WORKFLOW_NAME = "sketch_to_3d_v2"
+PAID_WORKFLOW_NAME = "sketch_to_3d_v2"
+BYOK_WORKFLOW_NAME = "sketch_to_3d_byok_v2"
+# Backward-compatible alias for integrations that imported the original name.
+WORKFLOW_NAME = PAID_WORKFLOW_NAME
 CODE_LLM_PROFILE = "nova3d_code_generation"
 UV_WORKFLOW_NAME = "generate_uv_maps"
+OPENROUTER_PROVIDER = "openrouter"
+OPENROUTER_KEYS_URL = "https://openrouter.ai/settings/keys"
+BILLING_NOVA3D_CREDITS = "nova3d_credits"
+BILLING_OPENROUTER = "openrouter"
 
 # Terminal carriers the result endpoint may return for sketch_to_3d_v2.
 GENERATION_RETURN_NODES = (
     "final_validated_correction",
     "final_latest_valid",
     "fail_generation",
+    "fail_llm_generation",
+)
+BYOK_GENERATION_RETURN_NODES = GENERATION_RETURN_NODES + (
+    "require_byok_api_key",
 )
 
 # ── Input limits (identical to the web client) ───────────────────────────────
@@ -93,20 +102,31 @@ MISSING_AFTER_ALIVE_LIMIT = 4
 LOST_CONNECTION_LIMIT = 60
 
 
-# ── Paid-credit model options ────────────────────────────────────────────────
-# (id, label, code_llm_tier, credits, badge). `credits` is a display hint only —
-# the authoritative hold comes from POST /credits/estimate at generation time.
+# ── Model options ────────────────────────────────────────────────────────────
+# (id, label, hosted code_llm_tier, Nova3D Credits, badge). The displayed credit
+# amount is only a hint; POST /credits/estimate remains authoritative at runtime.
+# Keep this list in the same order as GenerationModelOption.paidCreditOptions in
+# the app. BYOK uses the corresponding OpenRouter tier declared below.
 MODEL_OPTIONS = (
-    ("credits_gemini_3_1_pro_google", "Gemini 3.1 Pro Preview",
-     "gemini_3_1_pro_google", 12, "Fastest"),
-    ("credits_claude_sonnet_4_6_anthropic", "Claude Sonnet 4.6",
-     "claude_sonnet_4_6_anthropic", 15, ""),
-    ("credits_claude_opus_4_8_anthropic", "Claude Opus 4.8",
-     "claude_opus_4_8_anthropic", 25, ""),
-    ("credits_gpt_5_5_openrouter", "GPT-5.5",
-     "gpt_5_5_openrouter", 28, "Recommended"),
+    ("credits_claude_opus_5_openrouter", "Claude Opus 5",
+     "claude_opus_5_openrouter", 40, ""),
+    ("credits_claude_fable_5_anthropic", "Claude Fable 5",
+     "claude_fable_5_anthropic", 60, "Recommended"),
+    ("credits_gpt_5_6_sol_openrouter", "GPT-5.6 Sol",
+     "gpt_5_6_sol_openrouter", 30, ""),
+    ("credits_kimi_k3_openrouter", "Kimi K3",
+     "kimi_k3_openrouter", 40, ""),
 )
-DEFAULT_MODEL_OPTION_ID = "credits_gemini_3_1_pro_google"
+DEFAULT_MODEL_OPTION_ID = "credits_claude_fable_5_anthropic"
+
+# Every model exposed by the plug-in is available through OpenRouter. Fable's
+# hosted route is Anthropic-direct, so its BYOK route intentionally differs.
+OPENROUTER_TIER_BY_OPTION_ID = {
+    "credits_claude_opus_5_openrouter": "claude_opus_5_openrouter",
+    "credits_claude_fable_5_anthropic": "claude_fable_5_openrouter",
+    "credits_gpt_5_6_sol_openrouter": "gpt_5_6_sol_openrouter",
+    "credits_kimi_k3_openrouter": "kimi_k3_openrouter",
+}
 
 
 def model_option_by_id(option_id):
@@ -114,7 +134,16 @@ def model_option_by_id(option_id):
     for option in MODEL_OPTIONS:
         if option[0] == option_id:
             return option
+    for option in MODEL_OPTIONS:
+        if option[0] == DEFAULT_MODEL_OPTION_ID:
+            return option
     return MODEL_OPTIONS[0]
+
+
+def openrouter_tier_for_option(model_option):
+    """Return the OpenRouter tier matching a model-option tuple."""
+    option_id = model_option[0] if model_option else ""
+    return OPENROUTER_TIER_BY_OPTION_ID.get(option_id)
 
 
 # ── Human-readable progress labels, keyed by GraphFlow node id ───────────────
@@ -137,6 +166,7 @@ NODE_PROGRESS_LABELS = {
     "final_latest_valid": "Finalizing the model...",
     "final_validated_correction": "Finalizing the corrected model...",
     "fail_generation": "Generation failed.",
+    "fail_llm_generation": "Model provider failed.",
 }
 
 # Workflow runtime.state values that mean "stop polling".
@@ -148,6 +178,7 @@ TERMINAL_STATES = frozenset({
 # Node ids that also signal completion even if runtime.state lags behind.
 TERMINAL_NODES = frozenset({
     "final_latest_valid", "final_validated_correction", "fail_generation",
+    "fail_llm_generation",
 })
 
 # Object/collection naming used to group + auto-hide generations in the scene.

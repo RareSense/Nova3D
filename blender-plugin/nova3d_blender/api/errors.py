@@ -42,17 +42,18 @@ class ServiceUnavailableError(ApiError):
 # to friendly copy. Mirrors CadResult._messageForCategory in the web client.
 _CATEGORY_MESSAGES = {
     "invalid_api_key":
-        "The provider rejected this request's API key. "
-        "Check your Nova3D API key in the add-on preferences.",
+        "The model provider rejected the API key. If OpenRouter is selected, "
+        "check your OpenRouter key; otherwise contact Nova3D support.",
     "missing_api_key":
-        "A required provider key is missing on the server side. "
-        "Try another model or contact support.",
+        "A required model-provider key is missing. Enter your OpenRouter key, "
+        "or use Nova3D Credits and retry.",
     "model_access_denied":
         "This account cannot use the selected model. Choose another model.",
     "unsupported_provider_for_model":
         "The selected model is not available right now. Choose another model.",
     "insufficient_credits":
-        "Not enough credits for this generation. Buy more credits and retry.",
+        "Not enough funds for this generation. Check your OpenRouter balance "
+        "or buy more Nova3D Credits and retry.",
     "quota_or_rate_limit":
         "The provider hit a quota or rate limit. Wait a moment and retry.",
     "provider_unavailable":

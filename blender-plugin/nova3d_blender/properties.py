@@ -3,7 +3,7 @@
 
 Scene properties hold user *input* (prompt, model, reference images) and are
 saved with the .blend. WindowManager properties hold transient *runtime* state
-(status line, busy flag, cached credit count) and are intentionally not saved.
+(status line, busy flag, cached Nova3D Credits count) and are not saved.
 """
 
 import bpy
@@ -22,8 +22,8 @@ class Nova3DReferenceImage(bpy.types.PropertyGroup):
 # items callback are garbage-collected while still referenced by the UI.
 _MODEL_ENUM_ITEMS = [
     (option_id,
-     f"{label} — {credits} credits" + (f" ({badge})" if badge else ""),
-     f"{label}: {credits} credits")
+     f"{label} — {credits} Nova3D Credits" + (f" ({badge})" if badge else ""),
+     f"{label}: {credits} Nova3D Credits when using hosted generation")
     for option_id, label, _tier, credits, badge in constants.MODEL_OPTIONS
 ]
 
@@ -39,9 +39,15 @@ def register_properties():
     )
     scene.nova3d_model = bpy.props.EnumProperty(
         name="Model",
-        description="Which LLM writes the Blender program (priced in credits)",
+        description="Which LLM writes the Blender program",
         items=_MODEL_ENUM_ITEMS,
         default=constants.DEFAULT_MODEL_OPTION_ID,
+    )
+    scene.nova3d_use_openrouter = bpy.props.BoolProperty(
+        name="Use OpenRouter Key",
+        description="Bill the selected model to your OpenRouter account instead "
+                    "of spending Nova3D Credits",
+        default=False,
     )
     scene.nova3d_images = bpy.props.CollectionProperty(type=Nova3DReferenceImage)
     scene.nova3d_images_index = bpy.props.IntProperty(name="Image", default=0)
@@ -66,8 +72,8 @@ def register_properties():
 
 def unregister_properties():
     scene = bpy.types.Scene
-    for attr in ("nova3d_prompt", "nova3d_model", "nova3d_images",
-                 "nova3d_images_index"):
+    for attr in ("nova3d_prompt", "nova3d_model", "nova3d_use_openrouter",
+                 "nova3d_images", "nova3d_images_index"):
         if hasattr(scene, attr):
             delattr(scene, attr)
 

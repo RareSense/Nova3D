@@ -188,13 +188,13 @@ def conversation_title(prompt):
     return text[:50] + "..." if len(text) > 50 else text
 
 
-def start_link(conversation_id):
+def start_link(conversation_id, workflow_name=constants.PAID_WORKFLOW_NAME):
     """The `conversation` block sent with POST /run/state to link the workflow."""
     return {
         "conversation_id": conversation_id,
         "relation_type": "initial_generation",
         "link_metadata": {
-            "operation": constants.WORKFLOW_NAME,
+            "operation": workflow_name,
             "client": constants.CLIENT_NAME,
         },
     }

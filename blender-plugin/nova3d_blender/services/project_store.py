@@ -94,7 +94,10 @@ class ProjectFolder:
 
 
 def build_meta(*, prompt, model_option, credits, workflow_id, conversation_id,
-               message_id, parsed, files, uv_summary=None):
+               message_id, parsed, files, uv_summary=None,
+               workflow_name=constants.PAID_WORKFLOW_NAME,
+               billing_mode=constants.BILLING_NOVA3D_CREDITS,
+               code_llm_tier=None):
     """Assemble the meta.json pointer record."""
     option_id, label, tier, display_credits, _badge = model_option
     return {
@@ -105,15 +108,21 @@ def build_meta(*, prompt, model_option, credits, workflow_id, conversation_id,
         "model": {
             "option_id": option_id,
             "label": label,
-            "code_llm_tier": tier,
+            "code_llm_tier": code_llm_tier or tier,
             "code_llm_profile": constants.CODE_LLM_PROFILE,
         },
         "credits": {
             "authorized": credits.get("authorized") if credits else None,
-            "estimated_display": display_credits,
+            "estimated_display": (0 if billing_mode == constants.BILLING_OPENROUTER
+                                  else display_credits),
+        },
+        "billing": {
+            "mode": billing_mode,
+            "provider": (constants.OPENROUTER_PROVIDER
+                         if billing_mode == constants.BILLING_OPENROUTER else None),
         },
         "workflow": {
-            "name": constants.WORKFLOW_NAME,
+            "name": workflow_name,
             "workflow_id": workflow_id,
         },
         "conversation_id": conversation_id,
