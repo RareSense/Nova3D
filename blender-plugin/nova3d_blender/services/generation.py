@@ -36,7 +36,7 @@ import time
 from .. import constants
 from ..api import client as api_client
 from ..api.errors import ApiError, AuthError
-from . import history, pending, project_store, uv_maps
+from . import history, pending, project_store, provider_access, uv_maps
 
 
 class GenerationParams:
@@ -45,7 +45,7 @@ class GenerationParams:
     def __init__(self, *, api_base_url, api_key, prompt, image_data_urls,
                  model_option, output_root,
                  billing_mode=constants.BILLING_NOVA3D_CREDITS,
-                 openrouter_api_key=""):
+                 provider=None, provider_api_key=""):
         self.api_base_url = api_base_url
         self.api_key = api_key
         self.prompt = (prompt or "").strip()
@@ -53,36 +53,38 @@ class GenerationParams:
         self.model_option = model_option  # (id, label, tier, credits, badge)
         self.output_root = output_root
         self.billing_mode = (
-            constants.BILLING_OPENROUTER
-            if billing_mode == constants.BILLING_OPENROUTER
-            else constants.BILLING_NOVA3D_CREDITS
+            constants.BILLING_NOVA3D_CREDITS
+            if billing_mode == constants.BILLING_NOVA3D_CREDITS
+            else constants.BILLING_PROVIDER_KEY
         )
-        # Sensitive and intentionally memory-only: never written to pending or
-        # project metadata. The GraphFlow BYOK contract receives it at start.
-        self.openrouter_api_key = (openrouter_api_key or "").strip()
+        self.provider = (provider or "").strip().lower() or None
+        # Sensitive and intentionally memory-only: never written to pending,
+        # project metadata, .blend files, history, or logs. GraphFlow receives
+        # it only when this provider-key generation starts.
+        self.provider_api_key = (provider_api_key or "").strip()
 
     @property
     def has_image(self):
         return bool(self.image_data_urls)
 
     @property
-    def uses_openrouter(self):
-        return self.billing_mode == constants.BILLING_OPENROUTER
+    def uses_provider_key(self):
+        # Treat legacy non-credit pending records as provider-key runs too; a
+        # resumed job only polls and never needs the secret again.
+        return self.billing_mode != constants.BILLING_NOVA3D_CREDITS
 
     @property
     def workflow_name(self):
-        return (constants.BYOK_WORKFLOW_NAME if self.uses_openrouter
+        return (constants.BYOK_WORKFLOW_NAME if self.uses_provider_key
                 else constants.PAID_WORKFLOW_NAME)
 
     @property
     def code_llm_tier(self):
-        if self.uses_openrouter:
-            return constants.openrouter_tier_for_option(self.model_option)
         return self.model_option[2]
 
     @property
     def return_nodes(self):
-        return (constants.BYOK_GENERATION_RETURN_NODES if self.uses_openrouter
+        return (constants.BYOK_GENERATION_RETURN_NODES if self.uses_provider_key
                 else constants.GENERATION_RETURN_NODES)
 
 
@@ -112,6 +114,7 @@ class GenerationJob(threading.Thread):
             output_root=record.get("output_root"),
             billing_mode=record.get("billing_mode") or
                          constants.BILLING_NOVA3D_CREDITS,
+            provider=record.get("provider"),
         )
         job = cls(params, queue)
         job._resume = True
@@ -167,12 +170,17 @@ class GenerationJob(threading.Thread):
         Used when the run may still be alive on the backend (sustained network
         loss, overall timeout) — the model isn't lost, we just lost contact.
         """
-        self._emit("error", message)
+        self._emit("detached", message)
 
     def _on_cancel(self):
-        """User explicitly cancelled — respect it and drop the pending record."""
-        self._remove_pending()
-        self._emit("finished")
+        """Stop waiting locally without pretending the backend was cancelled."""
+        if self._workflow_id:
+            self._abandon(
+                "Stopped waiting in Blender. The generation is still running "
+                "on Nova3D and will appear in the app; use Resume to reattach. "
+                f"(Workflow {self._workflow_id})")
+        else:
+            self._emit("finished")
 
     # ── thread entry point ───────────────────────────────────────────────────
     def run(self):
@@ -204,14 +212,24 @@ class GenerationJob(threading.Thread):
             self._fail(_readiness_message(readiness.get("reason")))
             return
 
-        # 2. Hosted runs reserve Nova3D Credits. BYOK runs skip wallet calls and
-        # send the user-provided OpenRouter key to the dedicated BYOK workflow.
+        # 2. Hosted runs reserve Nova3D Credits. Provider-key runs first prove
+        # the exact key/model can serve a tiny real request, then skip Nova3D's
+        # wallet and send that key to the dedicated BYOK workflow.
         required = 0
-        if params.uses_openrouter:
-            if not params.openrouter_api_key:
-                self._fail("An OpenRouter key is required for BYOK generation.")
+        if params.uses_provider_key:
+            label = provider_access.provider_label(params.provider)
+            model_id = constants.provider_model_id_for_option(params.model_option)
+            if not params.provider or not params.provider_api_key or not model_id:
+                self._fail("Select a tested Anthropic or OpenAI model before generating.")
                 return
-            self._status("Using your OpenRouter key...")
+            self._status(f"Verifying your {label} key and {model_id} access…")
+            try:
+                provider_access.validate_selected_model(
+                    params.provider, params.provider_api_key, model_id)
+            except provider_access.ProviderAccessError as exc:
+                self._fail(str(exc))
+                return
+            self._status(f"{label} access verified. Starting with your key…")
         else:
             self._status("Estimating Nova3D Credits...")
             estimate = self._client.estimate(params.workflow_name, tier)
@@ -238,6 +256,8 @@ class GenerationJob(threading.Thread):
         conversation = self._client.create_conversation(
             history.conversation_title(params.prompt))
         self._conversation_id = conversation.get("id") or conversation.get("conversation_id")
+        if self._conversation_id:
+            self._emit("conversation", self._conversation_id)
 
         # 4. Start the workflow (linked to the conversation).
         workflow_id = f"state-{self._now_us}"
@@ -270,7 +290,8 @@ class GenerationJob(threading.Thread):
                 model_option=params.model_option, output_root=params.output_root,
                 now_us=self._now_us, required=required,
                 billing_mode=params.billing_mode,
-                workflow_name=params.workflow_name))
+                workflow_name=params.workflow_name,
+                provider=params.provider))
         except OSError:
             pass  # a disk hiccup must not abort an already-running generation
 
@@ -284,6 +305,8 @@ class GenerationJob(threading.Thread):
             return
         self._status("Resuming a previous generation...")
         self._emit("workflow", self._workflow_id)
+        if self._conversation_id:
+            self._emit("conversation", self._conversation_id)
         self._complete()
 
     # ── shared tail: poll → result → save → import → history → uv ────────────
@@ -301,11 +324,9 @@ class GenerationJob(threading.Thread):
             return
         if parsed.failed or not parsed.glb_url:
             message = parsed.error_message or "Generation failed."
-            if (params.uses_openrouter and
-                    parsed.error_category == "insufficient_credits"):
-                message = ("Your OpenRouter account or API key does not have "
-                           "enough funds to continue. Add OpenRouter credits "
-                           "and retry.")
+            if params.uses_provider_key:
+                message = _provider_failure_message(
+                    parsed, params.provider, fallback=message)
             self._fail(message)
             return
 
@@ -352,7 +373,8 @@ class GenerationJob(threading.Thread):
             conversation_id=self._conversation_id,
             message_id=remote_message_id or message_id, parsed=parsed,
             files=dict(project.files), workflow_name=params.workflow_name,
-            billing_mode=params.billing_mode, code_llm_tier=params.code_llm_tier,
+            billing_mode=params.billing_mode, provider=params.provider,
+            code_llm_tier=params.code_llm_tier,
         )
         project.write_meta(meta)
 
@@ -367,7 +389,8 @@ class GenerationJob(threading.Thread):
             "model_label": model_label,
             "workflow_id": workflow_id,
             "conversation_id": self._conversation_id,
-            "warning_message": _validation_warning(parsed, params.uses_openrouter),
+            "warning_message": _validation_warning(
+                parsed, params.provider if params.uses_provider_key else None),
         })
 
         # The model is saved, imported, and in the user's history — the tracked
@@ -409,12 +432,19 @@ class GenerationJob(threading.Thread):
             "code_llm_profile": constants.CODE_LLM_PROFILE,
             "code_llm_tier": tier,
         }
-        if params.uses_openrouter:
-            payload["code_llm_provider"] = constants.OPENROUTER_PROVIDER
-            payload["code_llm_api_key"] = params.openrouter_api_key
+        if params.uses_provider_key:
+            payload["code_llm_provider"] = params.provider
+            payload["code_llm_api_key"] = params.provider_api_key
         if params.has_image:
             payload["has_reference_images"] = True
             payload["image_artifact"] = params.image_data_urls
+            if params.uses_provider_key:
+                # sketch_to_3d_byok_v2's default caption route is Gemini through
+                # OpenRouter. A direct Anthropic/OpenAI key cannot call it, so
+                # caption with the same selected vision-capable model instead.
+                payload["caption_llm_profile"] = constants.CODE_LLM_PROFILE
+                payload["caption_llm_tier"] = tier
+                payload["caption_llm_provider"] = params.provider
         return payload
 
     def _poll_status(self):
@@ -481,7 +511,7 @@ class GenerationJob(threading.Thread):
             if api_client.is_terminal(status):
                 state, _node = api_client.status_snapshot(status)
                 if state == "budget_exhausted":
-                    if self._params.uses_openrouter:
+                    if self._params.uses_provider_key:
                         self._fail("The workflow execution budget was exhausted "
                                    "before the model completed.")
                     else:
@@ -537,14 +567,37 @@ def _int(value):
         return None
 
 
-def _validation_warning(parsed, uses_openrouter):
+def _provider_failure_message(parsed, provider, *, fallback):
+    """Make ownership of a provider-account failure unambiguous."""
+    label = provider_access.provider_label(provider)
+    category = getattr(parsed, "error_category", None)
+    if category == "invalid_api_key":
+        return (f"{label} rejected your API key during generation. Update and "
+                "test the key; this was not a Nova3D credit charge.")
+    if category == "insufficient_credits":
+        return (f"{label} stopped the generation because the provider account "
+                f"could not spend. Add at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}, "
+                "check spend limits, and retry.")
+    if category == "model_access_denied":
+        return (f"{label} says the selected model is not enabled for this key. "
+                "Open the provider setup, enable access, and test again.")
+    if category == "quota_or_rate_limit":
+        return (f"{label} stopped the request at its quota or rate limit. Check "
+                "that provider account and retry later.")
+    if category == "provider_unavailable":
+        return f"{label} was temporarily unavailable. Your Nova3D setup is intact; retry shortly."
+    return fallback
+
+
+def _validation_warning(parsed, provider):
     """Explain a skipped final review without discarding an already-valid GLB."""
     category = getattr(parsed, "validation_error_category", None)
     if not category:
         return None
-    if uses_openrouter and category == "insufficient_credits":
+    if provider and category == "insufficient_credits":
+        label = provider_access.provider_label(provider)
         return ("Model generated, but final visual review was skipped because "
-                "your OpenRouter account or API key ran out of funds.")
+                f"your {label} account could not spend any more.")
     return "Model generated, but final visual review could not be completed."
 
 
@@ -564,12 +617,12 @@ def _aborted_message(workflow_id):
 
 
 def _lost_connection_message(workflow_id):
-    return ("Lost connection to Nova3D. Your model may still be generating — it "
-            "will resume automatically next time, or use the Resume button. "
+    return ("Lost connection to Nova3D, but the backend run keeps going and "
+            "remains visible in the Nova3D app. Use Resume to reattach in Blender. "
             f"(Workflow {workflow_id})")
 
 
 def _timeout_message(workflow_id):
-    return ("Generation is taking longer than expected. It may still finish — it "
-            "will resume next time, or use the Resume button. "
+    return ("Generation is taking longer than expected. The backend run keeps "
+            "going and remains visible in the Nova3D app; use Resume to reattach. "
             f"(Workflow {workflow_id})")

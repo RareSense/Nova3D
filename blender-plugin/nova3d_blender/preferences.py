@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: MIT
-"""Add-on preferences: credentials, base URLs, and the output folder.
+"""Add-on preferences: credentials, provider access, and local storage.
 
 The API key is the user's Nova3D key (``n3d_...``) created on the web at
 ``<web>/api-key``. It is stored in Blender's user preferences (not in the
-.blend), so it never travels inside a shared scene file. The optional OpenRouter
-key is stored the same way. Neither key is logged; the OpenRouter key is sent
-only in BYOK workflow payloads selected by the user.
+.blend), so it never travels inside a shared scene file. Direct Anthropic and
+OpenAI keys are stored the same way. Provider keys are never written to .blend
+files, pending-run records, project metadata, history, or logs. When selected,
+the key is sent to Nova3D's BYOK workflow so the hosted toolkit can call that
+provider on the user's behalf.
 """
 
 import bpy
@@ -21,6 +23,40 @@ from . import constants
 # (Using `__package__.partition('.')[0]` would wrongly yield "bl_ext" as an
 # extension and the preferences/API key would never be found.)
 ADDON_ID = __package__
+
+
+def _normalise_model_selection(context):
+    try:
+        from . import properties
+        properties.ensure_valid_model_selection(context)
+    except Exception:
+        pass
+
+
+def _invalidate_provider(prefs, context, provider):
+    if provider == constants.PROVIDER_ANTHROPIC:
+        prefs.anthropic_validation_fingerprint = ""
+        prefs.anthropic_available_models = ""
+        prefs.anthropic_validation_message = ""
+        prefs.anthropic_funding_confirmed = False
+    else:
+        prefs.openai_validation_fingerprint = ""
+        prefs.openai_available_models = ""
+        prefs.openai_validation_message = ""
+        prefs.openai_funding_confirmed = False
+    _normalise_model_selection(context)
+
+
+def _anthropic_key_changed(prefs, context):
+    _invalidate_provider(prefs, context, constants.PROVIDER_ANTHROPIC)
+
+
+def _openai_key_changed(prefs, context):
+    _invalidate_provider(prefs, context, constants.PROVIDER_OPENAI)
+
+
+def _funding_confirmation_changed(_prefs, context):
+    _normalise_model_selection(context)
 
 
 def online_access_ok():
@@ -43,14 +79,42 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         default="",
         subtype="PASSWORD",
     )
-    openrouter_api_key: bpy.props.StringProperty(
-        name="OpenRouter API Key",
-        description="Optional OpenRouter key used only when OpenRouter BYOK is "
-                    "selected in the Nova3D panel",
+    anthropic_api_key: bpy.props.StringProperty(
+        name="Anthropic API Key",
+        description="Used only for Claude Fable 5 provider-key generations",
         default="",
         maxlen=512,
         subtype="PASSWORD",
+        update=_anthropic_key_changed,
     )
+    openai_api_key: bpy.props.StringProperty(
+        name="OpenAI API Key",
+        description="Used only for GPT-5.6 Sol and GPT-5.5 provider-key generations",
+        default="",
+        maxlen=512,
+        subtype="PASSWORD",
+        update=_openai_key_changed,
+    )
+    anthropic_funding_confirmed: bpy.props.BoolProperty(
+        name=f"I added at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}",
+        description="Confirmation only; Anthropic does not expose the balance to ordinary API keys",
+        default=False,
+        update=_funding_confirmation_changed,
+    )
+    openai_funding_confirmed: bpy.props.BoolProperty(
+        name=f"I added at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD} and enabled the models",
+        description="Confirmation only; OpenAI does not expose the balance to ordinary project API keys",
+        default=False,
+        update=_funding_confirmation_changed,
+    )
+    # Hidden validation state. The fingerprint makes a result immediately stale
+    # when the stored key changes without persisting the secret twice.
+    anthropic_validation_fingerprint: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    anthropic_available_models: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    anthropic_validation_message: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    openai_validation_fingerprint: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    openai_available_models: bpy.props.StringProperty(default="", options={"HIDDEN"})
+    openai_validation_message: bpy.props.StringProperty(default="", options={"HIDDEN"})
     # How the credential was obtained ("sign_in" | "manual" | ""), and its expiry
     # if known. Hidden — used for messaging and sign-out, not user-edited.
     key_source: bpy.props.StringProperty(default="", options={"HIDDEN"})
@@ -99,11 +163,10 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         box.operator("nova3d.open_api_key", icon="URL", text="Create a key on the web")
 
         box = layout.box()
-        box.label(text="Optional OpenRouter BYOK", icon="KEY_HLT")
-        box.prop(self, "openrouter_api_key")
-        box.operator("nova3d.open_openrouter_keys", icon="URL",
-                     text="Create an OpenRouter key")
+        box.label(text="Provider API keys", icon="KEY_HLT")
+        box.label(text="Manage and test keys in View3D > Nova3D.")
         box.label(text="Stored in Blender preferences, never in .blend files.")
+        box.label(text="Sent only for provider-key generations.")
 
         box = layout.box()
         box.label(text="Storage", icon="FILE_FOLDER")

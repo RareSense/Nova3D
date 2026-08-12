@@ -3,8 +3,7 @@
 
 Sections, top to bottom:
   * Account gate — if no API key, prompt the user to create one.
-  * Nova3D Credits — current balance, refresh, and purchase link.
-  * Optional OpenRouter BYOK selection and key field.
+  * One generation-access card for Nova3D Credits or verified provider keys.
   * Prompt + model + reference images.
   * Generate / Cancel + live status.
   * Last generation — open the project folder.
@@ -14,6 +13,7 @@ import bpy
 
 from .. import constants
 from ..preferences import get_prefs, online_access_ok
+from ..services import provider_access
 
 
 class NOVA3D_UL_images(bpy.types.UIList):
@@ -89,38 +89,33 @@ class NOVA3D_PT_main(bpy.types.Panel):
             rbox.label(
                 text=f"{pending} generation(s) waiting to finish",
                 icon="RECOVER_LAST")
-            rbox.operator("nova3d.resume",
-                          text=f"Resume {pending} pending", icon="PLAY")
+            rbox.label(text="The backend keeps running if Blender disconnects.")
+            row = rbox.row(align=True)
+            row.operator("nova3d.resume",
+                         text=f"Resume {pending}", icon="PLAY")
+            row.operator("nova3d.open_web_run", text="Open App", icon="URL")
 
-        # ── Nova3D Credits / OpenRouter BYOK ─────────────────────────────────
-        box = layout.box()
-        row = box.row(align=True)
-        credits = wm.nova3d_credits
-        credits_text = ("Nova3D Credits: —" if credits < 0
-                        else f"Nova3D Credits: {credits}")
-        row.label(text=credits_text, icon="FUND")
-        sub = row.row(align=True)
-        sub.enabled = not wm.nova3d_credits_busy
-        sub.operator("nova3d.refresh_credits", text="", icon="FILE_REFRESH")
-        box.operator("nova3d.buy_credits", icon="URL")
-
-        byok = layout.box()
-        byok.enabled = not running
-        byok.label(text="Or use your OpenRouter key", icon="KEY_HLT")
-        byok.prop(scene, "nova3d_use_openrouter", text="Use OpenRouter instead")
-        if scene.nova3d_use_openrouter:
-            byok.prop(prefs, "openrouter_api_key", text="Key")
-            byok.operator("nova3d.open_openrouter_keys", icon="URL",
-                          text="Create an OpenRouter key")
-            if prefs.openrouter_api_key.strip():
-                byok.label(text="OpenRouter bills your account directly.",
-                           icon="CHECKMARK")
-                byok.label(text="No Nova3D Credits are used.")
-            else:
-                warning = byok.row()
-                warning.alert = True
-                warning.label(text="Enter an OpenRouter key to use this option.",
-                              icon="ERROR")
+        # ── Generation access + model ────────────────────────────────────────
+        access = layout.box()
+        access.enabled = not running
+        access.label(text="Generation access", icon="SETTINGS")
+        access.prop(scene, "nova3d_access_mode", expand=True)
+        if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
+            _draw_provider_access(access, context, prefs, wm)
+        else:
+            _draw_credit_access(access, wm)
+        access.separator()
+        access.prop(scene, "nova3d_model", text="Model")
+        selected = constants.model_option_by_id(
+            scene.nova3d_model, access_mode=scene.nova3d_access_mode)
+        if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
+            provider = constants.provider_for_option(selected)
+            if provider:
+                access.label(
+                    text=f"Billed by {provider_access.provider_label(provider)} · 0 Nova3D Credits",
+                    icon="CHECKMARK")
+        else:
+            access.label(text=f"Estimated: {selected[3]} Nova3D Credits")
 
         # ── Inputs ───────────────────────────────────────────────────────────
         col = layout.column()
@@ -128,12 +123,6 @@ class NOVA3D_PT_main(bpy.types.Panel):
         col.label(text="Prompt")
         col.prop(scene, "nova3d_prompt", text="")
         _draw_word_counter(col, scene.nova3d_prompt)
-        col.prop(scene, "nova3d_model", text="Model")
-        selected = constants.model_option_by_id(scene.nova3d_model)
-        if scene.nova3d_use_openrouter:
-            col.label(text="Cost: your OpenRouter usage; 0 Nova3D Credits")
-        else:
-            col.label(text=f"Cost: {selected[3]} Nova3D Credits")
 
         # Reference images (optional, up to 3).
         img_box = layout.box()
@@ -153,21 +142,31 @@ class NOVA3D_PT_main(bpy.types.Panel):
         # ── Generate / Cancel ────────────────────────────────────────────────
         layout.separator()
         if running:
-            layout.operator("nova3d.cancel", text="Cancel", icon="CANCEL")
+            layout.operator("nova3d.cancel", text="Stop waiting in Blender",
+                            icon="CANCEL")
+            layout.label(text="The backend run continues and stays in the app.")
         else:
             row = layout.row()
             row.scale_y = 1.5
+            if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
+                row.enabled = bool(constants.provider_for_option(selected))
             row.operator("nova3d.generate", text="Generate", icon="MESH_MONKEY")
 
         # ── Status ───────────────────────────────────────────────────────────
         if wm.nova3d_status:
             sbox = layout.box()
-            icon = "SORTTIME" if running else "CHECKMARK"
+            status_lower = wm.nova3d_status.lower()
+            is_error = any(word in status_lower for word in (
+                "failed", "rejected", "lost connection", "could not", "not enabled"))
+            icon = "SORTTIME" if running else ("ERROR" if is_error else "CHECKMARK")
             sbox.label(text=wm.nova3d_status, icon=icon)
             if wm.nova3d_workflow_id:
                 row = sbox.row(align=True)
                 row.label(text=f"Workflow: {wm.nova3d_workflow_id}", icon="FILE_TEXT")
                 row.operator("nova3d.copy_workflow_id", text="", icon="COPYDOWN")
+            if wm.nova3d_conversation_id or wm.nova3d_workflow_id:
+                sbox.operator("nova3d.open_web_run", text="Open run in Nova3D App",
+                              icon="URL")
 
         # ── Last generation ──────────────────────────────────────────────────
         if wm.nova3d_last_dir:
@@ -196,6 +195,98 @@ def _draw_update_banner(layout, wm):
     box.label(text=f"Update available: v{wm.nova3d_latest_version}", icon="IMPORT")
     url = wm.nova3d_release_url or constants.RELEASES_PAGE_URL
     box.operator("wm.url_open", text="Download update", icon="URL").url = url
+
+
+def _draw_credit_access(box, wm):
+    row = box.row(align=True)
+    credits = wm.nova3d_credits
+    credits_text = ("Balance: —" if credits < 0 else f"Balance: {credits} credits")
+    row.label(text=credits_text, icon="FUND")
+    refresh = row.row(align=True)
+    refresh.enabled = not wm.nova3d_credits_busy
+    refresh.operator("nova3d.refresh_credits", text="", icon="FILE_REFRESH")
+    box.operator("nova3d.buy_credits", text="Buy Nova3D Credits", icon="URL")
+
+
+def _draw_provider_access(box, context, prefs, wm):
+    box.label(text="Use your Anthropic or OpenAI account directly.", icon="KEY_HLT")
+    box.label(text="The selected key is sent only to Nova3D's hosted workflow.")
+    box.label(text="A tiny provider-billed access test runs now and before each generation.")
+    _draw_provider_card(box, context, prefs, wm, constants.PROVIDER_ANTHROPIC)
+    _draw_provider_card(box, context, prefs, wm, constants.PROVIDER_OPENAI)
+    if not provider_access.available_provider_options(prefs):
+        warning = box.row()
+        warning.alert = True
+        warning.label(text="Fund and test a key to unlock its models.", icon="INFO")
+
+
+def _draw_provider_card(parent, context, prefs, wm, provider):
+    label = provider_access.provider_label(provider)
+    key_attr = ("anthropic_api_key" if provider == constants.PROVIDER_ANTHROPIC
+                else "openai_api_key")
+    funding_attr = ("anthropic_funding_confirmed"
+                    if provider == constants.PROVIDER_ANTHROPIC
+                    else "openai_funding_confirmed")
+    message_attr = ("anthropic_validation_message"
+                    if provider == constants.PROVIDER_ANTHROPIC
+                    else "openai_validation_message")
+    key = provider_access.provider_key(prefs, provider)
+    current = provider_access.validation_is_current(prefs, provider)
+    busy = wm.nova3d_provider_test_busy and wm.nova3d_provider_test_name == provider
+
+    card = parent.box()
+    header = card.row(align=True)
+    header.label(text=label, icon="CHECKMARK" if current else "KEY_HLT")
+    if key:
+        clear = header.operator("nova3d.clear_provider_key", text="", icon="X")
+        clear.provider = provider
+    card.prop(prefs, key_attr, text="API key")
+
+    links = card.row(align=True)
+    create = links.operator("nova3d.open_provider_page", text="Create key", icon="URL")
+    create.destination = "anthropic_keys" if provider == constants.PROVIDER_ANTHROPIC else "openai_keys"
+    fund = links.operator(
+        "nova3d.open_provider_page",
+        text=f"Add ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}+", icon="FUND")
+    fund.destination = ("anthropic_billing" if provider == constants.PROVIDER_ANTHROPIC
+                        else "openai_billing")
+    if provider == constants.PROVIDER_OPENAI:
+        models = card.operator("nova3d.open_provider_page",
+                               text="Enable GPT-5.6 Sol & GPT-5.5", icon="SETTINGS")
+        models.destination = "openai_models"
+    else:
+        card.label(text="Fable 5 requires 30-day workspace data retention.",
+                   icon="INFO")
+
+    card.prop(prefs, funding_attr)
+    card.label(text="Balance cannot be read from a normal provider API key.", icon="INFO")
+    test = card.row()
+    test.enabled = bool(key and getattr(prefs, funding_attr) and
+                        not wm.nova3d_provider_test_busy)
+    op = test.operator("nova3d.test_provider_key",
+                       text=(f"Testing {label}…" if busy else "Test key & model access"),
+                       icon="FILE_REFRESH" if busy else "CHECKMARK")
+    op.provider = provider
+
+    message = getattr(prefs, message_attr, "")
+    if message:
+        _draw_wrapped(card, message, icon="CHECKMARK" if current else "ERROR")
+
+
+def _draw_wrapped(layout, message, *, icon="NONE", width=52):
+    words = str(message or "").split()
+    lines = []
+    current = []
+    for word in words:
+        if current and len(" ".join(current + [word])) > width:
+            lines.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(" ".join(current))
+    for index, line in enumerate(lines):
+        layout.label(text=line, icon=icon if index == 0 else "NONE")
 
 
 def _draw_word_counter(layout, prompt):

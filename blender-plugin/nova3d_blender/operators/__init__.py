@@ -1,17 +1,20 @@
 # SPDX-License-Identifier: MIT
 """Blender operators: account/billing actions, image management, generation."""
 
-from . import account, images, generate, auth, updates
+from . import account, images, generate, auth, provider_keys, updates
 
 # Registration order does not matter for these classes; listed for the central
 # register() in the add-on's __init__.
 classes = (
     account.NOVA3D_OT_open_api_key,
-    account.NOVA3D_OT_open_openrouter_keys,
     account.NOVA3D_OT_buy_credits,
     account.NOVA3D_OT_refresh_credits,
     account.NOVA3D_OT_open_output_folder,
+    account.NOVA3D_OT_open_web_run,
     account.NOVA3D_OT_copy_workflow_id,
+    provider_keys.NOVA3D_OT_test_provider_key,
+    provider_keys.NOVA3D_OT_clear_provider_key,
+    provider_keys.NOVA3D_OT_open_provider_page,
     updates.NOVA3D_OT_check_updates,
     auth.NOVA3D_OT_sign_in,
     auth.NOVA3D_OT_enter_api_key,

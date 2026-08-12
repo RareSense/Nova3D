@@ -97,7 +97,7 @@ def build_meta(*, prompt, model_option, credits, workflow_id, conversation_id,
                message_id, parsed, files, uv_summary=None,
                workflow_name=constants.PAID_WORKFLOW_NAME,
                billing_mode=constants.BILLING_NOVA3D_CREDITS,
-               code_llm_tier=None):
+               provider=None, code_llm_tier=None):
     """Assemble the meta.json pointer record."""
     option_id, label, tier, display_credits, _badge = model_option
     return {
@@ -113,13 +113,12 @@ def build_meta(*, prompt, model_option, credits, workflow_id, conversation_id,
         },
         "credits": {
             "authorized": credits.get("authorized") if credits else None,
-            "estimated_display": (0 if billing_mode == constants.BILLING_OPENROUTER
+            "estimated_display": (0 if billing_mode != constants.BILLING_NOVA3D_CREDITS
                                   else display_credits),
         },
         "billing": {
             "mode": billing_mode,
-            "provider": (constants.OPENROUTER_PROVIDER
-                         if billing_mode == constants.BILLING_OPENROUTER else None),
+            "provider": provider,
         },
         "workflow": {
             "name": workflow_name,

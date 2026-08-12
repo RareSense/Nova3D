@@ -18,6 +18,7 @@ from .. import constants
 from ..api import client as api_client
 from ..api.errors import ApiError, ServiceUnavailableError
 from ..preferences import get_prefs, online_access_ok
+from ..services import pending
 
 
 def _open_url(url):
@@ -63,20 +64,6 @@ class NOVA3D_OT_buy_credits(bpy.types.Operator):
         return {"CANCELLED"}
 
 
-class NOVA3D_OT_open_openrouter_keys(bpy.types.Operator):
-    bl_idname = "nova3d.open_openrouter_keys"
-    bl_label = "Create an OpenRouter Key"
-    bl_description = "Open OpenRouter's API-key page in your browser"
-
-    def execute(self, context):
-        if _open_url(constants.OPENROUTER_KEYS_URL):
-            self.report({"INFO"}, "Opened the OpenRouter API-key page.")
-            return {"FINISHED"}
-        self.report({"ERROR"}, "Could not open a browser. Visit "
-                               f"{constants.OPENROUTER_KEYS_URL} manually.")
-        return {"CANCELLED"}
-
-
 class NOVA3D_OT_open_output_folder(bpy.types.Operator):
     bl_idname = "nova3d.open_output_folder"
     bl_label = "Open Last Generation Folder"
@@ -90,6 +77,32 @@ class NOVA3D_OT_open_output_folder(bpy.types.Operator):
         if _open_url("file://" + last_dir):
             return {"FINISHED"}
         self.report({"ERROR"}, f"Could not open {last_dir}.")
+        return {"CANCELLED"}
+
+
+class NOVA3D_OT_open_web_run(bpy.types.Operator):
+    bl_idname = "nova3d.open_web_run"
+    bl_label = "Open in Nova3D App"
+    bl_description = ("Open this generation in the Nova3D app; backend runs "
+                      "continue there if Blender disconnects")
+
+    def execute(self, context):
+        prefs = get_prefs(context)
+        web = (prefs.web_base_url if prefs else
+               constants.DEFAULT_WEB_BASE_URL).rstrip("/")
+        conversation_id = (context.window_manager.nova3d_conversation_id or "").strip()
+        if not conversation_id and prefs is not None:
+            try:
+                records = pending.load_all(prefs.output_dir)
+                if records:
+                    conversation_id = str(records[-1].get("conversation_id") or "").strip()
+            except Exception:
+                pass
+        url = (f"{web}{constants.WEB_CHAT_PATH}/{conversation_id}"
+               if conversation_id else web)
+        if _open_url(url):
+            return {"FINISHED"}
+        self.report({"ERROR"}, f"Could not open a browser. Visit {url} manually.")
         return {"CANCELLED"}
 
 

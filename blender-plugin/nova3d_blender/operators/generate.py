@@ -19,9 +19,11 @@ import queue
 import bpy
 
 from .. import constants
+from .. import properties
 from ..preferences import get_prefs, online_access_ok
 from ..services import images as image_service
 from ..services import pending
+from ..services import provider_access
 from ..services.generation import GenerationJob, GenerationParams
 from ..scene_io import importer
 
@@ -74,6 +76,7 @@ class _JobModalMixin:
         wm = context.window_manager
         wm.nova3d_status = "Starting..."
         wm.nova3d_workflow_id = ""
+        wm.nova3d_conversation_id = ""
         self._job.start()
 
     def modal(self, context, event):
@@ -103,11 +106,17 @@ class _JobModalMixin:
         elif kind == "workflow":
             wm.nova3d_workflow_id = payload or ""
             _tag_redraw(context)
+        elif kind == "conversation":
+            wm.nova3d_conversation_id = payload or ""
+            _tag_redraw(context)
         elif kind == "done":
             self._import_asset(context, payload)
-        elif kind in ("error", "finished"):
+        elif kind in ("error", "detached", "finished"):
             if kind == "error":
                 self.report({"ERROR"}, payload)
+                wm.nova3d_status = payload
+            elif kind == "detached":
+                self.report({"WARNING"}, payload)
                 wm.nova3d_status = payload
             elif not wm.nova3d_status or wm.nova3d_status.endswith("..."):
                 wm.nova3d_status = "Done."
@@ -172,8 +181,8 @@ class _JobModalMixin:
 class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
     bl_idname = "nova3d.generate"
     bl_label = "Generate"
-    bl_description = ("Generate a 3D model using Nova3D Credits or your "
-                      "OpenRouter key")
+    bl_description = ("Generate a 3D model using Nova3D Credits or a verified "
+                      "Anthropic/OpenAI key")
 
     def invoke(self, context, event):
         if is_generating():
@@ -201,21 +210,24 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
                         f"Prompt must be {constants.MAX_PROMPT_WORDS} words or fewer.")
             return {"CANCELLED"}
 
-        model_option = constants.model_option_by_id(scene.nova3d_model)
-        use_openrouter = bool(scene.nova3d_use_openrouter)
-        openrouter_key = (prefs.openrouter_api_key or "").strip()
-        if use_openrouter and not openrouter_key:
-            self.report({"ERROR"}, "Enter an OpenRouter key or turn off "
-                                   "'Use OpenRouter instead'.")
+        access_mode = scene.nova3d_access_mode
+        available = properties.available_model_options(context, access_mode)
+        model_option = next(
+            (option for option in available if option[0] == scene.nova3d_model),
+            None,
+        )
+        if model_option is None:
+            self.report({"ERROR"},
+                        "Add funds and test an Anthropic or OpenAI key to unlock its models.")
             return {"CANCELLED"}
-        if use_openrouter and not openrouter_key.startswith("sk-or-"):
-            self.report({"ERROR"}, "This does not look like an OpenRouter key. "
-                                   "OpenRouter keys start with 'sk-or-'.")
-            return {"CANCELLED"}
-        if use_openrouter and not constants.openrouter_tier_for_option(model_option):
-            self.report({"ERROR"}, "The selected model is not available through "
-                                   "OpenRouter. Choose another model.")
-            return {"CANCELLED"}
+
+        provider = constants.provider_for_option(model_option)
+        provider_key = ""
+        if access_mode == constants.BILLING_PROVIDER_KEY:
+            if not provider or not provider_access.validation_is_current(prefs, provider):
+                self.report({"ERROR"}, "Test the selected provider key and model access first.")
+                return {"CANCELLED"}
+            provider_key = provider_access.provider_key(prefs, provider)
 
         # Encode reference images now, on the main thread (bpy is not thread-safe).
         data_urls = []
@@ -231,9 +243,9 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
             image_data_urls=data_urls,
             model_option=model_option,
             output_root=prefs.output_dir,
-            billing_mode=(constants.BILLING_OPENROUTER if use_openrouter
-                          else constants.BILLING_NOVA3D_CREDITS),
-            openrouter_api_key=openrouter_key if use_openrouter else "",
+            billing_mode=access_mode,
+            provider=provider,
+            provider_api_key=provider_key,
         )
         return self._start_jobs(context, [lambda q: GenerationJob(params, q)])
 
@@ -278,14 +290,15 @@ class NOVA3D_OT_resume(bpy.types.Operator, _JobModalMixin):
 
 class NOVA3D_OT_cancel(bpy.types.Operator):
     bl_idname = "nova3d.cancel"
-    bl_label = "Cancel Generation"
-    bl_description = "Stop the running generation"
+    bl_label = "Stop Waiting in Blender"
+    bl_description = ("Detach Blender from this run; the backend generation "
+                      "continues and remains available in the Nova3D app")
 
     def execute(self, context):
         if _active_job is not None:
             _active_job.cancel()
-            context.window_manager.nova3d_status = "Cancelling..."
-            self.report({"INFO"}, "Cancelling the current generation.")
+            context.window_manager.nova3d_status = "Stopping local wait…"
+            self.report({"INFO"}, "Stopping Blender's wait; the backend run continues.")
             return {"FINISHED"}
         self.report({"WARNING"}, "No generation is running.")
         return {"CANCELLED"}

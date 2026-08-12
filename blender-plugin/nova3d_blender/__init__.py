@@ -3,7 +3,8 @@
 
 This add-on drives the hosted Nova3D / GraphFlow backend (the same service the
 web app uses) to generate part-structured 3D assets from a text prompt and
-optional reference images. Generations use Nova3D Credits or OpenRouter, are
+optional reference images. Generations use Nova3D Credits or verified direct
+Anthropic/OpenAI API keys, are
 written to a per-generation project folder on disk, imported into the scene,
 and synced to the user's web chat history.
 
@@ -25,11 +26,11 @@ Package layout
 bl_info = {
     "name": "Nova3D — Code-native 3D Generation",
     "author": "RareSense (Nova3D)",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar (N) > Nova3D",
     "description": "Generate part-structured 3D assets from text prompts using "
-                   "the hosted Nova3D backend with Nova3D Credits or OpenRouter.",
+                   "Nova3D Credits or verified Anthropic/OpenAI keys.",
     "category": "3D View",
     "doc_url": "https://nova3d.xyz",
     "tracker_url": "https://github.com/RareSense/Nova3D/issues",

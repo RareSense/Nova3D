@@ -81,10 +81,11 @@ def count(output_root):
 def build_record(*, workflow_id, conversation_id, prompt, image_data_urls,
                  model_option, output_root, now_us, required,
                  billing_mode=constants.BILLING_NOVA3D_CREDITS,
-                 workflow_name=constants.PAID_WORKFLOW_NAME):
+                 workflow_name=constants.PAID_WORKFLOW_NAME,
+                 provider=None):
     """Assemble a resumable record without persisting any provider key."""
     return {
-        "schema": 2,
+        "schema": 3,
         "workflow_id": workflow_id,
         "conversation_id": conversation_id,
         "prompt": prompt,
@@ -94,5 +95,6 @@ def build_record(*, workflow_id, conversation_id, prompt, image_data_urls,
         "now_us": now_us,
         "required": required,
         "billing_mode": billing_mode,
+        "provider": provider,
         "workflow_name": workflow_name,
     }

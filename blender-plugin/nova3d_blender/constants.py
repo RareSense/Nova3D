@@ -24,7 +24,7 @@ SUBSCRIPTION_PATH = "/subscription"  # Nova3D Credits checkout
 # ── Add-on version + update check ────────────────────────────────────────────
 # Single source of truth for comparisons. KEEP IN SYNC with the version in
 # blender_manifest.toml and bl_info (__init__.py) when you cut a release.
-ADDON_VERSION = (1, 1, 0)
+ADDON_VERSION = (1, 2, 0)
 ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
 # Public GitHub releases — read-only, unauthenticated, used only to tell the
 # user when a newer build exists. Releases are tagged `blender-plugin-v<x.y.z>`.
@@ -52,10 +52,22 @@ BYOK_WORKFLOW_NAME = "sketch_to_3d_byok_v2"
 WORKFLOW_NAME = PAID_WORKFLOW_NAME
 CODE_LLM_PROFILE = "nova3d_code_generation"
 UV_WORKFLOW_NAME = "generate_uv_maps"
-OPENROUTER_PROVIDER = "openrouter"
-OPENROUTER_KEYS_URL = "https://openrouter.ai/settings/keys"
 BILLING_NOVA3D_CREDITS = "nova3d_credits"
-BILLING_OPENROUTER = "openrouter"
+BILLING_PROVIDER_KEY = "provider_key"
+
+# Direct-provider setup. Provider keys are created and funded on the provider's
+# own site; Nova3D has no balance API for ordinary user keys, so the add-on
+# links users to the authoritative pages and verifies real model access before
+# a workflow is started.
+PROVIDER_ANTHROPIC = "anthropic"
+PROVIDER_OPENAI = "openai"
+ANTHROPIC_KEYS_URL = "https://platform.claude.com/settings/keys"
+ANTHROPIC_BILLING_URL = "https://platform.claude.com/settings/billing"
+OPENAI_KEYS_URL = "https://platform.openai.com/api-keys"
+OPENAI_BILLING_URL = "https://platform.openai.com/settings/organization/billing"
+OPENAI_MODEL_ACCESS_URL = "https://platform.openai.com/settings/organization/limits"
+WEB_CHAT_PATH = "/chat"
+RECOMMENDED_PROVIDER_BALANCE_USD = 20
 
 # Terminal carriers the result endpoint may return for sketch_to_3d_v2.
 GENERATION_RETURN_NODES = (
@@ -103,48 +115,87 @@ LOST_CONNECTION_LIMIT = 60
 
 
 # ── Model options ────────────────────────────────────────────────────────────
-# (id, label, hosted code_llm_tier, Nova3D Credits, badge). The displayed credit
-# amount is only a hint; POST /credits/estimate remains authoritative at runtime.
-# Keep this list in the same order as GenerationModelOption.paidCreditOptions in
-# the app. BYOK uses the corresponding OpenRouter tier declared below.
-MODEL_OPTIONS = (
+# Every option keeps the legacy five-field shape used by history/project files:
+# (id, label, code_llm_tier, Nova3D Credits, badge). Provider and provider model
+# IDs live in maps below, keeping credentials/routing out of display strings.
+# The displayed hosted credit amount is only a hint; /credits/estimate remains
+# authoritative at runtime.
+HOSTED_MODEL_OPTIONS = (
     ("credits_claude_opus_5_openrouter", "Claude Opus 5",
      "claude_opus_5_anthropic", 40, ""),
     ("credits_claude_fable_5_anthropic", "Claude Fable 5",
      "claude_fable_5_anthropic", 60, "Recommended"),
     ("credits_gpt_5_6_sol_openrouter", "GPT-5.6 Sol",
      "gpt_5_6_sol_openrouter", 30, ""),
-    ("credits_kimi_k3_openrouter", "Kimi K3",
-     "kimi_k3_openrouter", 40, ""),
+    ("credits_gpt_5_5_openrouter", "GPT-5.5",
+     "gpt_5_5_openrouter", 28, ""),
 )
-DEFAULT_MODEL_OPTION_ID = "credits_claude_fable_5_anthropic"
 
-# Every model exposed by the plug-in is available through OpenRouter. Hosted
-# Opus and Fable use Anthropic directly, while BYOK intentionally maps them to
-# their OpenRouter tiers. Option IDs remain stable for saved .blend files.
-OPENROUTER_TIER_BY_OPTION_ID = {
-    "credits_claude_opus_5_openrouter": "claude_opus_5_openrouter",
-    "credits_claude_fable_5_anthropic": "claude_fable_5_openrouter",
-    "credits_gpt_5_6_sol_openrouter": "gpt_5_6_sol_openrouter",
-    "credits_kimi_k3_openrouter": "kimi_k3_openrouter",
+PROVIDER_MODEL_OPTIONS = (
+    ("byok_claude_fable_5_anthropic", "Claude Fable 5",
+     "claude_fable_5_anthropic", 0, "Anthropic"),
+    ("byok_gpt_5_6_sol_openai", "GPT-5.6 Sol",
+     "gpt_5_6_sol_openai", 0, "OpenAI"),
+    ("byok_gpt_5_5_openai", "GPT-5.5",
+     "gpt_5_5_openai", 0, "OpenAI"),
+)
+
+# Backward-compatible alias for code that imports the old hosted catalogue.
+MODEL_OPTIONS = HOSTED_MODEL_OPTIONS
+DEFAULT_MODEL_OPTION_ID = "credits_claude_fable_5_anthropic"
+DEFAULT_PROVIDER_OPTION_ID = "byok_claude_fable_5_anthropic"
+PROVIDER_SETUP_OPTION_ID = "provider_setup_required"
+
+PROVIDER_BY_OPTION_ID = {
+    "byok_claude_fable_5_anthropic": PROVIDER_ANTHROPIC,
+    "byok_gpt_5_6_sol_openai": PROVIDER_OPENAI,
+    "byok_gpt_5_5_openai": PROVIDER_OPENAI,
+}
+
+PROVIDER_MODEL_ID_BY_OPTION_ID = {
+    "byok_claude_fable_5_anthropic": "claude-fable-5",
+    "byok_gpt_5_6_sol_openai": "gpt-5.6-sol",
+    "byok_gpt_5_5_openai": "gpt-5.5",
 }
 
 
-def model_option_by_id(option_id):
+def model_option_by_id(option_id, *, access_mode=None):
     """Return the (id, label, tier, credits, badge) tuple for *option_id*."""
-    for option in MODEL_OPTIONS:
+    options = HOSTED_MODEL_OPTIONS + PROVIDER_MODEL_OPTIONS
+    for option in options:
         if option[0] == option_id:
             return option
-    for option in MODEL_OPTIONS:
-        if option[0] == DEFAULT_MODEL_OPTION_ID:
+    fallback_id = (DEFAULT_PROVIDER_OPTION_ID
+                   if access_mode == BILLING_PROVIDER_KEY
+                   else DEFAULT_MODEL_OPTION_ID)
+    for option in options:
+        if option[0] == fallback_id:
             return option
-    return MODEL_OPTIONS[0]
+    return options[0]
 
 
-def openrouter_tier_for_option(model_option):
-    """Return the OpenRouter tier matching a model-option tuple."""
+def provider_for_option(model_option):
+    """Return ``anthropic``/``openai`` for a provider-key option, else None."""
     option_id = model_option[0] if model_option else ""
-    return OPENROUTER_TIER_BY_OPTION_ID.get(option_id)
+    return PROVIDER_BY_OPTION_ID.get(option_id)
+
+
+def provider_model_id_for_option(model_option):
+    option_id = model_option[0] if model_option else ""
+    return PROVIDER_MODEL_ID_BY_OPTION_ID.get(option_id)
+
+
+def is_provider_option(model_option):
+    return provider_for_option(model_option) is not None
+
+
+def provider_options(provider=None):
+    if not provider:
+        return PROVIDER_MODEL_OPTIONS
+    return tuple(
+        option for option in PROVIDER_MODEL_OPTIONS
+        if provider_for_option(option) == provider
+    )
 
 
 # ── Human-readable progress labels, keyed by GraphFlow node id ───────────────
