@@ -159,6 +159,11 @@ class NOVA3D_PT_main(bpy.types.Panel):
             button_text = "Generate"
             if ready and not scene.nova3d_use_provider_key:
                 button_text = f"Generate · {wm.nova3d_required_credits} credits"
+            elif (not scene.nova3d_use_provider_key
+                  and (wm.nova3d_credits_busy
+                       or (exact_selected is not None
+                           and wm.nova3d_credit_estimate_model != exact_selected[0]))):
+                button_text = "Checking model price…"
             row.operator("nova3d.generate", text=button_text, icon="MESH_MONKEY")
             if not ready and access_message:
                 action = layout.box()

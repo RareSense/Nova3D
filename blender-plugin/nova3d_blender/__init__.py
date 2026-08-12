@@ -26,7 +26,7 @@ Package layout
 bl_info = {
     "name": "Nova3D — Code-native 3D Generation",
     "author": "RareSense (Nova3D)",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar (N) > Nova3D",
     "description": "Generate part-structured 3D assets from text prompts using "

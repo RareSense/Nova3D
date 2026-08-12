@@ -11,7 +11,7 @@ Claude Fable 5, or an OpenAI key for GPT-5.6 Sol and GPT-5.5.
 ## 1. Download the add-on
 
 Open the [**Releases page**](https://github.com/RareSense/Nova3D/releases) and,
-under the newest release's **Assets**, download **`nova3d_blender-1.3.0.zip`**.
+under the newest release's **Assets**, download **`nova3d_blender-1.3.1.zip`**.
 Leave it zipped — Blender installs the `.zip` as-is.
 
 ## 2. Install it in Blender
@@ -20,7 +20,7 @@ Leave it zipped — Blender installs the `.zip` as-is.
 2. In the window that opens, click **Get Extensions** in the left-hand list.
 3. At the **top-right**, click the small **▾ arrow** (next to the funnel icon) and
    choose **Install from Disk…**.
-4. Find your `nova3d_blender-1.3.0.zip`, click it, then click **Install from Disk**.
+4. Find your `nova3d_blender-1.3.1.zip`, click it, then click **Install from Disk**.
    It installs *and* switches on automatically. If asked, allow the *Network* and
    *Files* permissions.
 
@@ -108,7 +108,7 @@ model.glb   ·   code.py   ·   uvs/   ·   meta.json
 ```bash
 git clone https://github.com/RareSense/Nova3D.git
 cd Nova3D/blender-plugin
-bash build.sh            # creates dist/nova3d_blender-1.3.0.zip
+bash build.sh            # creates dist/nova3d_blender-1.3.1.zip
 ```
 
 Then install that zip via step 2 above.

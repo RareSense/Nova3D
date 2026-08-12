@@ -119,11 +119,19 @@ def _use_provider_key_changed(_scene, context):
 def _model_changed(_scene, context):
     scene = getattr(context, "scene", None)
     if scene is not None and not getattr(scene, "nova3d_use_provider_key", False):
+        # The previous model's quote must disappear synchronously. The refresh
+        # operator may still be busy, and keeping the old value would make the
+        # Generate label look like a static price for the newly selected model.
+        wm = getattr(context, "window_manager", None)
+        if wm is not None:
+            wm.nova3d_required_credits = -1
+            wm.nova3d_credit_estimate_model = ""
         _schedule_credit_refresh()
     _tag_redraw(context)
 
 
 _credit_refresh_scheduled = False
+_credit_refresh_retry_count = 0
 
 
 def _schedule_credit_refresh():
@@ -132,14 +140,26 @@ def _schedule_credit_refresh():
     Enum update callbacks can run in contexts where invoking an operator inline
     is unsafe. A one-shot timer moves the call back onto Blender's main loop.
     """
-    global _credit_refresh_scheduled
+    global _credit_refresh_scheduled, _credit_refresh_retry_count
     if _credit_refresh_scheduled:
         return
     _credit_refresh_scheduled = True
+    _credit_refresh_retry_count = 0
 
     def refresh():
-        global _credit_refresh_scheduled
+        global _credit_refresh_scheduled, _credit_refresh_retry_count
+        # A prior balance/quote request can still be completing when the user
+        # chooses another model. Wait for it rather than dropping this refresh.
+        wm = getattr(bpy.context, "window_manager", None)
+        if wm is not None and getattr(wm, "nova3d_credits_busy", False):
+            _credit_refresh_retry_count += 1
+            if _credit_refresh_retry_count < 200:  # ~20 seconds at 0.1s
+                return 0.1
+            _credit_refresh_scheduled = False
+            _credit_refresh_retry_count = 0
+            return None
         _credit_refresh_scheduled = False
+        _credit_refresh_retry_count = 0
         try:
             bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
         except Exception:

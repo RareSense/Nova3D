@@ -24,7 +24,7 @@ SUBSCRIPTION_PATH = "/subscription"  # Nova3D Credits checkout
 # ── Add-on version + update check ────────────────────────────────────────────
 # Single source of truth for comparisons. KEEP IN SYNC with the version in
 # blender_manifest.toml and bl_info (__init__.py) when you cut a release.
-ADDON_VERSION = (1, 3, 0)
+ADDON_VERSION = (1, 3, 1)
 ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
 # Public GitHub releases — unauthenticated. Startup performs a read-only check;
 # an explicit user-confirmed update downloads the matching release asset.
