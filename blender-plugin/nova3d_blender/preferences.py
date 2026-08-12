@@ -38,12 +38,10 @@ def _invalidate_provider(prefs, context, provider):
         prefs.anthropic_validation_fingerprint = ""
         prefs.anthropic_available_models = ""
         prefs.anthropic_validation_message = ""
-        prefs.anthropic_funding_confirmed = False
     else:
         prefs.openai_validation_fingerprint = ""
         prefs.openai_available_models = ""
         prefs.openai_validation_message = ""
-        prefs.openai_funding_confirmed = False
     _normalise_model_selection(context)
 
 
@@ -53,10 +51,6 @@ def _anthropic_key_changed(prefs, context):
 
 def _openai_key_changed(prefs, context):
     _invalidate_provider(prefs, context, constants.PROVIDER_OPENAI)
-
-
-def _funding_confirmation_changed(_prefs, context):
-    _normalise_model_selection(context)
 
 
 def online_access_ok():
@@ -94,18 +88,6 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
         maxlen=512,
         subtype="PASSWORD",
         update=_openai_key_changed,
-    )
-    anthropic_funding_confirmed: bpy.props.BoolProperty(
-        name=f"I added at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}",
-        description="Confirmation only; Anthropic does not expose the balance to ordinary API keys",
-        default=False,
-        update=_funding_confirmation_changed,
-    )
-    openai_funding_confirmed: bpy.props.BoolProperty(
-        name=f"I added at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD} and enabled the models",
-        description="Confirmation only; OpenAI does not expose the balance to ordinary project API keys",
-        default=False,
-        update=_funding_confirmation_changed,
     )
     # Hidden validation state. The fingerprint makes a result immediately stale
     # when the stored key changes without persisting the secret twice.
@@ -164,7 +146,7 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
 
         box = layout.box()
         box.label(text="Provider API keys", icon="KEY_HLT")
-        box.label(text="Manage and test keys in View3D > Nova3D.")
+        box.label(text="Connect or manage keys in View3D > Nova3D.")
         box.label(text="Stored in Blender preferences, never in .blend files.")
         box.label(text="Sent only for provider-key generations.")
 
@@ -186,8 +168,10 @@ class Nova3DPreferences(bpy.types.AddonPreferences):
             row.alert = True
             row.label(text=f"Update available: v{wm.nova3d_latest_version}",
                       icon="IMPORT")
-            box.operator("wm.url_open", text="Download update", icon="URL").url = (
-                wm.nova3d_release_url or constants.RELEASES_PAGE_URL)
+            update = box.row()
+            update.enabled = not wm.nova3d_updates_busy
+            update.operator("nova3d.install_update", text="Update Nova3D",
+                            icon="IMPORT")
         box.operator("nova3d.check_updates", icon="FILE_REFRESH")
 
 

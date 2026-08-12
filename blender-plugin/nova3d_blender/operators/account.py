@@ -5,8 +5,8 @@
 browser — the same account and Stripe checkout the web app uses; no credentials
 ever leave Blender for these.
 
-`Refresh Nova3D Credits` fetches the wallet balance on a worker thread so
-the UI never blocks, then writes the count into a WindowManager property.
+`Refresh Nova3D Credits` fetches the wallet balance and the authoritative
+authorization amount for the selected hosted model on a worker thread.
 """
 
 import queue
@@ -62,6 +62,28 @@ class NOVA3D_OT_buy_credits(bpy.types.Operator):
         self.report({"ERROR"}, "Could not open a browser. Visit "
                                f"{web + constants.SUBSCRIPTION_PATH} manually.")
         return {"CANCELLED"}
+
+
+class NOVA3D_OT_use_provider_key(bpy.types.Operator):
+    bl_idname = "nova3d.use_provider_key"
+    bl_label = "Use My API Key"
+    bl_description = "Switch this scene to an Anthropic or OpenAI API key"
+
+    def execute(self, context):
+        context.scene.nova3d_use_provider_key = True
+        _tag_redraw(context)
+        return {"FINISHED"}
+
+
+class NOVA3D_OT_use_credits(bpy.types.Operator):
+    bl_idname = "nova3d.use_credits"
+    bl_label = "Use Nova3D Credits"
+    bl_description = "Switch this scene back to your Nova3D credit balance"
+
+    def execute(self, context):
+        context.scene.nova3d_use_provider_key = False
+        _tag_redraw(context)
+        return {"FINISHED"}
 
 
 class NOVA3D_OT_open_output_folder(bpy.types.Operator):
@@ -144,16 +166,42 @@ class NOVA3D_OT_refresh_credits(bpy.types.Operator):
         if wm.nova3d_credits_busy:
             return {"CANCELLED"}
         wm.nova3d_credits_busy = True
+        wm.nova3d_credits = -1
+        wm.nova3d_required_credits = -1
+        wm.nova3d_credit_estimate_model = ""
 
         self._queue = queue.Queue()
         api_base = prefs.api_base_url
         api_key = prefs.api_key
+        key_fingerprint = _key_fingerprint(api_key)
+        scene = context.scene
+        model_option = None
+        if not getattr(scene, "nova3d_use_provider_key", False):
+            model_option = next(
+                (option for option in constants.HOSTED_MODEL_OPTIONS
+                 if option[0] == scene.nova3d_model),
+                None,
+            )
 
         def worker(q):
             try:
                 client = api_client.Nova3DClient(api_base, api_key)
                 balance = client.balance()
-                q.put(("ok", int(balance.get("available") or 0)))
+                available = _strict_nonnegative_int(balance.get("available"))
+                if available is None:
+                    raise ApiError("Nova3D returned an unreadable credit balance.")
+                required = None
+                model_id = ""
+                if model_option is not None:
+                    estimate = client.estimate(
+                        constants.PAID_WORKFLOW_NAME, model_option[2])
+                    required = _strict_nonnegative_int(
+                        estimate.get("authorized_budget"))
+                    if required is None:
+                        raise ApiError("Nova3D returned an unreadable model price.")
+                    model_id = model_option[0]
+                q.put(("ok", (available, required, model_id,
+                              api_base, key_fingerprint)))
             except ServiceUnavailableError as exc:
                 # Nova3D unreachable / 5xx — a health signal, not a key problem.
                 q.put(("down", str(exc)))
@@ -180,14 +228,42 @@ class NOVA3D_OT_refresh_credits(bpy.types.Operator):
 
         wm = context.window_manager
         if kind == "ok":
-            wm.nova3d_credits = payload
-            wm.nova3d_service_down = False
+            available, required, model_id, api_base, key_fingerprint = payload
+            prefs = get_prefs(context)
+            current_model = (context.scene.nova3d_model
+                             if not context.scene.nova3d_use_provider_key else "")
+            still_current = bool(
+                prefs
+                and prefs.api_base_url == api_base
+                and _key_fingerprint(prefs.api_key) == key_fingerprint
+                and current_model == model_id
+            )
+            if still_current:
+                wm.nova3d_credits = available
+                wm.nova3d_required_credits = required if required is not None else -1
+                wm.nova3d_credit_estimate_model = model_id
+                wm.nova3d_service_down = False
+            elif not context.scene.nova3d_use_provider_key:
+                # The model/account changed while the worker was running. Its
+                # quote must never enable Generate for a different selection.
+                self._finish(context)
+                try:
+                    bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
+                except Exception:
+                    pass
+                return {"FINISHED"}
         elif kind == "down":
             # Don't spam a toast — the panel shows a persistent "unreachable"
             # banner with a Retry button instead.
             wm.nova3d_service_down = True
+            wm.nova3d_credits = -1
+            wm.nova3d_required_credits = -1
+            wm.nova3d_credit_estimate_model = ""
         else:
             wm.nova3d_service_down = False
+            wm.nova3d_credits = -1
+            wm.nova3d_required_credits = -1
+            wm.nova3d_credit_estimate_model = ""
             self.report({"WARNING"}, f"Could not load Nova3D Credits: {payload}")
         self._finish(context)
         return {"FINISHED"}
@@ -208,3 +284,18 @@ def _tag_redraw(context):
     for area in getattr(context.screen, "areas", []) or []:
         if area.type == "VIEW_3D":
             area.tag_redraw()
+
+
+def _strict_nonnegative_int(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _key_fingerprint(value):
+    import hashlib
+    return hashlib.sha256((value or "").encode("utf-8")).hexdigest()[:16]

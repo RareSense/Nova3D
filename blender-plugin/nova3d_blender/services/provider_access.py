@@ -7,11 +7,10 @@ standard library. A check deliberately does two things:
 1. list models to confirm the key can see the exact Nova3D model; and
 2. make one tiny request to prove the provider will actually serve it now.
 
-The second step catches valid-but-unfunded keys, disabled model access, project
-spend limits, and Fable's workspace/data-retention requirements before Nova3D
-starts a multi-minute workflow. Ordinary API keys do not expose a trustworthy
-dollar balance, so the UI separately asks users to confirm they funded at least
-the recommended amount.
+The second step catches invalid keys, disabled model access, and many provider
+billing/spend-limit failures before Nova3D starts a multi-minute workflow.
+Ordinary API keys do not expose a trustworthy dollar balance, so the UI simply
+reminds users to keep enough provider balance for the run to finish.
 
 Provider keys are never logged or included in exceptions. They are fingerprinted
 only to invalidate a prior successful check when the stored key changes.
@@ -76,15 +75,9 @@ def provider_key(prefs, provider):
     return ""
 
 
-def funding_confirmed(prefs, provider):
-    attr = ("anthropic_funding_confirmed" if provider == constants.PROVIDER_ANTHROPIC
-            else "openai_funding_confirmed")
-    return bool(getattr(prefs, attr, False))
-
-
 def validation_is_current(prefs, provider):
     key = provider_key(prefs, provider)
-    if not key or not funding_confirmed(prefs, provider):
+    if not key:
         return False
     attr = ("anthropic_validation_fingerprint"
             if provider == constants.PROVIDER_ANTHROPIC
@@ -172,7 +165,7 @@ def _require_available(provider, requested, available):
     label = provider_label(provider)
     extra = (" Enable the model in your OpenAI project limits, then test again."
              if provider == constants.PROVIDER_OPENAI
-             else " Check that this workspace can use Claude Fable 5 and allows its required data retention.")
+             else " Check that this workspace can use Claude Fable 5.")
     raise ProviderAccessError(
         f"Your {label} key is valid, but it cannot access {names}.{extra}",
         provider=provider, category="model_access")
@@ -311,14 +304,14 @@ def _classified_error(provider, status, code, raw_message):
             "credit_balance", "insufficient_quota", "billing", "payment",
             "spend_limit", "usage_limit", "balance")):
         return ProviderAccessError(
-            f"{label} accepted the key but the account cannot spend right now. Add at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD} and check project/org spend limits, then test again.",
+            f"{label} could not start usage. Check your API balance and spending limits, then try again.",
             provider=provider, category="billing", status=status, code=code)
     if status in (403, 404) or any(term in combined for term in (
             "model_not_found", "permission", "not have access", "data retention",
             "workspace")):
         suffix = (" Enable the selected model in OpenAI project limits."
                   if provider == constants.PROVIDER_OPENAI
-                  else " Enable Claude Fable 5 access and its required workspace data retention.")
+                  else " Check Claude Fable 5 access for this workspace.")
         return ProviderAccessError(
             f"{label} accepted the key, but the selected model is not enabled.{suffix}",
             provider=provider, category="model_access", status=status, code=code)

@@ -210,15 +210,14 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
                         f"Prompt must be {constants.MAX_PROMPT_WORDS} words or fewer.")
             return {"CANCELLED"}
 
-        access_mode = scene.nova3d_access_mode
+        access_mode = properties.access_mode(scene)
         available = properties.available_model_options(context, access_mode)
         model_option = next(
             (option for option in available if option[0] == scene.nova3d_model),
             None,
         )
         if model_option is None:
-            self.report({"ERROR"},
-                        "Add funds and test an Anthropic or OpenAI key to unlock its models.")
+            self.report({"ERROR"}, "Connect a provider key, or use Nova3D Credits.")
             return {"CANCELLED"}
 
         provider = constants.provider_for_option(model_option)
@@ -228,6 +227,24 @@ class NOVA3D_OT_generate(bpy.types.Operator, _JobModalMixin):
                 self.report({"ERROR"}, "Test the selected provider key and model access first.")
                 return {"CANCELLED"}
             provider_key = provider_access.provider_key(prefs, provider)
+        else:
+            wm = context.window_manager
+            quote_matches = wm.nova3d_credit_estimate_model == model_option[0]
+            required = wm.nova3d_required_credits
+            balance = wm.nova3d_credits
+            if not quote_matches or required < 0 or balance < 0:
+                self.report({"ERROR"}, "Check your Nova3D credit balance first.")
+                try:
+                    bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
+                except Exception:
+                    pass
+                return {"CANCELLED"}
+            if balance < required:
+                self.report(
+                    {"ERROR"},
+                    f"This model needs {required} credits; you have {balance}. "
+                    "Buy credits or use your own API key.")
+                return {"CANCELLED"}
 
         # Encode reference images now, on the main thread (bpy is not thread-safe).
         data_urls = []

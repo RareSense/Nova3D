@@ -28,11 +28,6 @@ def _key_attr(provider):
             else "openai_api_key")
 
 
-def _funding_attr(provider):
-    return ("anthropic_funding_confirmed" if provider == constants.PROVIDER_ANTHROPIC
-            else "openai_funding_confirmed")
-
-
 def _validation_attrs(provider):
     if provider == constants.PROVIDER_ANTHROPIC:
         return ("anthropic_validation_fingerprint",
@@ -46,8 +41,8 @@ def _validation_attrs(provider):
 class NOVA3D_OT_test_provider_key(bpy.types.Operator):
     bl_idname = "nova3d.test_provider_key"
     bl_label = "Test API Key & Model Access"
-    bl_description = ("Verify the key, provider funding, and exact Nova3D model "
-                      "access before starting a generation")
+    bl_description = ("Connect this key and verify exact Nova3D model access "
+                      "before starting a generation")
 
     provider: bpy.props.EnumProperty(items=(
         (constants.PROVIDER_ANTHROPIC, "Anthropic", "Test Anthropic access"),
@@ -75,12 +70,6 @@ class NOVA3D_OT_test_provider_key(bpy.types.Operator):
         if not key:
             self.report({"ERROR"}, f"Enter your {label} API key first.")
             return {"CANCELLED"}
-        if not bool(getattr(prefs, _funding_attr(provider), False)):
-            self.report(
-                {"ERROR"},
-                f"Confirm that you added at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD} first.")
-            return {"CANCELLED"}
-
         wm = context.window_manager
         if wm.nova3d_provider_test_busy:
             self.report({"INFO"}, "A provider access test is already running.")

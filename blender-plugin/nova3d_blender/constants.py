@@ -24,14 +24,21 @@ SUBSCRIPTION_PATH = "/subscription"  # Nova3D Credits checkout
 # ── Add-on version + update check ────────────────────────────────────────────
 # Single source of truth for comparisons. KEEP IN SYNC with the version in
 # blender_manifest.toml and bl_info (__init__.py) when you cut a release.
-ADDON_VERSION = (1, 2, 0)
+ADDON_VERSION = (1, 3, 0)
 ADDON_VERSION_STR = ".".join(str(part) for part in ADDON_VERSION)
-# Public GitHub releases — read-only, unauthenticated, used only to tell the
-# user when a newer build exists. Releases are tagged `blender-plugin-v<x.y.z>`.
+# Public GitHub releases — unauthenticated. Startup performs a read-only check;
+# an explicit user-confirmed update downloads the matching release asset.
+# Releases are tagged `blender-plugin-v<x.y.z>`.
 GITHUB_RELEASES_API = "https://api.github.com/repos/RareSense/Nova3D/releases"
 RELEASES_PAGE_URL = "https://github.com/RareSense/Nova3D/releases"
 RELEASE_TAG_PREFIX = "blender-plugin-v"
 UPDATE_HTTP_TIMEOUT = 15.0
+ADDON_PACKAGE_ID = "nova3d_blender"
+UPDATE_ASSET_NAME_TEMPLATE = ADDON_PACKAGE_ID + "-{version}.zip"
+UPDATE_CACHE_DIRNAME = "nova3d-blender-update"
+UPDATE_DOWNLOAD_TIMEOUT = 180.0
+UPDATE_MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024
+UPDATE_MAX_UNCOMPRESSED_BYTES = 300 * 1024 * 1024
 
 # ── Browser ("Sign in with Google") auth ─────────────────────────────────────
 # Reuses the hosted MCP browser-login flow, so no backend changes are needed:
@@ -67,7 +74,6 @@ OPENAI_KEYS_URL = "https://platform.openai.com/api-keys"
 OPENAI_BILLING_URL = "https://platform.openai.com/settings/organization/billing"
 OPENAI_MODEL_ACCESS_URL = "https://platform.openai.com/settings/organization/limits"
 WEB_CHAT_PATH = "/chat"
-RECOMMENDED_PROVIDER_BALANCE_USD = 20
 
 # Terminal carriers the result endpoint may return for sketch_to_3d_v2.
 GENERATION_RETURN_NODES = (

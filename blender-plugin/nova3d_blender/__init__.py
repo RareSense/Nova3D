@@ -26,7 +26,7 @@ Package layout
 bl_info = {
     "name": "Nova3D — Code-native 3D Generation",
     "author": "RareSense (Nova3D)",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar (N) > Nova3D",
     "description": "Generate part-structured 3D assets from text prompts using "
@@ -59,7 +59,7 @@ def _deferred_startup():
         # so even signed-out users learn a newer build exists.
         if preferences.online_access_ok():
             try:
-                bpy.ops.nova3d.check_updates("INVOKE_DEFAULT")
+                bpy.ops.nova3d.check_updates("INVOKE_DEFAULT", silent=True)
             except Exception:
                 pass
         if not (prefs and prefs.api_key.strip() and preferences.online_access_ok()):

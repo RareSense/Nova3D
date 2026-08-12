@@ -98,6 +98,8 @@ class NOVA3D_OT_sign_in(bpy.types.Operator):
                 set_credential(prefs, payload["token"], source="sign_in",
                                expires_at=payload.get("expires_at"))
                 wm.nova3d_credits = -1  # force a fresh balance fetch
+                wm.nova3d_required_credits = -1
+                wm.nova3d_credit_estimate_model = ""
                 self.report({"INFO"}, "Signed in to Nova3D.")
         elif kind == "error":
             self.report({"ERROR"}, payload)
@@ -128,6 +130,8 @@ class NOVA3D_OT_sign_in(bpy.types.Operator):
             bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
         except Exception:
             context.window_manager.nova3d_credits = -1
+            context.window_manager.nova3d_required_credits = -1
+            context.window_manager.nova3d_credit_estimate_model = ""
 
     def cancel(self, context):
         if self._job is not None:
@@ -170,6 +174,8 @@ class NOVA3D_OT_enter_api_key(bpy.types.Operator):
             return {"CANCELLED"}
         set_credential(prefs, key, source="manual")
         context.window_manager.nova3d_credits = -1
+        context.window_manager.nova3d_required_credits = -1
+        context.window_manager.nova3d_credit_estimate_model = ""
         try:
             bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
         except Exception:
@@ -189,6 +195,8 @@ class NOVA3D_OT_sign_out(bpy.types.Operator):
         if prefs is not None:
             clear_credential(prefs)
         context.window_manager.nova3d_credits = -1
+        context.window_manager.nova3d_required_credits = -1
+        context.window_manager.nova3d_credit_estimate_model = ""
         context.window_manager.nova3d_status = ""
         self.report({"INFO"}, "Signed out.")
         _tag_redraw(context)

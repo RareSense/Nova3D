@@ -7,7 +7,7 @@
 schema_version = "1.0.0"
 
 id = "nova3d_blender"
-version = "1.2.0"
+version = "1.3.0"
 name = "Nova3D — Code-native 3D Generation"
 tagline = "Generate part-structured 3D assets from text prompts"
 maintainer = "RareSense (Nova3D)"
@@ -26,5 +26,5 @@ license = ["SPDX:MIT"]
 # Declared permissions are shown to the user at install time. We request exactly
 # what the add-on needs and nothing more.
 [permissions]
-network = "Generate 3D models via the hosted Nova3D API."
-files = "Save generated assets (GLB, code, UV maps) to your output folder."
+network = "Generate via Nova3D and check/download user-confirmed updates from GitHub."
+files = "Save generated assets and a verified update package to local storage."

@@ -23,8 +23,8 @@ class Nova3DReferenceImage(bpy.types.PropertyGroup):
 # inside the callback can otherwise leave dangling strings and crash the UI.
 _HOSTED_MODEL_ENUM_ITEMS = tuple(
     (option_id,
-     f"{label} — {credits} credits" + (f" · {badge}" if badge else ""),
-     f"Nova3D-hosted {label}; the live credit estimate is checked before generation",
+     label + (f" · {badge}" if badge else ""),
+     f"Nova3D-hosted {label}; the exact price is checked before generation",
      "FUND", index)
     for index, (option_id, label, _tier, credits, badge)
     in enumerate(constants.HOSTED_MODEL_OPTIONS, start=1)
@@ -43,16 +43,22 @@ _PROVIDER_MODEL_ENUM_ITEMS = {
 
 _PROVIDER_SETUP_ENUM_ITEM = (
     constants.PROVIDER_SETUP_OPTION_ID,
-    "Add and test a provider key below",
-    "Provider-key models appear after their key, funding, and access are verified",
+    "Connect a provider key above",
+    "Provider-key models appear after their key and model access are verified",
     "ERROR", 999,
 )
 
 
-def available_model_options(context, access_mode=None):
-    mode = access_mode or getattr(getattr(context, "scene", None),
-                                  "nova3d_access_mode",
-                                  constants.BILLING_NOVA3D_CREDITS)
+def access_mode(scene):
+    """Translate the simple UI checkbox into the workflow billing contract."""
+    return (constants.BILLING_PROVIDER_KEY
+            if bool(getattr(scene, "nova3d_use_provider_key", False))
+            else constants.BILLING_NOVA3D_CREDITS)
+
+
+def available_model_options(context, billing_mode=None):
+    scene = getattr(context, "scene", None)
+    mode = billing_mode or access_mode(scene)
     if mode != constants.BILLING_PROVIDER_KEY:
         return constants.HOSTED_MODEL_OPTIONS
     try:
@@ -63,8 +69,7 @@ def available_model_options(context, access_mode=None):
 
 
 def _model_enum_items(_self, context):
-    mode = getattr(getattr(context, "scene", None), "nova3d_access_mode",
-                   constants.BILLING_NOVA3D_CREDITS)
+    mode = access_mode(getattr(context, "scene", None))
     if mode != constants.BILLING_PROVIDER_KEY:
         return _HOSTED_MODEL_ENUM_ITEMS
     options = available_model_options(context, mode)
@@ -77,7 +82,7 @@ def ensure_valid_model_selection(context):
     scene = getattr(context, "scene", None)
     if scene is None or not hasattr(scene, "nova3d_model"):
         return
-    mode = getattr(scene, "nova3d_access_mode", constants.BILLING_NOVA3D_CREDITS)
+    mode = access_mode(scene)
     options = available_model_options(context, mode)
     valid_ids = {option[0] for option in options}
     current = getattr(scene, "nova3d_model", "")
@@ -93,19 +98,65 @@ def ensure_valid_model_selection(context):
         pass
 
 
-def _access_mode_changed(_scene, context):
+def _use_provider_key_changed(_scene, context):
     scene = getattr(context, "scene", None)
     if scene is None:
         return
-    if scene.nova3d_access_mode == constants.BILLING_NOVA3D_CREDITS:
-        desired = constants.DEFAULT_MODEL_OPTION_ID
-    else:
+    if scene.nova3d_use_provider_key:
         options = available_model_options(context, constants.BILLING_PROVIDER_KEY)
         desired = (options[0][0] if options else constants.PROVIDER_SETUP_OPTION_ID)
+    else:
+        desired = constants.DEFAULT_MODEL_OPTION_ID
     try:
         scene.nova3d_model = desired
     except Exception:
         pass
+    if not scene.nova3d_use_provider_key:
+        _schedule_credit_refresh()
+    _tag_redraw(context)
+
+
+def _model_changed(_scene, context):
+    scene = getattr(context, "scene", None)
+    if scene is not None and not getattr(scene, "nova3d_use_provider_key", False):
+        _schedule_credit_refresh()
+    _tag_redraw(context)
+
+
+_credit_refresh_scheduled = False
+
+
+def _schedule_credit_refresh():
+    """Refresh balance + authoritative model cost after a hosted-model change.
+
+    Enum update callbacks can run in contexts where invoking an operator inline
+    is unsafe. A one-shot timer moves the call back onto Blender's main loop.
+    """
+    global _credit_refresh_scheduled
+    if _credit_refresh_scheduled:
+        return
+    _credit_refresh_scheduled = True
+
+    def refresh():
+        global _credit_refresh_scheduled
+        _credit_refresh_scheduled = False
+        try:
+            bpy.ops.nova3d.refresh_credits("INVOKE_DEFAULT")
+        except Exception:
+            pass
+        return None
+
+    try:
+        bpy.app.timers.register(refresh, first_interval=0.05)
+    except Exception:
+        _credit_refresh_scheduled = False
+
+
+def _tag_redraw(context):
+    screen = getattr(context, "screen", None)
+    for area in getattr(screen, "areas", []) or []:
+        if area.type == "VIEW_3D":
+            area.tag_redraw()
 
 
 def register_properties():
@@ -117,17 +168,20 @@ def register_properties():
         description="Describe the 3D model to generate (max 40 words)",
         default="",
     )
-    scene.nova3d_access_mode = bpy.props.EnumProperty(
-        name="Generation access",
-        description="Use Nova3D Credits or a directly verified provider API key",
+    scene.nova3d_use_provider_key = bpy.props.BoolProperty(
+        name="Use my own API key",
+        description="Use a connected Anthropic or OpenAI key instead of Nova3D Credits",
+        default=False,
+        update=_use_provider_key_changed,
+    )
+    scene.nova3d_provider_setup = bpy.props.EnumProperty(
+        name="Provider",
+        description="Provider key to connect or manage",
         items=(
-            (constants.BILLING_NOVA3D_CREDITS, "Nova3D Credits",
-             "Nova3D handles provider access and billing", "FUND", 1),
-            (constants.BILLING_PROVIDER_KEY, "My API Key",
-             "Use a verified Anthropic or OpenAI API key", "KEY_HLT", 2),
+            (constants.PROVIDER_ANTHROPIC, "Anthropic", "Connect an Anthropic key"),
+            (constants.PROVIDER_OPENAI, "OpenAI", "Connect an OpenAI key"),
         ),
-        default=constants.BILLING_NOVA3D_CREDITS,
-        update=_access_mode_changed,
+        default=constants.PROVIDER_ANTHROPIC,
     )
     scene.nova3d_model = bpy.props.EnumProperty(
         name="Model",
@@ -136,6 +190,7 @@ def register_properties():
         # Dynamic EnumProperty callbacks require an integer default. Item 2 is
         # the hosted Claude Fable 5 recommendation.
         default=2,
+        update=_model_changed,
     )
     scene.nova3d_images = bpy.props.CollectionProperty(type=Nova3DReferenceImage)
     scene.nova3d_images_index = bpy.props.IntProperty(name="Image", default=0)
@@ -147,6 +202,8 @@ def register_properties():
     wm.nova3d_workflow_id = bpy.props.StringProperty(default="")
     wm.nova3d_credits = bpy.props.IntProperty(default=-1)  # -1 = unknown
     wm.nova3d_credits_busy = bpy.props.BoolProperty(default=False)
+    wm.nova3d_required_credits = bpy.props.IntProperty(default=-1)
+    wm.nova3d_credit_estimate_model = bpy.props.StringProperty(default="")
     wm.nova3d_last_dir = bpy.props.StringProperty(default="")
     wm.nova3d_pending = bpy.props.IntProperty(default=0)  # interrupted runs to resume
     wm.nova3d_conversation_id = bpy.props.StringProperty(default="")
@@ -163,7 +220,8 @@ def register_properties():
 
 def unregister_properties():
     scene = bpy.types.Scene
-    for attr in ("nova3d_prompt", "nova3d_model", "nova3d_access_mode",
+    for attr in ("nova3d_prompt", "nova3d_model", "nova3d_use_provider_key",
+                 "nova3d_provider_setup",
                  "nova3d_images", "nova3d_images_index"):
         if hasattr(scene, attr):
             delattr(scene, attr)
@@ -171,7 +229,8 @@ def unregister_properties():
     wm = bpy.types.WindowManager
     for attr in ("nova3d_running", "nova3d_signing_in", "nova3d_status",
                  "nova3d_workflow_id", "nova3d_credits",
-                 "nova3d_credits_busy", "nova3d_last_dir", "nova3d_pending",
+                 "nova3d_credits_busy", "nova3d_required_credits",
+                 "nova3d_credit_estimate_model", "nova3d_last_dir", "nova3d_pending",
                  "nova3d_conversation_id", "nova3d_provider_test_busy",
                  "nova3d_provider_test_name",
                  "nova3d_service_down", "nova3d_update_available",

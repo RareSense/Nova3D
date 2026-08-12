@@ -233,8 +233,11 @@ class GenerationJob(threading.Thread):
         else:
             self._status("Estimating Nova3D Credits...")
             estimate = self._client.estimate(params.workflow_name, tier)
-            required = int(estimate.get("authorized_budget")
-                           or estimate.get("projected_max_hold") or 0)
+            required = _int(estimate.get("authorized_budget"))
+            if required is None or required < 0:
+                self._fail("Could not confirm this model's Nova3D credit price. "
+                           "Refresh credits and try again.")
+                return
             balance = self._client.balance()
             available = _int(balance.get("available"))
             if available is None:
@@ -576,8 +579,7 @@ def _provider_failure_message(parsed, provider, *, fallback):
                 "test the key; this was not a Nova3D credit charge.")
     if category == "insufficient_credits":
         return (f"{label} stopped the generation because the provider account "
-                f"could not spend. Add at least ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}, "
-                "check spend limits, and retry.")
+                "could not spend. Check its API balance and spending limits, then retry.")
     if category == "model_access_denied":
         return (f"{label} says the selected model is not enabled for this key. "
                 "Open the provider setup, enable access, and test again.")

@@ -12,6 +12,7 @@ Sections, top to bottom:
 import bpy
 
 from .. import constants
+from .. import properties
 from ..preferences import get_prefs, online_access_ok
 from ..services import provider_access
 
@@ -97,25 +98,31 @@ class NOVA3D_PT_main(bpy.types.Panel):
 
         # ── Generation access + model ────────────────────────────────────────
         access = layout.box()
-        access.enabled = not running
-        access.label(text="Generation access", icon="SETTINGS")
-        access.prop(scene, "nova3d_access_mode", expand=True)
-        if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
-            _draw_provider_access(access, context, prefs, wm)
-        else:
-            _draw_credit_access(access, wm)
+        access.label(text="Nova3D Credits", icon="FUND")
+        _draw_credit_access(access, wm)
         access.separator()
-        access.prop(scene, "nova3d_model", text="Model")
-        selected = constants.model_option_by_id(
-            scene.nova3d_model, access_mode=scene.nova3d_access_mode)
-        if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
-            provider = constants.provider_for_option(selected)
-            if provider:
-                access.label(
-                    text=f"Billed by {provider_access.provider_label(provider)} · 0 Nova3D Credits",
-                    icon="CHECKMARK")
-        else:
-            access.label(text=f"Estimated: {selected[3]} Nova3D Credits")
+        toggle = access.row()
+        toggle.enabled = not running
+        toggle.prop(scene, "nova3d_use_provider_key")
+        if scene.nova3d_use_provider_key:
+            _draw_provider_access(access, prefs, wm, scene, running)
+        available = properties.available_model_options(context)
+        exact_selected = next(
+            (option for option in available if option[0] == scene.nova3d_model),
+            None,
+        )
+        model_row = access.row()
+        model_row.enabled = bool(not running and exact_selected is not None)
+        model_row.prop(scene, "nova3d_model", text="Model")
+        ready, access_message = _generation_access_state(scene, wm, exact_selected)
+        if scene.nova3d_use_provider_key and exact_selected:
+            provider = constants.provider_for_option(exact_selected)
+            access.label(text=f"Usage billed by {provider_access.provider_label(provider)}.",
+                         icon="CHECKMARK")
+        elif not scene.nova3d_use_provider_key and exact_selected:
+            required = wm.nova3d_required_credits
+            if required >= 0 and wm.nova3d_credit_estimate_model == exact_selected[0]:
+                access.label(text=f"This generation needs {required} credits.")
 
         # ── Inputs ───────────────────────────────────────────────────────────
         col = layout.column()
@@ -148,9 +155,23 @@ class NOVA3D_PT_main(bpy.types.Panel):
         else:
             row = layout.row()
             row.scale_y = 1.5
-            if scene.nova3d_access_mode == constants.BILLING_PROVIDER_KEY:
-                row.enabled = bool(constants.provider_for_option(selected))
-            row.operator("nova3d.generate", text="Generate", icon="MESH_MONKEY")
+            row.enabled = ready and online_access_ok() and not wm.nova3d_service_down
+            button_text = "Generate"
+            if ready and not scene.nova3d_use_provider_key:
+                button_text = f"Generate · {wm.nova3d_required_credits} credits"
+            row.operator("nova3d.generate", text=button_text, icon="MESH_MONKEY")
+            if not ready and access_message:
+                action = layout.box()
+                action.alert = True
+                _draw_wrapped(action, access_message, icon="INFO")
+                buttons = action.row(align=True)
+                if scene.nova3d_use_provider_key:
+                    buttons.operator("nova3d.use_credits", text="Use Nova3D Credits",
+                                     icon="FUND")
+                else:
+                    buttons.operator("nova3d.buy_credits", text="Buy credits", icon="URL")
+                    buttons.operator("nova3d.use_provider_key", text="Use my API key",
+                                     icon="KEY_HLT")
 
         # ── Status ───────────────────────────────────────────────────────────
         if wm.nova3d_status:
@@ -188,45 +209,41 @@ class NOVA3D_PT_main(bpy.types.Panel):
 
 
 def _draw_update_banner(layout, wm):
-    """A subtle 'newer version available' notice, shown only when one exists."""
+    """Offer a verified in-Blender update when a newer release exists."""
     if not wm.nova3d_update_available:
         return
     box = layout.box()
     box.label(text=f"Update available: v{wm.nova3d_latest_version}", icon="IMPORT")
-    url = wm.nova3d_release_url or constants.RELEASES_PAGE_URL
-    box.operator("wm.url_open", text="Download update", icon="URL").url = url
+    row = box.row()
+    row.enabled = not wm.nova3d_updates_busy
+    row.operator("nova3d.install_update", text="Update Nova3D", icon="IMPORT")
 
 
 def _draw_credit_access(box, wm):
     row = box.row(align=True)
     credits = wm.nova3d_credits
-    credits_text = ("Balance: —" if credits < 0 else f"Balance: {credits} credits")
+    credits_text = ("Checking balance…" if credits < 0 else f"Balance: {credits} credits")
     row.label(text=credits_text, icon="FUND")
     refresh = row.row(align=True)
     refresh.enabled = not wm.nova3d_credits_busy
     refresh.operator("nova3d.refresh_credits", text="", icon="FILE_REFRESH")
-    box.operator("nova3d.buy_credits", text="Buy Nova3D Credits", icon="URL")
+    row.operator("nova3d.buy_credits", text="Buy", icon="URL")
 
 
-def _draw_provider_access(box, context, prefs, wm):
-    box.label(text="Use your Anthropic or OpenAI account directly.", icon="KEY_HLT")
-    box.label(text="The selected key is sent only to Nova3D's hosted workflow.")
-    box.label(text="A tiny provider-billed access test runs now and before each generation.")
-    _draw_provider_card(box, context, prefs, wm, constants.PROVIDER_ANTHROPIC)
-    _draw_provider_card(box, context, prefs, wm, constants.PROVIDER_OPENAI)
+def _draw_provider_access(box, prefs, wm, scene, running):
+    box.label(text="Your provider bills usage. Keep enough API balance to finish.")
+    provider_row = box.row()
+    provider_row.enabled = not running
+    provider_row.prop(scene, "nova3d_provider_setup", expand=True)
+    _draw_provider_card(box, prefs, wm, scene.nova3d_provider_setup, running)
     if not provider_access.available_provider_options(prefs):
-        warning = box.row()
-        warning.alert = True
-        warning.label(text="Fund and test a key to unlock its models.", icon="INFO")
+        box.label(text="Connect an Anthropic or OpenAI key to continue.", icon="INFO")
 
 
-def _draw_provider_card(parent, context, prefs, wm, provider):
+def _draw_provider_card(parent, prefs, wm, provider, running):
     label = provider_access.provider_label(provider)
     key_attr = ("anthropic_api_key" if provider == constants.PROVIDER_ANTHROPIC
                 else "openai_api_key")
-    funding_attr = ("anthropic_funding_confirmed"
-                    if provider == constants.PROVIDER_ANTHROPIC
-                    else "openai_funding_confirmed")
     message_attr = ("anthropic_validation_message"
                     if provider == constants.PROVIDER_ANTHROPIC
                     else "openai_validation_message")
@@ -235,6 +252,7 @@ def _draw_provider_card(parent, context, prefs, wm, provider):
     busy = wm.nova3d_provider_test_busy and wm.nova3d_provider_test_name == provider
 
     card = parent.box()
+    card.enabled = not running
     header = card.row(align=True)
     header.label(text=label, icon="CHECKMARK" if current else "KEY_HLT")
     if key:
@@ -243,34 +261,49 @@ def _draw_provider_card(parent, context, prefs, wm, provider):
     card.prop(prefs, key_attr, text="API key")
 
     links = card.row(align=True)
-    create = links.operator("nova3d.open_provider_page", text="Create key", icon="URL")
+    create = links.operator("nova3d.open_provider_page", text="Get key", icon="URL")
     create.destination = "anthropic_keys" if provider == constants.PROVIDER_ANTHROPIC else "openai_keys"
-    fund = links.operator(
-        "nova3d.open_provider_page",
-        text=f"Add ${constants.RECOMMENDED_PROVIDER_BALANCE_USD}+", icon="FUND")
-    fund.destination = ("anthropic_billing" if provider == constants.PROVIDER_ANTHROPIC
-                        else "openai_billing")
+    billing = links.operator(
+        "nova3d.open_provider_page", text="Billing", icon="FUND")
+    billing.destination = ("anthropic_billing" if provider == constants.PROVIDER_ANTHROPIC
+                           else "openai_billing")
     if provider == constants.PROVIDER_OPENAI:
         models = card.operator("nova3d.open_provider_page",
                                text="Enable GPT-5.6 Sol & GPT-5.5", icon="SETTINGS")
         models.destination = "openai_models"
-    else:
-        card.label(text="Fable 5 requires 30-day workspace data retention.",
-                   icon="INFO")
-
-    card.prop(prefs, funding_attr)
-    card.label(text="Balance cannot be read from a normal provider API key.", icon="INFO")
     test = card.row()
-    test.enabled = bool(key and getattr(prefs, funding_attr) and
-                        not wm.nova3d_provider_test_busy)
+    test.enabled = bool(key and not wm.nova3d_provider_test_busy)
     op = test.operator("nova3d.test_provider_key",
-                       text=(f"Testing {label}…" if busy else "Test key & model access"),
+                       text=(f"Connecting {label}…" if busy else
+                             ("Reconnect" if current else "Connect")),
                        icon="FILE_REFRESH" if busy else "CHECKMARK")
     op.provider = provider
 
     message = getattr(prefs, message_attr, "")
     if message:
         _draw_wrapped(card, message, icon="CHECKMARK" if current else "ERROR")
+
+
+def _generation_access_state(scene, wm, selected):
+    """Return (ready, user-facing reason) without relying on enum fallbacks."""
+    if selected is None:
+        if getattr(scene, "nova3d_use_provider_key", False):
+            return False, "Connect an Anthropic or OpenAI key, or use Nova3D Credits."
+        return False, "Choose a model."
+    if getattr(scene, "nova3d_use_provider_key", False):
+        return True, ""
+    if wm.nova3d_credits_busy:
+        return False, "Checking your Nova3D Credits…"
+    if wm.nova3d_credit_estimate_model != selected[0] or wm.nova3d_required_credits < 0:
+        return False, "Check your Nova3D credit balance to continue."
+    if wm.nova3d_credits < 0:
+        return False, "Could not confirm your Nova3D credit balance. Refresh and try again."
+    required = wm.nova3d_required_credits
+    available = wm.nova3d_credits
+    if available < required:
+        return False, (f"This model needs {required} credits; you have {available}. "
+                       "Buy credits or use your own API key.")
+    return True, ""
 
 
 def _draw_wrapped(layout, message, *, icon="NONE", width=52):

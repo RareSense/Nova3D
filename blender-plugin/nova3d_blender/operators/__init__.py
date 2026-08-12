@@ -8,6 +8,8 @@ from . import account, images, generate, auth, provider_keys, updates
 classes = (
     account.NOVA3D_OT_open_api_key,
     account.NOVA3D_OT_buy_credits,
+    account.NOVA3D_OT_use_provider_key,
+    account.NOVA3D_OT_use_credits,
     account.NOVA3D_OT_refresh_credits,
     account.NOVA3D_OT_open_output_folder,
     account.NOVA3D_OT_open_web_run,
@@ -16,6 +18,7 @@ classes = (
     provider_keys.NOVA3D_OT_clear_provider_key,
     provider_keys.NOVA3D_OT_open_provider_page,
     updates.NOVA3D_OT_check_updates,
+    updates.NOVA3D_OT_install_update,
     auth.NOVA3D_OT_sign_in,
     auth.NOVA3D_OT_enter_api_key,
     auth.NOVA3D_OT_sign_out,
