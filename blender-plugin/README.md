@@ -11,7 +11,7 @@ Claude Fable 5, or an OpenAI key for GPT-5.6 Sol and GPT-5.5.
 ## 1. Download the add-on
 
 Open the [**Releases page**](https://github.com/RareSense/Nova3D/releases) and,
-under the newest release's **Assets**, download **`nova3d_blender-1.2.0.zip`**.
+under the newest release's **Assets**, download **`nova3d_blender-1.3.0.zip`**.
 Leave it zipped — Blender installs the `.zip` as-is.
 
 ## 2. Install it in Blender
@@ -20,7 +20,7 @@ Leave it zipped — Blender installs the `.zip` as-is.
 2. In the window that opens, click **Get Extensions** in the left-hand list.
 3. At the **top-right**, click the small **▾ arrow** (next to the funnel icon) and
    choose **Install from Disk…**.
-4. Find your `nova3d_blender-1.2.0.zip`, click it, then click **Install from Disk**.
+4. Find your `nova3d_blender-1.3.0.zip`, click it, then click **Install from Disk**.
    It installs *and* switches on automatically. If asked, allow the *Network* and
    *Files* permissions.
 
@@ -47,13 +47,12 @@ says **"Nova3D is ready"**, switch back to Blender; you're now connected.
 ## 5. Generate
 
 1. Type what you want in the **Prompt** box (e.g. *"7 DOF robotic arm"*).
-2. In **Generation access**, choose:
-   - **Nova3D Credits** for hosted billing; or
-   - **My API Key** to add a direct Anthropic/OpenAI key.
-3. For a provider key, follow the in-panel setup links, add at least **$20** to
-   the provider account, enable the OpenAI models when applicable, then click
-   **Test key & model access**. Only models that pass the live check appear in
-   the picker.
+2. Your Nova3D credit balance, refresh button, and **Buy** action are together
+   in one card. Pick a hosted model and the add-on checks its current price.
+3. To use Anthropic/OpenAI billing instead, enable **Use my own API key**,
+   paste the key, and click **Connect**. Only models available to that key
+   appear in the picker. Keep sufficient provider balance for the generation
+   to finish.
 4. Pick a **Model**. Hosted choices are Claude Opus 5, Claude Fable 5,
    GPT-5.6 Sol, and GPT-5.5. Direct-key choices are Claude Fable 5 through
    Anthropic and GPT-5.6 Sol/GPT-5.5 through OpenAI.
@@ -81,11 +80,9 @@ model.glb   ·   code.py   ·   uvs/   ·   meta.json
 - Provider keys are stored in Blender's user preferences, not in `.blend`,
   project metadata, history, logs, or pending-generation files. A selected key
   is sent to Nova3D's BYOK workflow so the hosted toolkit can call its provider.
-- Ordinary provider keys do not expose a trustworthy cash balance. The `$20`
-  funding checkbox is therefore a user confirmation, not a balance claim. The
-  add-on also lists the exact available models and makes a tiny real request at
-  setup and immediately before every generation. That catches rejected keys,
-  disabled models, exhausted credits, and spend limits before the long run.
+- The add-on lists the exact available models and makes a small real request
+  when connecting a key and immediately before every generation. That catches
+  rejected keys, disabled models, exhausted credits, and spend limits early.
 - A successful preflight proves the account can serve the model at that moment;
   it cannot guarantee the balance will cover an unusually long generation.
   If funds run out during final visual review, Nova3D keeps the valid GLB.
@@ -95,11 +92,12 @@ model.glb   ·   code.py   ·   uvs/   ·   meta.json
   without falsely claiming to cancel the backend run.
 - If Nova3D can't be reached, the panel shows an **unreachable** notice with a
   **Retry** button — no failed generation, just try again when you're back online.
-- The add-on checks for a newer version on startup and shows a **Download update**
-  link when one exists (also under **Preferences → Add-ons → Nova3D**). It does
-  not silently install code. Download the new release zip and use **Install from
-  Disk…** again; Blender replaces the installed version, so you do not need to
-  uninstall it first.
+- The add-on checks for a newer version on startup. Choose **Update Nova3D** to
+  download the matching GitHub Release asset, verify its identity/version and
+  integrity, and pass it to Blender's own extension installer. Save your work
+  first and restart Blender when installation finishes. Your add-on preferences
+  and API keys are preserved. Updates are always user-confirmed; Nova3D never
+  silently replaces executable add-on code.
 - Don't see colours? Materials only show in **Material Preview**; the add-on
   switches to it for you. Press **Alt + H** to un-hide anything it tucked away.
 - Change the output folder or self-host URLs in
@@ -110,7 +108,7 @@ model.glb   ·   code.py   ·   uvs/   ·   meta.json
 ```bash
 git clone https://github.com/RareSense/Nova3D.git
 cd Nova3D/blender-plugin
-bash build.sh            # creates dist/nova3d_blender-1.2.0.zip
+bash build.sh            # creates dist/nova3d_blender-1.3.0.zip
 ```
 
 Then install that zip via step 2 above.
