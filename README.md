@@ -1,120 +1,196 @@
 <div align="center">
 
-<img src="docs/media/nova3d-logo.png" width="132" alt="Nova3D" />
+<a href="https://app.nova3d.xyz"><img src="docs/media/robotics/banner.svg" width="100%" alt="Nova3D Robotics: worlds for robots, written as code" /></a>
 
-**Code-native 3D generation: assets are executable programs, not opaque meshes.**
+<a href="https://nova3d.xyz"><img src="https://api.iconify.design/lucide:globe-2.svg?color=%230e1013" width="16" height="16" align="center" alt="Website" /> website</a> · <a href="https://app.nova3d.xyz"><img src="https://api.iconify.design/lucide:box.svg?color=%230e1013" width="16" height="16" align="center" alt="App" /> open studio</a> · <a href="https://arxiv.org/abs/2607.22738"><img src="https://api.iconify.design/simple-icons:arxiv.svg?color=%23b31b1b" width="16" height="16" align="center" alt="Paper" /> paper</a> · <a href="https://discord.gg/QEH8mzcwdR"><img src="https://api.iconify.design/simple-icons:discord.svg?color=%235865f2" width="16" height="16" align="center" alt="Discord" /> discord</a> · <a href="https://x.com/nova3d_ai"><img src="https://api.iconify.design/simple-icons:x.svg?color=%230e1013" width="16" height="16" align="center" alt="X" /> X</a> · <a href="https://github.com/RareSense/Nova3D/issues"><img src="https://api.iconify.design/octicon:issue-opened-16.svg?color=%230e1013" width="16" height="16" align="center" alt="Issues" /> issues</a>
 
-<a href="https://nova3d.xyz"><img src="https://api.iconify.design/lucide:globe-2.svg?color=%2358a6ff" width="16" height="16" align="center" alt="Website" /> website</a> · <a href="https://app.nova3d.xyz"><img src="https://api.iconify.design/lucide:box.svg?color=%2358a6ff" width="16" height="16" align="center" alt="App" /> app</a> · <a href="https://arxiv.org/abs/2607.22738"><img src="https://api.iconify.design/simple-icons:arxiv.svg?color=%23b31b1b" width="16" height="16" align="center" alt="Paper" /> paper</a> · <a href="https://discord.gg/QEH8mzcwdR"><img src="https://api.iconify.design/simple-icons:discord.svg?color=%235865f2" width="16" height="16" align="center" alt="Discord" /> discord</a> · <a href="https://x.com/nova3d_ai"><img src="https://api.iconify.design/simple-icons:x.svg?color=%238b949e" width="16" height="16" align="center" alt="X" /> X</a> · <a href="https://github.com/RareSense/Nova3D/issues"><img src="https://api.iconify.design/octicon:issue-opened-16.svg?color=%2358a6ff" width="16" height="16" align="center" alt="Issues" /> issues</a>
+<a href="https://github.com/RareSense/Nova3D/stargazers"><img src="https://img.shields.io/github/stars/RareSense/Nova3D?style=flat-square&labelColor=0e1013&color=f0c27b" alt="Stars"></a>
+<img src="https://img.shields.io/badge/MuJoCo-3.x-6fe3a6?style=flat-square&labelColor=0e1013" alt="MuJoCo">
+<img src="https://img.shields.io/badge/exports-MJCF%20·%20USD%20·%20SDF%20·%20URDF-8fa5ff?style=flat-square&labelColor=0e1013" alt="Exports">
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-d5d9de?style=flat-square&labelColor=0e1013" alt="MIT"></a>
 
 <br/>
 
-<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
+<img src="docs/media/robotics/hero_farm.gif" width="100%" alt="Robots harvesting on a Nova3D-generated farm, simulated in MuJoCo" />
+
+*A working farm, written by Nova3D from one prompt. Humanoids pick tomatoes, quadrupeds carry the harvest, drones scout. Simulated and filmed in MuJoCo.*
+
+<img src="docs/media/robotics/stats.svg" width="100%" alt="4 simulators · 173 mechanisms force-tested · friction-accurate · digital cousins checked shot-for-shot"/>
 
 </div>
 
-## What is Nova3D?
+<br/>
 
-Nova3D generates 3D assets as **executable construction procedures**. Instead of emitting a single fused mesh, the pipeline writes Blender-native Python that compiles to a structured GLB with **named, separately addressable parts**, a real assembly hierarchy, joint pivots, and PBR materials.
+<samp>worlds</samp>
 
-The asset's source of truth is the program; the mesh is just its compiled output. Because anything coded is programmable, every generated object is born **inspectable, addressable, editable, and animatable**; properties a baked mesh cannot natively expose.
+## Robots at work.
 
-This is architecturally different from diffusion-based generators (Meshy, Tripo, Rodin), which extract a single merged mesh with no part boundaries, and from CSG/OpenSCAD systems, which guarantee solids but cap out on organic shapes, hierarchy, and materials. Nova3D uses Blender's scene graph as the native representation, a strict superset of both.
+Every world below started as a text prompt, was generated as an **executable scene program**, compiled to MuJoCo, and populated with robots. Doors open on real hinges, produce carries labeled masses, floors carry measured friction. The environment is code, so every physical property is authored, not painted on.
 
+<table align="center">
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/robotics/cafe_robots.gif" width="100%"/><br/><sub><b>Café</b> · Unitree G1 waiters clear tables; a Go2 serves from its back <i>(learned walking policy, full physics)</i></sub></td>
+    <td align="center" width="33%"><img src="docs/media/robotics/mall_robots.gif" width="100%"/><br/><sub><b>Mall</b> · Spot patrols, H1 delivers parcels, Stretch restocks, a Skydio X2 flies the atrium</sub></td>
+    <td align="center" width="33%"><img src="docs/media/robotics/field_robots.gif" width="100%"/><br/><sub><b>Farm</b> · Apptronik Apollo picks tomatoes into a basket; ANYmal hauls the crate</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/robotics/g1_apartment.gif" width="100%"/><br/><sub><b>Apartment</b> · a G1 tidies a generated home, object by object</sub></td>
+    <td align="center" width="33%"><img src="docs/media/robotics/zerog_catch.gif" width="100%"/><br/><sub><b>Orbital lab</b> · a UR5e throws a sample across the module in zero g; a Franka Panda catches it in flight</sub></td>
+    <td align="center" width="33%"><img src="docs/media/robotics/friction_go2_lanes.gif" width="100%"/><br/><sub><b>Traction hall</b> · one walking policy, three floors: ice μ 0.02, steel μ 0.30, rubber μ 1.05</sub></td>
+  </tr>
+</table>
 
-## Getting started
+<br/>
 
-The web client lives in [`app/`](app/) and connects to the hosted Nova3D service; no local backend required. See **[`app/README.md`](app/README.md)** for prerequisites, setup, features, and troubleshooting.
+<samp>physics</samp>
 
+## Real-life physics, built in.
 
-## Repository structure
+Every scene Nova3D produces comes with real-life physics as part of the world itself: gravity, contact, friction, mass and inertia. Change one constant and the simulation answers. Here the same scene runs twice; the only difference is gravity.
 
-This repository is the home for Nova3D's open clients and integrations. The hosted generation backend is (currently) closed-source.
+<table align="center">
+  <tr>
+    <td align="center" width="50%"><img src="docs/media/robotics/zerog_pushoff.gif" width="100%"/><br/><sub><b>g = 0</b> · a Booster T1 pushes off the hatch with its legs and floats the length of the module, carried only by the momentum of that push</sub></td>
+    <td align="center" width="50%"><img src="docs/media/robotics/gravity981_drop.gif" width="100%"/><br/><sub><b>g = 9.81 m/s²</b> · the identical throw now falls in a curve, and the catcher waiting on the straight line misses</sub></td>
+  </tr>
+</table>
 
-```
-Nova3D/
-├── app/              # Flutter/Dart web client  ·  see app/README.md
-├── mcp/              # Nova3D MCP server  ·  see mcp/README.md
-├── blender-plugin/   # Blender add-on  ·  see blender-plugin/README.md
-├── claude-skills/    # Claude skills (coming soon)
-├── docs/             # architecture & the "3D as code" thesis (coming soon)
-└── examples/         # gallery of generated assets + their source programs (coming soon)
-```
+<div align="center"><img src="docs/media/robotics/friction_ramp.gif" width="72%"/></div>
 
-> Surfaces are being moved in one at a time. Today the **client app** and
-> **Blender add-on** live in [`app/`](app/) and [`blender-plugin/`](blender-plugin/).
+*The ramp tilts slowly, and the blocks let go in order of grip: the ice block slides at just 4.6°, steel at 15°, aluminium at 20°, oak at 26°, and the rubber block holds on to the very end. Nobody animated any of this. Each block slips at exactly the angle where physics says its grip runs out.*
 
-## Demo
+<br/>
+
+<samp>validation</samp>
+
+## Every mechanism opens before a scene ships.
+
+The build pushes every door, drawer, lid and gate with the physics engine itself. A hinge that jams, a drawer that binds, a prop that floats: each one fails the build, by name.
+
+<div align="center"><img src="docs/media/robotics/mechtest.svg" width="100%" alt="Mechanism test console output: hinges, sliders, free bodies, jammed=0, status=passed"/></div>
+
+<br/>
+
+<samp>digital&nbsp;cousins</samp>
+
+## A real place, rebuilt as a digital cousin.
+
+<div align="center">
+<img src="docs/media/robotics/real_vs_mujoco_go2.jpg" width="100%" alt="Photograph vs Nova3D digital cousin in MuJoCo vs the same scene with a Go2 robot inserted"/>
+<img src="docs/media/robotics/real_vs_mujoco_go2_angle2.jpg" width="100%" alt="Second camera angle: photograph vs MuJoCo vs MuJoCo with Go2"/>
+<img src="docs/media/robotics/real_vs_mujoco_go2_angle3.jpg" width="100%" alt="Third camera angle: photograph vs MuJoCo vs MuJoCo with Go2"/>
+</div>
+
+*Left: the photograph. Middle: the Nova3D digital cousin rendered in MuJoCo from the same camera. Right: the same scene with a Unitree Go2 walking through it. Cousins are rebuilt object by object from photos: every visible item counted, placed and sized against the originals, checked shot for shot from every angle.*
+
+<br/>
+
+<samp>thesis</samp>
+
+## A robot can't open a door that is one fused mesh.
 
 <div align="center">
 
-<a href="https://www.youtube.com/watch?v=309zNw0JETU"><img src="docs/media/demo_one_shot.png" width="100%" alt="Nova3D one-shot 3D model generation demo" /></a>
+<img src="docs/media/robotics/g1_doors.gif" width="62%" alt="A Unitree G1 walks a generated house in MuJoCo, opening real hinged doors room by room."/>
 
-☝️ One shot: **3D models with 4K PBR textures, ready for games, animation, VFX, and more with Nova3D**
+<sub>A G1 tours a generated house in MuJoCo and opens every door on its way, because every door is a real hinged body.</sub>
 
 </div>
 
-## Comparison
+Mesh generators output vertex soup. Nova3D never builds fused meshes:
 
-[![Nova3D vs TRELLIS vs Hunyuan3D](https://i.imgur.com/QAAgIQ8.png)](https://www.youtube.com/watch?v=iL_NX_hBq9k)
+- **Named parts, real hierarchy.** `kitchen_door`, its hinge pin, its handle: separately addressable bodies.
+- **Working mechanisms.** Hinges and sliders with limits, damping and clearances that survive contact simulation.
+- **Labeled physics.** Every loose object carries mass, inertia and friction with stated provenance.
+- **Verified, not vibed.** Mechanism force-tests, terrain probe-tests and photo-matched captures gate every build.
 
-☝️ Side-by-side with TRELLIS and Hunyuan3D. Nova3D is optimized for **structured asset generation**, but the advantage is not limited to multipart editing; it also shows stronger single-asset fidelity: cleaner silhouette control, sharper feature delineation, and more coherent surface transitions. **Explicit part structure is an added capability, not a quality tradeoff.**
+<br/>
 
-[![Nova3D vs PartPacker vs Tripo Segmentation](https://i.imgur.com/wWjVuRr.png)](https://www.youtube.com/watch?v=msGZs4EMnvs)
+<samp>exports</samp>
 
-☝️ Part-aware comparison with NVIDIA PartPacker and Tripo. Nova3D preserves discrete components as independently addressable objects with stable boundaries, clearer instance separation, and better **edit locality**; assets stay actionable after generation (inspect, regenerate, restyle, articulate, export) without collapsing back into one undifferentiated mesh.
+## One source. Every engine.
 
-### Visual fidelity: same prompt vs the mesh-native generators
+A world written once opens wherever people build, play and train. Change the source and every target follows. For robotics the exports are native: MuJoCo (MJCF), Isaac Sim (USD), Gazebo (SDF) and PyBullet (URDF), the same environment everywhere, never four approximations.
 
-<div align="center"><img src="docs/media/comparison_slider.gif" width="100%" alt="Animated textured and wireframe comparison: Nova3D vs Meshy, TRELLIS.2, and TripoSG" /></div>
+<div align="center"><a href="https://nova3d.xyz"><img src="docs/media/robotics/every_engine.png" width="78%" alt="One source, every engine: MuJoCo, Isaac Sim, Gazebo, PyBullet, Omniverse, Unity, Unreal, Godot, Roblox, Minecraft, the web, glTF, Blender, OpenUSD, Rhino"/></a></div>
 
-*Textured, as delivered: Nova3D vs the mesh-native generators (Meshy, TRELLIS.2, TripoSG).*
+Static structure exports with exact collision. Mechanisms export as native joints on every target. Outdoor ground exports as height fields, so feet collide with the actual hill, not its convex hull.
 
-*Wireframe (mesh topology). Nova3D builds clean parts; internal structure is visible; the diffusion models output dense isosurface meshes.*
+<br/>
 
-## Anatomy of a generation
+<samp>studio</samp>
 
-<div align="center"><img src="docs/media/anatomy_ring.jpg" width="100%" alt="Measured gold engagement ring generated by Nova3D" /></div>
+## Worlds as software projects.
 
-☝️ Prompt: Create a gold engagement ring with an **oval center stone measuring 6.82 × 8.75 × 4.40 mm**, raised prong setting, and small pavé diamonds along the upper band. Use a **17.00 mm inner diameter (US size 6.5)**, **6.22 mm crown height**, **20.96 mm overall width**, and **26.42 mm overall height**.
+Nova3D builds 3D worlds as software projects you can edit, test and build on.
 
-Every visually distinct component is its own named, editable mesh, grouped into named sub-assemblies, and prompt-stated counts and dimensions hold up when measured back from the result.
+| **Keep building.** | **Decide what happens.** | **Build it together.** |
+|---|---|---|
+| Rebuild a part, add something new, or make another version. Every change is a saved version you can replay. | Add movement, controls and interactions to the things you build. | People and AI agents work in the same world at the same time, each on their own branch. The branches merge into one world. |
 
-### Built as parts, not segmented after the fact
+<br/>
 
-<div align="center"><img src="docs/media/segmentation_explode.gif" width="78%" alt="Four assets exploded into their parts" /></div>
+<details>
+<summary><b>Nova3D beyond robotics: general 3D asset generation</b> (click to expand)</summary>
 
-*Nova3D never builds a fused mesh in the first place; every component is generated as its own named, watertight part, so any piece can be selected, retextured, replaced, or rigged on its own. The others can only approximate this afterward: PartCrafter returns a handful of unnamed chunks, and CubePart must be handed the part names, then slices a finished mesh into capped, approximate regions. *
+<br/>
 
-## Assembly hierarchy
+Nova3D generates 3D assets as **executable construction procedures**: prompt-to-code targeting Blender's API, compiling to structured GLB with named parts, assembly hierarchy, joint pivots and PBR materials.
 
-<div align="center"><img src="docs/media/assembly_hierarchy.gif" width="100%" alt="Building exported as a labeled assembly hierarchy" /></div>
+<div align="center">
+<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
+</div>
 
-*Parts don't just have names; they're wired into a labeled assembly tree with a joint pivot at every articulation point. This robot arm exports as a depth-7 kinematic chain: rotating any pivot moves its whole subtree. The program writes that tree itself; mesh generators export a flat list with nothing to grab or rig.*
+[![Nova3D one-shot generation demo](docs/media/demo_one_shot.png)](https://www.youtube.com/watch?v=309zNw0JETU)
 
-## Articulation
+**Comparisons:** [vs TRELLIS & Hunyuan3D](https://www.youtube.com/watch?v=iL_NX_hBq9k) · [vs NVIDIA PartPacker & Tripo segmentation](https://www.youtube.com/watch?v=msGZs4EMnvs)
 
-<div align="center"><img src="docs/media/articulation_crane.gif" width="100%" alt="Tracked crane articulating, geometry frozen" /></div>
+<div align="center"><img src="docs/media/comparison_slider.gif" width="100%" alt="Nova3D vs Meshy, TRELLIS.2, TripoSG" /></div>
 
-*Rigging is an additive code pass: joints are added at real pivots referencing parts the program already named; the existing geometry never moves.*
+<div align="center"><img src="docs/media/anatomy_ring.jpg" width="100%" alt="Measured engagement ring" /></div>
 
-## UV-ready from the source
+*Prompt-stated dimensions hold up when measured back from the result: a ring generated to 17.00 mm inner diameter measures 17.00 mm.*
 
-<div align="center"><img src="docs/media/uv_from_code.png" width="100%" alt="Auto-generated clean, packed UV atlas for a generated asset" /></div>
+<div align="center"><img src="docs/media/segmentation_explode.gif" width="78%" /></div>
 
-*Each part gets its own UV chart, auto-packed into one clean, non-overlapping atlas grouped by sub-assembly.*
+<div align="center"><img src="docs/media/assembly_hierarchy.gif" width="100%" /></div>
 
-## Technical philosophy
+<div align="center"><img src="docs/media/articulation_crane.gif" width="100%" /></div>
 
-**1. Script-native, not mesh-native.** Most AI 3D generators do image-to-3D diffusion. Nova3D is prompt-to-code / image-to-code, targeting Blender's API, which yields a logical named hierarchy, surgical edits (change the handle without regenerating the cup), and proper PBR materials instead of baked vertex colors.
+<div align="center"><img src="docs/media/uv_from_code.png" width="100%" /></div>
 
-**2. Model-agnostic.** Nova3D is a generation harness. Swap providers (OpenRouter, OpenAI, Anthropic, Gemini) via the settings menu; the pipeline handles validation and execution regardless of which LLM writes the code.
+</details>
 
-**3. Precision + organic flow.** Unlike pure CSG/OpenSCAD systems that struggle with organic shapes, Nova3D leverages Blender's full modifier suite (subdivision, sculpting, booleans) for high-fidelity models.
+<br/>
 
+<samp>start</samp>
+
+## Open Studio. Pick a cartridge.
+
+New projects in Studio start from a cartridge. Pick **ROBOTICS** and the project is wired for MuJoCo, PyBullet, Gazebo and Isaac Sim from the first prompt.
+
+<div align="center"><a href="https://app.nova3d.xyz"><img src="docs/media/robotics/studio_cartridges.png" width="88%" alt="Nova3D Studio: new project console with the Game Assets and Robotics cartridges"/></a></div>
+
+<div align="center"><a href="https://app.nova3d.xyz"><b>Open Studio ↗</b></a> · no local backend required</div>
+
+<br/>
+
+This repository is the home of Nova3D's open clients and integrations: the [web client](app/), the [MCP server](mcp/) and the [Blender add-on](blender-plugin/).
+
+> Robot models in the films are from the [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie);
+> the worlds, physics setups, controllers and films are Nova3D.
+
+<br/>
+
+<div align="center">
+
+<a href="https://app.nova3d.xyz"><img src="docs/media/robotics/footer.svg" width="100%" alt="Build a world. Put a robot in it. Open Studio"/></a>
+
+</div>
 
 ## License
 
-[MIT](LICENSE) © RareSense. The clients and integrations in this repository are open-source; the hosted generation backend is proprietary.
+[MIT](LICENSE) © RareSense. The clients and integrations in this repository are open-source.
 
 <p align="center">
   <small>Built on the same engine powering <b><a href="https://formanova.ai">FormaNova</a></b> for specialized jewelry CAD.</small>
