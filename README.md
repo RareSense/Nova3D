@@ -21,7 +21,7 @@
 Start with an idea and keep shaping it. Change the geometry, add motion and behavior, and explore new versions.
 
 <div align="center">
-<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
+<img src="docs/media/assets/drill_machine.gif" width="32%" />&nbsp;<img src="docs/media/assets/escalator.gif" width="32%" />&nbsp;<img src="docs/media/assets/oven.gif" width="32%" />
 </div>
 
 <p align="center"><sub>A drill, an escalator and an oven, each built part by part: assembled, taken apart, and seen through to every piece inside.</sub></p>
