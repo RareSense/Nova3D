@@ -1,12 +1,9 @@
 <div align="center">
 
-<a href="https://app.nova3d.xyz"><img src="docs/media/robotics/banner.svg" width="100%" alt="Nova3D Robotics: worlds for robots, written as code" /></a>
+<a href="https://nova3d.xyz"><img src="docs/media/site/banner.svg" width="100%" alt="Nova 3D: design workspace for programmable 3D" /></a>
 
 <a href="https://nova3d.xyz"><img src="https://api.iconify.design/lucide:globe-2.svg?color=%230e1013" width="16" height="16" align="center" alt="Website" /> website</a> · <a href="https://app.nova3d.xyz"><img src="https://api.iconify.design/lucide:box.svg?color=%230e1013" width="16" height="16" align="center" alt="App" /> open studio</a> · <a href="https://arxiv.org/abs/2607.22738"><img src="https://api.iconify.design/simple-icons:arxiv.svg?color=%23b31b1b" width="16" height="16" align="center" alt="Paper" /> paper</a> · <a href="https://discord.gg/QEH8mzcwdR"><img src="https://api.iconify.design/simple-icons:discord.svg?color=%235865f2" width="16" height="16" align="center" alt="Discord" /> discord</a> · <a href="https://x.com/nova3d_ai"><img src="https://api.iconify.design/simple-icons:x.svg?color=%230e1013" width="16" height="16" align="center" alt="X" /> X</a> · <a href="https://github.com/RareSense/Nova3D/issues"><img src="https://api.iconify.design/octicon:issue-opened-16.svg?color=%230e1013" width="16" height="16" align="center" alt="Issues" /> issues</a>
 
-<a href="https://github.com/RareSense/Nova3D/stargazers"><img src="https://img.shields.io/github/stars/RareSense/Nova3D?style=flat-square&labelColor=0e1013&color=f0c27b" alt="Stars"></a>
-<img src="https://img.shields.io/badge/MuJoCo-3.x-6fe3a6?style=flat-square&labelColor=0e1013" alt="MuJoCo">
-<img src="https://img.shields.io/badge/exports-MJCF%20·%20USD%20·%20SDF%20·%20URDF-8fa5ff?style=flat-square&labelColor=0e1013" alt="Exports">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-d5d9de?style=flat-square&labelColor=0e1013" alt="MIT"></a>
 
 <br/>
@@ -15,9 +12,46 @@
 
 *A working farm, written by Nova3D from one prompt. Humanoids pick tomatoes, quadrupeds carry the harvest, drones scout. Simulated and filmed in MuJoCo.*
 
-<img src="docs/media/robotics/stats.svg" width="100%" alt="4 simulators · 173 mechanisms force-tested · friction-accurate · digital cousins checked shot-for-shot"/>
-
 </div>
+
+<br/>
+
+## Describe it. Build it. Keep going.
+
+Start with an idea and keep shaping it. Change the geometry, add motion and behavior, and explore new versions.
+
+<div align="center">
+<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
+</div>
+
+<p align="center"><sub>A drill, an escalator and an oven, each built part by part: assembled, taken apart, and seen through to every piece inside.</sub></p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="33%"><a href="https://nova3d.xyz/#keep-building"><img src="docs/media/site/keep_bot.gif" width="100%" alt="The gardener bot's arm turns from a soil probe into a watering can"/></a><br/><sub><b>gardener_bot</b><br/><i>Animate his arm changing from the probe into the can, and make him water the plants.</i></sub></td>
+    <td align="center" width="33%"><a href="https://nova3d.xyz/#keep-building"><img src="docs/media/site/keep_jewel.gif" width="100%" alt="A ring, then a pair of earrings, then rose gold, then rising-star climbers"/></a><br/><sub><b>shooting_star</b><br/><i>Make this ring.</i> → <i>Turn it into a pair of matching earrings.</i> → <i>Make the earrings rose gold.</i> → <i>Change the earring shape into a rising-star climber.</i></sub></td>
+    <td align="center" width="33%"><a href="https://nova3d.xyz/#keep-building"><img src="docs/media/site/keep_doll.gif" width="100%" alt="The harlequin doll's head unzips and a glowing moon floats out"/></a><br/><sub><b>harlequin_doll</b><br/><i>Animate his head unzipping, and a bright glowing moon floating out of it.</i></sub></td>
+  </tr>
+</table>
+
+<br/>
+
+## Build it together.
+
+People and AI agents work in the same world at the same time, each on their own branch. Then the branches merge into one world.
+
+<table align="center">
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/site/together_1-build.gif" width="100%" alt="v1: a cottage with a glass tower"/><br/><sub><b>You</b>: <i>Build a cottage on the empty plot, with a glass tower.</i><br/>v1 · 53 parts</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/together_2-open.gif" width="100%" alt="v2: the back opened up"/><br/><sub><b>Maya</b>: <i>I want to see inside. Open up the back.</i><br/>v2 · 19 new parts inside</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/together_3-winter.gif" width="100%" alt="v3: winter"/><br/><sub><b>Sam</b>: <i>What does it look like in winter?</i><br/>v3 · snow, bare trees, frozen pond</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/site/together_4-night.gif" width="100%" alt="v4: night"/><br/><sub><b>Sam</b>: <i>Now make it night.</i><br/>v4 · 9 lamps and the fire lit</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/together_5-merge.gif" width="100%" alt="v5: the two branches merged"/><br/><sub><b>You</b>: <i>Merge Maya's open back with Sam's winter night.</i><br/>v5 · no conflicts</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/together_6-bot.gif" width="100%" alt="v6: the gardener bot waters the plants"/><br/><sub><b>Maya</b>: <i>Send the gardener bot in to water the plants.</i><br/>v6 · in through the open back</sub></td>
+  </tr>
+</table>
 
 <br/>
 
@@ -42,151 +76,52 @@ Every world below started as a text prompt, was generated as an **executable sce
 
 <br/>
 
+## Simulate. Test. Revise.
+
+Run your designs in simulation to check movement, collisions, and interactions. Find what fails, revise the design, and test it again.
+
+<table align="center">
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/site/orchard_test1.gif" width="100%" alt="Test 1: the Husky robot is stopped by the tree's low limb"/><br/><sub><b>Test 1 · failed</b><br/><i>Husky, pick the ripe apples off this tree.</i><br/>The low limb stops it at 50 cm.</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/orchard_test2.gif" width="100%" alt="Test 2: the arm snags on branches"/><br/><sub><b>v2 · the low limb tied up 20°</b><br/><b>Test 2 · failed</b>: the arm snags on branches, 0 of 3 apples picked.</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/orchard_test3.gif" width="100%" alt="Test 3: the arm picks the ripe apples into the bin"/><br/><sub><b>v3 · 6 branches pruned out of the arm's path</b><br/><b>Test 3 · passed</b>: 3 ripe apples in the bin, nothing knocked.</sub></td>
+  </tr>
+</table>
+
+<p align="center"><sub>A Clearpath Husky with a UR10e arm and a Robotiq 2F-85 gripper, in an old orchard grown as code. Asked to <i>adapt this tree for this robot and keep every apple</i>, Nova revises the tree and tests again. Every move is the MuJoCo run: branches bend and spring back, stems snap only when pulled or lifted.</sub></p>
+
+<table align="center">
+  <tr>
+    <td align="center" width="33%"><img src="docs/media/site/loft_photo.jpg" width="100%" alt="Photo of the real kitchen"/><br/><sub><b>The real kitchen</b><br/>The scene was built from 8 phone photos.</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/loft_test1.gif" width="100%" alt="Test 1: Stretch bumps the bar stool"/><br/><sub><b>Test 1 · failed</b><br/><i>Stretch, get the milk off the island.</i><br/>It bumps the bar stool, 1.1 m short.</sub></td>
+    <td align="center" width="33%"><img src="docs/media/site/loft_test2.gif" width="100%" alt="Test 2: Stretch gets the milk"/><br/><sub><b>v2 · adapted for Stretch, design kept</b><br/><b>Test 2 · passed</b>: 4 things moved out of its path, milk in hand at 11 s.</sub></td>
+  </tr>
+</table>
+
+<br/>
+
 <samp>physics</samp>
 
-## Real-life physics, built in.
+## Physics, defined in source.
 
-Every scene Nova3D produces comes with real-life physics as part of the world itself: gravity, contact, friction, mass and inertia. Change one constant and the simulation answers. Here the same scene runs twice; the only difference is gravity.
+Mass, inertia, friction, and joint limits are explicit and editable alongside the geometry. Change the conditions and simulate the result. Below, the same scene runs with one parameter changed: gravity, from 0 to 9.81 m/s².
 
 <table align="center">
   <tr>
     <td align="center" width="50%"><img src="docs/media/robotics/zerog_pushoff.gif" width="100%"/><br/><sub><b>g = 0</b> · a Booster T1 pushes off the hatch with its legs and floats the length of the module, carried only by the momentum of that push</sub></td>
-    <td align="center" width="50%"><img src="docs/media/robotics/gravity981_drop.gif" width="100%"/><br/><sub><b>g = 9.81 m/s²</b> · the identical throw now falls in a curve, and the catcher waiting on the straight line misses</sub></td>
+    <td align="center" width="50%"><img src="docs/media/robotics/friction_ramp.gif" width="100%"/><br/><sub>The ramp tilts slowly, and the blocks let go in order of grip: the ice block slides at just 4.6°, steel at 15°, aluminium at 20°, oak at 26°, and the rubber block holds on to the very end. Nobody animated any of this. Each block slips at exactly the angle where physics says its grip runs out.</sub></td>
   </tr>
 </table>
 
-<div align="center"><img src="docs/media/robotics/friction_ramp.gif" width="72%"/></div>
-
-*The ramp tilts slowly, and the blocks let go in order of grip: the ice block slides at just 4.6°, steel at 15°, aluminium at 20°, oak at 26°, and the rubber block holds on to the very end. Nobody animated any of this. Each block slips at exactly the angle where physics says its grip runs out.*
-
 <br/>
 
-<samp>validation</samp>
+## Build on common ground.
 
-## Every mechanism opens before a scene ships.
-
-The build pushes every door, drawer, lid and gate with the physics engine itself. A hinge that jams, a drawer that binds, a prop that floats: each one fails the build, by name.
-
-<div align="center"><img src="docs/media/robotics/mechtest.svg" width="100%" alt="Mechanism test console output: hinges, sliders, free bodies, jammed=0, status=passed"/></div>
-
-<br/>
-
-<samp>digital&nbsp;cousins</samp>
-
-## A real place, rebuilt as a digital cousin.
-
-<div align="center">
-<img src="docs/media/robotics/real_vs_mujoco_go2.jpg" width="100%" alt="Photograph vs Nova3D digital cousin in MuJoCo vs the same scene with a Go2 robot inserted"/>
-<img src="docs/media/robotics/real_vs_mujoco_go2_angle2.jpg" width="100%" alt="Second camera angle: photograph vs MuJoCo vs MuJoCo with Go2"/>
-<img src="docs/media/robotics/real_vs_mujoco_go2_angle3.jpg" width="100%" alt="Third camera angle: photograph vs MuJoCo vs MuJoCo with Go2"/>
-</div>
-
-*Left: the photograph. Middle: the Nova3D digital cousin rendered in MuJoCo from the same camera. Right: the same scene with a Unitree Go2 walking through it. Cousins are rebuilt object by object from photos: every visible item counted, placed and sized against the originals, checked shot for shot from every angle.*
-
-<br/>
-
-<samp>thesis</samp>
-
-## A robot can't open a door that is one fused mesh.
-
-<div align="center">
-
-<img src="docs/media/robotics/g1_doors.gif" width="62%" alt="A Unitree G1 walks a generated house in MuJoCo, opening real hinged doors room by room."/>
-
-<sub>A G1 tours a generated house in MuJoCo and opens every door on its way, because every door is a real hinged body.</sub>
-
-</div>
-
-Mesh generators output vertex soup. Nova3D never builds fused meshes:
-
-- **Named parts, real hierarchy.** `kitchen_door`, its hinge pin, its handle: separately addressable bodies.
-- **Working mechanisms.** Hinges and sliders with limits, damping and clearances that survive contact simulation.
-- **Labeled physics.** Every loose object carries mass, inertia and friction with stated provenance.
-- **Verified, not vibed.** Mechanism force-tests, terrain probe-tests and photo-matched captures gate every build.
-
-<br/>
-
-<samp>exports</samp>
-
-## One source. Every engine.
-
-A world written once opens wherever people build, play and train. Change the source and every target follows. For robotics the exports are native: MuJoCo (MJCF), Isaac Sim (USD), Gazebo (SDF) and PyBullet (URDF), the same environment everywhere, never four approximations.
+Bring assets, scenes, and behavior together in one programmable project. Build from the same source for design tools, game engines, and simulators.
 
 <div align="center"><a href="https://nova3d.xyz"><img src="docs/media/robotics/every_engine.png" width="78%" alt="One source, every engine: MuJoCo, Isaac Sim, Gazebo, PyBullet, Omniverse, Unity, Unreal, Godot, Roblox, Minecraft, the web, glTF, Blender, OpenUSD, Rhino"/></a></div>
 
-Static structure exports with exact collision. Mechanisms export as native joints on every target. Outdoor ground exports as height fields, so feet collide with the actual hill, not its convex hull.
-
 <br/>
-
-<samp>studio</samp>
-
-## Worlds as software projects.
-
-Nova3D builds 3D worlds as software projects you can edit, test and build on.
-
-| **Keep building.** | **Decide what happens.** | **Build it together.** |
-|---|---|---|
-| Rebuild a part, add something new, or make another version. Every change is a saved version you can replay. | Add movement, controls and interactions to the things you build. | People and AI agents work in the same world at the same time, each on their own branch. The branches merge into one world. |
-
-<br/>
-
-<details>
-<summary><b>Nova3D beyond robotics: general 3D asset generation</b> (click to expand)</summary>
-
-<br/>
-
-Nova3D generates 3D assets as **executable construction procedures**: prompt-to-code targeting Blender's API, compiling to structured GLB with named parts, assembly hierarchy, joint pivots and PBR materials.
-
-<div align="center">
-<img src="app/assets/gifs/nova3d/drill_machine.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/escalator.gif" width="32%" />&nbsp;<img src="app/assets/gifs/nova3d/oven.gif" width="32%" />
-</div>
-
-[![Nova3D one-shot generation demo](docs/media/demo_one_shot.png)](https://www.youtube.com/watch?v=309zNw0JETU)
-
-**Comparisons:** [vs TRELLIS & Hunyuan3D](https://www.youtube.com/watch?v=iL_NX_hBq9k) · [vs NVIDIA PartPacker & Tripo segmentation](https://www.youtube.com/watch?v=msGZs4EMnvs)
-
-<div align="center"><img src="docs/media/comparison_slider.gif" width="100%" alt="Nova3D vs Meshy, TRELLIS.2, TripoSG" /></div>
-
-<div align="center"><img src="docs/media/anatomy_ring.jpg" width="100%" alt="Measured engagement ring" /></div>
-
-*Prompt-stated dimensions hold up when measured back from the result: a ring generated to 17.00 mm inner diameter measures 17.00 mm.*
-
-<div align="center"><img src="docs/media/segmentation_explode.gif" width="78%" /></div>
-
-<div align="center"><img src="docs/media/assembly_hierarchy.gif" width="100%" /></div>
-
-<div align="center"><img src="docs/media/articulation_crane.gif" width="100%" /></div>
-
-<div align="center"><img src="docs/media/uv_from_code.png" width="100%" /></div>
-
-</details>
-
-<br/>
-
-<samp>start</samp>
-
-## Open Studio. Pick a cartridge.
-
-New projects in Studio start from a cartridge. Pick **ROBOTICS** and the project is wired for MuJoCo, PyBullet, Gazebo and Isaac Sim from the first prompt.
-
-<div align="center"><a href="https://app.nova3d.xyz"><img src="docs/media/robotics/studio_cartridges.png" width="88%" alt="Nova3D Studio: new project console with the Game Assets and Robotics cartridges"/></a></div>
-
-<div align="center"><a href="https://app.nova3d.xyz"><b>Open Studio ↗</b></a> · no local backend required</div>
-
-<br/>
-
-This repository is the home of Nova3D's open clients and integrations: the [web client](app/), the [MCP server](mcp/) and the [Blender add-on](blender-plugin/).
-
-> Robot models in the films are from the [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie);
-> the worlds, physics setups, controllers and films are Nova3D.
-
-<br/>
-
-<div align="center">
-
-<a href="https://app.nova3d.xyz"><img src="docs/media/robotics/footer.svg" width="100%" alt="Build a world. Put a robot in it. Open Studio"/></a>
-
-</div>
 
 ## License
 
