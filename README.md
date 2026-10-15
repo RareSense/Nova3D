@@ -16,6 +16,27 @@
 
 <br/>
 
+## Capabilities
+
+1. **Executable source:** represent assets and environments as programs that can be inspected, edited, and rebuilt.
+2. **Parametric control:** define dimensions, proportions, materials, physical properties, and motion through explicit parameters.
+3. **Controlled variation:** specify which parameters change and which remain fixed across design alternatives or experiments.
+4. **Structural editing:** change components, assemblies, layouts, clearances, and connections through their construction code.
+5. **Reusable construction:** reuse components and generation logic to build related designs, asset families, and environments.
+6. **Programmable motion:** define articulation, animation, interactive controls, and prescribed object trajectories.
+7. **Geometry and motion checks:** inspect dimensions, part relationships, pivots, and collisions, using checks appropriate to the design.
+8. **Versioned development:** preserve source, parameters, build outputs, and validation results as the project evolves.
+9. **Target-specific exports:** compile designs for CAD tools, 3D applications, and robotics simulators through dedicated export paths.
+
+### For robotics
+
+1. **Controlled scenario generation:** specify which geometric, physical, and temporal parameters change, and which remain fixed.
+2. **Structural variation:** change connectivity, obstacle arrangement, clearances, and mechanism configurations, not just textures or initial positions.
+3. **Reproducible evaluation:** preserve the environment source, parameters, simulator configuration, and experiment results.
+4. **Failure-driven generation:** eventually turn a failed rollout into a family of nearby scenarios to investigate the failure boundary.
+
+<br/>
+
 ## Describe it. Build it. Keep going.
 
 Start with an idea and keep shaping it. Change the geometry, add motion and behavior, and explore new versions.
@@ -125,7 +146,7 @@ Bring assets, scenes, and behavior together in one programmable project. Build f
 
 ## License
 
-[MIT](LICENSE) © RareSense. The clients and integrations in this repository are open-source.
+[MIT](LICENSE) © RareSense.
 
 <p align="center">
   <small>Built on the same engine powering <b><a href="https://formanova.ai">FormaNova</a></b> for specialized jewelry CAD.</small>
