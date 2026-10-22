@@ -22,6 +22,7 @@ Available content and formats are specified per collection.
 
 | Collection | Scope | Access |
 |---|---|---|
+| [Nova3D-Bench (preview)](https://huggingface.co/datasets/raresense/nova3d-bench-preview) | Benchmark used in *Nova3D: Code-Native Generation of Programmable 3D Assets*: 54 prompts across six domains and three difficulty levels, with text and image conditioning, output previews from 13 pipelines, and available generated source code. | [Hugging Face](https://huggingface.co/datasets/raresense/nova3d-bench-preview) |
 | [Interactive Real-to-Sim Environments for Embodied AI](wanderland/) | 20 outdoor environments reconstructed from [Wanderland](https://ai4ce.github.io/wanderland/) observations, with object and part annotations, articulated joints, contact physics, PBR materials, and native simulator exports. | [Hugging Face](https://huggingface.co/datasets/raresense/nova-wanderland) |
 
 Each collection page describes its inputs, annotations, available formats, and attribution. Scene files and downloads are hosted on Hugging Face.

@@ -39,7 +39,7 @@
 
 ## Datasets
 
-We release editable simulation environments with scene source, semantic and physical annotations, reconstruction inputs, and native simulator exports. The first collection contains 20 outdoor environments reconstructed from [Wanderland](https://ai4ce.github.io/wanderland/) captures.
+Our releases include [Nova3D-Bench (preview)](https://huggingface.co/datasets/raresense/nova3d-bench-preview), the benchmark used in our paper, and 20 outdoor simulation environments reconstructed from [Wanderland](https://ai4ce.github.io/wanderland/) captures, with editable scene source, annotations, and native simulator exports.
 
 [Explore the datasets](datasets/README.md)
 
