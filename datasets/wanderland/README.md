@@ -8,6 +8,10 @@ The collection covers **14 street and corridor scenes, four open public spaces, 
 
 **[Dataset and downloads on Hugging Face](https://huggingface.co/datasets/raresense/nova-wanderland)** · **[Wanderland project](https://ai4ce.github.io/wanderland/)**
 
+![Wanderland captures beside Nova reconstructions](media/wanderland-grid-3x4.jpg)
+
+*Wanderland captures beside Nova reconstructions*
+
 ## Contributions
 
 | Component | Released content |
