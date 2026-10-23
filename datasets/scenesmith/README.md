@@ -2,32 +2,55 @@
 
 [Nova3D Website](https://nova3d.xyz) · [Open Nova Studio](https://studio.nova3d.xyz)
 
-**20 indoor scenes generated with [Nova3D](https://nova3d.xyz/robotics) from the text descriptions released with [SceneSmith](https://scenesmith.github.io/). The collection provides procedural Python scene programs, part-level annotations, physical properties, and simulator exports.**
+**20 indoor environments represented as editable scene programs, with part-level annotations, articulated mechanisms, movable objects, and native simulator exports.** Generated with [Nova3D](https://nova3d.xyz/robotics) from the descriptions released by [SceneSmith](https://scenesmith.github.io/), the collection pairs each Nova scene with the corresponding original SceneSmith output.
 
-[SceneSmith (ICML 2026)](https://proceedings.mlr.press/v306/pfaff26a.html), by **Nicholas Pfaff, Thomas Cohn, Sergey Zakharov, Rick Cory, and Russ Tedrake** at **MIT and Toyota Research Institute**, releases both scene descriptions and generated environments. Here, **the same description is paired with two independently generated scenes: the original SceneSmith output and a Nova3D output**. Nova received only the text description. The original SceneSmith scene files are linked separately for comparison.
+[SceneSmith (Pfaff et al., ICML 2026)](https://proceedings.mlr.press/v306/pfaff26a.html) is developed by researchers at **MIT and Toyota Research Institute**. Both systems generated their scenes independently from the same text descriptions. The 20 Nova runs used **GPT-6 Astra**.
 
-The collection covers **four living rooms, three dining rooms, two bedrooms, two kitchens, two recreation rooms, and seven specialized settings**: an artist studio, laboratory, library, dental office, server room, pet grooming salon, and bakery. All 20 Nova scenes were generated with **GPT-6 Astra**.
+The collection includes **four living rooms, three dining rooms, two bedrooms, two kitchens, two recreation rooms, and seven specialized settings**: an artist studio, laboratory, library, dental office, server room, pet grooming salon, and bakery.
+
+![Interior views of the released dining room, studio, and bedroom.](media/scene-examples.png)
 
 ## Contributions
 
-| Released content | Purpose |
-|---|---|
-| Per-scene Python source | Edit geometry, layout, materials, and physical parameters in the scene program. |
-| Part labels, IDs, bounds, and dimensions | Inspect scene structure and spatial relationships. |
-| Joint and body annotations | Inspect pivots, axes, limits, masses, inertias, and contact properties. |
-| USD, MJCF, SDF, GLB, and PyBullet files | Use the generated scenes in simulation and visualization tools. |
-| Matched SceneSmith outputs and original descriptions | Compare both systems against the same requested scene content. |
+| Capability | Included in this release | Research application |
+|---|---|---|
+| **Procedural scene construction** | Python programs defining geometry, dimensions, placement, materials, and mechanisms | Create controlled changes to scene construction and layout |
+| **Addressable scene structure** | Part IDs, semantic labels, bounds, dimensions, and fixed/moving body declarations | Select task targets, inspect clearance, and connect observations to scene entities |
+| **Scene-level interaction** | Hinged storage, sliding drawers, free objects, collision geometry, and contact properties | Configure manipulation and rearrangement tasks within the assembled environment |
+| **Controllable physics** | Joint limits, mass, inertia, friction, and damping | Study sensitivity to physical parameters under fixed actions |
+| **Simulator and visualization access** | USD, MJCF, an assembled SDF world, PyBullet files, and whole-scene GLB | Use the same authored scene in different research tools |
+| **Continued natural-language editing** | Scene source that can be revised through [Nova Studio](https://studio.nova3d.xyz) | Specify changes to an existing environment instead of starting a new scene description |
+
+## Procedural source and annotations
+
+The dining-room program exposes room dimensions, table geometry, shelf placement, and refrigerator dimensions directly. Its annotation files identify the fixed furniture, movable stools and tableware, cabinet doors, refrigerator doors, and serving drawer.
+
+![Actual scene and construction constants from its released Python program.](media/procedural-source.png)
+
+![Plan of the scene's physical parts and the refrigerator door's joint record.](media/parts-and-physics.png)
+
+[Inspect the source](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/source/asset.py) · [Part annotations](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/metadata/parts.json) · [Joint annotations](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/metadata/articulation.json)
+
+## Controlled physical variation
+
+In the released Pop Art studio, the desk drawer responds to simulated force. Keeping the scene and applied force fixed, changing the travel limit or joint friction changes its motion:
+
+![Drawer motion under three configurations, replayed from measured MuJoCo coordinates.](media/drawer-variation.gif)
+
+![Measured drawer travel over time for the original, shorter-travel, and higher-friction configurations.](media/controlled-physics.png)
+
+The original drawer travels approximately **36 cm**; the shortened limit gives **18 cm**; higher joint friction reduces travel to **0.6 cm** under the same **15.8 N** force. The animation replays the measured MuJoCo motion using the exported mesh. [Video](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/resolve/main/media/drawer-variation.mp4) · [Reproduce the experiment](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/README.md) · [Measurements](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/parameter-sweep.csv)
 
 ## Comparison with SceneSmith
 
-**Articulation appears in 18 of the 20 Nova scenes, compared with 11 SceneSmith scenes generated from the same descriptions.**
+The comparison covers procedural authoring, annotations, interaction structure, physical controls, appearance, and simulator representations. **Both releases include articulated assets and physical properties.** In this selected sample, Nova has hinge/slide joints in 18 scenes and SceneSmith in 11.
 
-![Articulation coverage: SceneSmith 11/20; Nova3D 18/20.](figures/articulation-coverage.png)
+[View the comparison and paired scene figures](COMPARISON.md). The dataset's `scenesmith_output` column links directly to each original SceneSmith scene; Nova's source and exports appear in the same row.
 
-The graph counts scenes with declared hinge or slide joints. [See every scene's results and the release comparison](COMPARISON.md). Each row's `scenesmith_output` link provides the corresponding original scene.
+## Download
 
-## Access
+**[Browse the dataset and download scenes](https://huggingface.co/datasets/BoooomNing/nova-scenesmith)** · **[Original SceneSmith release](https://huggingface.co/datasets/nepfaff/scenesmith-example-scenes)**
 
-**[Dataset and downloads](https://huggingface.co/datasets/BoooomNing/nova-scenesmith)** · **[Paired-scene comparison](COMPARISON.md)**
+Each Nova archive includes its scene source, input description, annotations, and simulator files with their dependencies.
 
-Each Nova scene ZIP includes its source, input prompt, annotations, and simulator files with mesh and texture dependencies. The dataset table also links directly to the corresponding original SceneSmith archive.
+[Nova3D Website](https://nova3d.xyz) · [Open Nova Studio](https://studio.nova3d.xyz)
