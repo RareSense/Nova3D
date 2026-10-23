@@ -43,9 +43,9 @@ The original drawer travels approximately **36 cm**; the shortened limit gives *
 
 ## Comparison with SceneSmith
 
-The comparison covers procedural authoring, annotations, interaction structure, physical controls, appearance, and simulator representations. **Both releases include articulated assets and physical properties.** In this selected sample, Nova has hinge/slide joints in 18 scenes and SceneSmith in 11.
+Using the same 20 scene descriptions, we compare Nova reconstructions with SceneSmith’s released environments. Nova provides per-scene source code for changing geometry and layout, part-level semantic and physical annotations, and movable objects and mechanisms for interaction tasks. The comparison pairs scene views with articulation measurements and demonstrates how changing joint limits and friction alters simulated motion.
 
-[View the comparison and paired scene figures](COMPARISON.md). The dataset's `scenesmith_output` column links directly to each original SceneSmith scene; Nova's source and exports appear in the same row.
+[Paired scenes, measurements and reproducible examples](COMPARISON.md).
 
 ## Download
 
