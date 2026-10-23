@@ -41,12 +41,6 @@ In the released Pop Art studio, the desk drawer responds to simulated force. Kee
 
 The original drawer travels approximately **36 cm**; the shortened limit gives **18 cm**; higher joint friction reduces travel to **0.6 cm** under the same **15.8 N** force. The animation replays the measured MuJoCo motion using the exported mesh. [Video](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/resolve/main/media/drawer-variation.mp4) · [Reproduce the experiment](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/README.md) · [Measurements](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/parameter-sweep.csv)
 
-## Comparison with SceneSmith
-
-Nova provides editable construction code, semantic and physical annotations, and native simulation files for 20 SceneSmith descriptions. Researchers can modify room and furniture dimensions, identify individual interaction targets, and vary joint properties within the assembled environment. The examples below connect these capabilities to released source, part records and measured physical responses.
-
-[Explore scene source, annotations and interaction examples](COMPARISON.md).
-
 ## Download
 
 **[Browse the dataset and download scenes](https://huggingface.co/datasets/BoooomNing/nova-scenesmith)** · **[Original SceneSmith release](https://huggingface.co/datasets/nepfaff/scenesmith-example-scenes)**
