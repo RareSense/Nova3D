@@ -1,10 +1,10 @@
-# Programmable scene construction and interaction
+# Editable simulation environments for robotics research
 
 **Nova releases the construction program alongside each simulation environment.** Researchers can change room and furniture geometry, identify individual parts through semantic and physical annotations, and configure how objects move and interact. The source covers the assembled scene, including its layout, materials and mechanisms.
 
 This collection uses 20 descriptions from [SceneSmith](https://scenesmith.github.io/). Corresponding SceneSmith outputs are linked for each scene, providing a reference for comparing the released representations.
 
-## Released representations
+## Source, annotations and simulator access
 
 | Research resource | SceneSmith outputs | Nova3D outputs |
 |---|---|---|
@@ -59,35 +59,14 @@ This experiment runs in the complete released MuJoCo scene. It illustrates how p
 
 The released source provides the construction record for continued editing of geometry, layout, appearance and mechanisms.
 
-## Supporting measurements
+## Research applications
 
-<details>
-<summary>Articulation measurements for all 20 scene pairs</summary>
+| Research need | What the release provides |
+|---|---|
+| **Controlled geometry variation** | Scene construction code with room, furniture and mechanism dimensions |
+| **Manipulation and rearrangement task setup** | Individually identified movable objects, articulated parts and their physical properties |
+| **Physical-parameter sensitivity** | Editable joint limits and friction, with a runnable experiment and measured responses |
+| **Task-target selection** | Semantic labels, part IDs, dimensions, bounds, pivots and motion axes |
+| **Integration with existing simulation tools** | Native scene exports and their mesh dependencies, alongside source and annotations |
 
-The MJCF files contain hinge/slide joints in 18 Nova scenes and revolute/prismatic joints in 11 SceneSmith scenes, totaling 93 and 87 joints respectively. Both releases include articulated assets. The plots retain every selected pair.
-
-![Articulation coverage across the 20 scenes.](figures/articulation-coverage.png)
-
-![Joint counts for all 20 scene pairs.](figures/paired-joint-counts.png)
-
-[Per-scene measurements](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/resolve/main/comparison/paired-scenes.csv) · [File inspection](FILE_INSPECTION.md)
-
-</details>
-
-<details>
-<summary>Paired scene inspection views</summary>
-
-![SceneSmith and Nova environments for the first three selected descriptions.](media/paired-scenes.png)
-
-The first three pairs retain their original scene IDs. SceneSmith views use MJCF in MuJoCo; Nova views use GLB in Blender, with ceilings hidden for inspection.
-
-</details>
-
-<details>
-<summary>Measurement protocol and provenance</summary>
-
-File inspection covers all 20 pairs. Counts describe native declarations, not task-success scores; mesh parts, inventory objects and free joints are distinct units. The generations used different models and budgets. The drawer experiment applies force directly to the joint and measures the response for one second; it does not measure robot-policy performance. The animation replays the measured coordinates. Natural-language requests above illustrate the editing interface rather than additional experiment runs.
-
-[Selection and provenance](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/docs/PROVENANCE.md) · [Experiment settings and reproduction](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/README.md) · [Complete file inspection](FILE_INSPECTION.md)
-
-</details>
+[Download the environments](https://huggingface.co/datasets/BoooomNing/nova-scenesmith) · [Edit with Nova Studio](https://studio.nova3d.xyz) · [Reproduce the physics example](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/README.md)

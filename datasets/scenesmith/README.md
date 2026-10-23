@@ -43,9 +43,9 @@ The original drawer travels approximately **36 cm**; the shortened limit gives *
 
 ## Comparison with SceneSmith
 
-Using the same 20 scene descriptions, we compare Nova reconstructions with SceneSmith’s released environments. Nova provides per-scene source code for changing geometry and layout, part-level semantic and physical annotations, and movable objects and mechanisms for interaction tasks. The comparison pairs scene views with articulation measurements and demonstrates how changing joint limits and friction alters simulated motion.
+Nova provides editable construction code, semantic and physical annotations, and native simulation files for 20 SceneSmith descriptions. Researchers can modify room and furniture dimensions, identify individual interaction targets, and vary joint properties within the assembled environment. The examples below connect these capabilities to released source, part records and measured physical responses.
 
-[Paired scenes, measurements and reproducible examples](COMPARISON.md).
+[Explore scene source, annotations and interaction examples](COMPARISON.md).
 
 ## Download
 
