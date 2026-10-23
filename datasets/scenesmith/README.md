@@ -20,9 +20,11 @@ The collection covers **four living rooms, three dining rooms, two bedrooms, two
 
 ## Comparison with SceneSmith
 
-**Both releases contain physical properties, articulated assets, textures, and simulator exports.** Nova adds per-scene procedural source, separate annotation tables, whole-scene GLBs, and PyBullet runners to this paired collection. SceneSmith additionally supplies Blender scenes and Drake scene descriptions.
+**Articulation appears in 18 of the 20 Nova scenes, compared with 11 SceneSmith scenes generated from the same descriptions.**
 
-The `scenesmith_output` column downloads the original SceneSmith scene for that row. [The comparison](COMPARISON.md) covers all 20 pairs, including file formats, materials, scene structure, physical declarations, and joint counts. [Selection and provenance](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/docs/PROVENANCE.md) records the fixed sample and source revision. Shared prompts allow comparison of generated content; the original runs used different models and budgets.
+![Articulation coverage: SceneSmith 11/20; Nova3D 18/20.](figures/articulation-coverage.png)
+
+The graph counts scenes with declared hinge or slide joints. [See every scene's results and the release comparison](COMPARISON.md). Each row's `scenesmith_output` link provides the corresponding original scene.
 
 ## Access
 

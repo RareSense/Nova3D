@@ -1,0 +1,12 @@
+{
+  "scene_count": 20,
+  "metric": "Declared scalar hinge/slide joints; fixed and free joints excluded",
+  "source": "../paired-scenes.csv",
+  "scenesmith_scenes_with_joints": 11,
+  "nova_scenes_with_joints": 18,
+  "difference_percentage_points": 35,
+  "nova_more_joint_scenes": 13,
+  "equal_joint_scenes": 2,
+  "nova_fewer_joint_scenes": 5,
+  "scope": "Descriptive results for the selected pairs; no task-success or superiority estimate."
+}
