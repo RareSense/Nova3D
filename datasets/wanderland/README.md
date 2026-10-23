@@ -2,6 +2,8 @@
 
 **Building on [Wanderland](https://ai4ce.github.io/wanderland/)'s real-world urban captures, we release 20 outdoor simulation environments reconstructed with [Nova3D](https://nova3d.xyz/robotics), adding object-level semantics, articulated mechanisms, physical properties, and editable scene programs.**
 
+This collection uses [Wanderland](https://ai4ce.github.io/wanderland/) (Liu et al., CVPR 2026), developed by researchers at NYU’s [AI4CE Lab](https://ai4ce.github.io/) and Cornell University. We thank Xinhao Liu, Jiaqi Li, Prof. Chen Feng, and the Wanderland team for making their captures available.
+
 Nova3D generates and executes procedural code from the released observations. The resulting programs define individual objects and parts, their geometry and labels, collision shapes, physical properties, and joints. Researchers can edit these programs to vary layouts, geometry, and mechanism parameters.
 
 The collection covers **14 street and corridor scenes, four open public spaces, a loading yard, and a parking/commercial area**.
