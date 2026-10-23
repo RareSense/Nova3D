@@ -29,7 +29,7 @@ The dining-room program exposes room dimensions, table geometry, shelf placement
 
 ![Plan of the scene's physical parts and the refrigerator door's joint record.](media/parts-and-physics.png)
 
-[Inspect the source](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/source/asset.py) · [Part annotations](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/metadata/parts.json) · [Joint annotations](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/scenes/scene_034/metadata/articulation.json)
+[Inspect the source](https://huggingface.co/datasets/raresense/nova-scenesmith/blob/main/scenes/scene_034/source/asset.py) · [Part annotations](https://huggingface.co/datasets/raresense/nova-scenesmith/blob/main/scenes/scene_034/metadata/parts.json) · [Joint annotations](https://huggingface.co/datasets/raresense/nova-scenesmith/blob/main/scenes/scene_034/metadata/articulation.json)
 
 ## Controlled physical variation
 
@@ -39,11 +39,11 @@ In the released Pop Art studio, the desk drawer responds to simulated force. Kee
 
 ![Measured drawer travel over time for the original, shorter-travel, and higher-friction configurations.](media/controlled-physics.png)
 
-The original drawer travels approximately **36 cm**; the shortened limit gives **18 cm**; higher joint friction reduces travel to **0.6 cm** under the same **15.8 N** force. The animation replays the measured MuJoCo motion using the exported mesh. [Video](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/resolve/main/media/drawer-variation.mp4) · [Reproduce the experiment](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/README.md) · [Measurements](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/blob/main/examples/parameter-sweep.csv)
+The original drawer travels approximately **36 cm**; the shortened limit gives **18 cm**; higher joint friction reduces travel to **0.6 cm** under the same **15.8 N** force. The animation replays the measured MuJoCo motion using the exported mesh. [Video](https://huggingface.co/datasets/raresense/nova-scenesmith/resolve/main/media/drawer-variation.mp4) · [Reproduce the experiment](https://huggingface.co/datasets/raresense/nova-scenesmith/blob/main/examples/README.md) · [Measurements](https://huggingface.co/datasets/raresense/nova-scenesmith/blob/main/examples/parameter-sweep.csv)
 
 ## Download
 
-**[Browse the dataset and download scenes](https://huggingface.co/datasets/BoooomNing/nova-scenesmith)** · **[Original SceneSmith release](https://huggingface.co/datasets/nepfaff/scenesmith-example-scenes)**
+**[Browse the dataset and download scenes](https://huggingface.co/datasets/raresense/nova-scenesmith)** · **[Original SceneSmith release](https://huggingface.co/datasets/nepfaff/scenesmith-example-scenes)**
 
 Each Nova archive includes its scene source, input description, annotations, and simulator files with their dependencies.
 

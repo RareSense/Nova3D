@@ -31,7 +31,7 @@ Nova's distinct contribution here is the **per-scene procedural source and separ
 
 ## Data and method
 
-[Per-scene data and paired downloads](https://huggingface.co/datasets/BoooomNing/nova-scenesmith/resolve/main/comparison/paired-scenes.csv) · [Complete file and declaration inspection](FILE_INSPECTION.md) · [Plot data](figures/plot-data.csv)
+[Per-scene data and paired downloads](https://huggingface.co/datasets/raresense/nova-scenesmith/resolve/main/comparison/paired-scenes.csv) · [Complete file and declaration inspection](FILE_INSPECTION.md) · [Plot data](figures/plot-data.csv)
 
 Figures: [coverage PDF](figures/articulation-coverage.pdf) / [SVG](figures/articulation-coverage.svg), [per-scene PDF](figures/paired-joint-counts.pdf) / [SVG](figures/paired-joint-counts.svg).
 
